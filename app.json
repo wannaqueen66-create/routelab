@@ -1,0 +1,45 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/record/record",
+    "pages/history/history",
+    "pages/route-detail/route-detail",
+    "pages/profile/profile"
+  ],
+  "window": {
+    "navigationBarTextStyle": "black",
+    "navigationStyle": "custom"
+  },
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  },
+  "requiredBackgroundModes": [
+    "location"
+  ],
+  "permission": {
+    "scope.userLocation": {
+      "desc": "\u7528\u4E8E\u8BB0\u5F55\u60A8\u5728\u6821\u56ED\u4E2D\u7684\u884C\u8D70\u8DEF\u7EBF\u5E76\u751F\u6210\u7EDF\u8BA1"
+    }
+  },
+  "requiredPrivateInfos": [
+    "getLocation",
+    "startLocationUpdate",
+    "startLocationUpdateBackground",
+    "onLocationChange"
+  ],
+  "style": "v2",
+  "renderer": "skyline",
+  "rendererOptions": {
+    "skyline": {
+      "defaultDisplayBlock": true,
+      "defaultContentBox": true,
+      "disableABTest": true,
+      "sdkVersionBegin": "3.0.0",
+      "sdkVersionEnd": "15.255.255"
+    }
+  },
+  "componentFramework": "glass-easel",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
+

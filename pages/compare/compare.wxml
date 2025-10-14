@@ -1,0 +1,61 @@
+<view class="page">
+  <rlab-nav
+    title="RouteLab · 人群对比"
+    background="#0f172a"
+    color="#ffffff"
+  ></rlab-nav>
+
+  <scroll-view class="page__scroll" scroll-y enable-back-to-top>
+    <view class="summary">
+      <block wx:for="{{summaryCards}}" wx:key="key">
+        <view
+          class="summary-card {{selectedLevel === item.key ? 'summary-card--active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="handleSummaryTap"
+        >
+          <text class="summary-card__title">{{item.title}}</text>
+          <text class="summary-card__metric">{{item.distance}}</text>
+          <text class="summary-card__sub">平均时长 {{item.duration}}</text>
+          <text class="summary-card__count">样本量：{{item.count}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="insights">
+      <view class="insights__title">对比洞察</view>
+      <block wx:for="{{insights}}" wx:key="*this">
+        <view class="insights__item">
+          <text>{{item}}</text>
+        </view>
+      </block>
+    </view>
+
+    <view class="level">
+      <view class="level__head">
+        <text class="level__title">{{levelTitle}}</text>
+        <text class="level__desc">{{levelDescription}}</text>
+      </view>
+      <block wx:if="{{levelRoutes.length}}">
+        <block wx:for="{{levelRoutes}}" wx:key="id">
+          <view class="route-card">
+            <view class="route-card__title">{{item.title}}</view>
+            <view class="route-card__meta">
+              <text>{{item.distance}}</text>
+              <text>·</text>
+              <text>{{item.duration}}</text>
+              <text>·</text>
+              <text>{{item.calories}}</text>
+            </view>
+            <view class="route-card__footer">
+              <text>{{item.campusLabel}}</text>
+              <text>{{item.privacyLabel}}</text>
+            </view>
+          </view>
+        </block>
+      </block>
+      <view wx:else class="empty">
+        <text>暂无匹配路线，快去补充数据吧！</text>
+      </view>
+    </view>
+  </scroll-view>
+</view>

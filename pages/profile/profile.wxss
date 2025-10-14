@@ -1,0 +1,101 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f8fafc;
+}
+
+.page__scroll {
+  flex: 1;
+  padding: 24rpx 32rpx 64rpx;
+  box-sizing: border-box;
+}
+
+.section {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 16rpx 32rpx rgba(15, 23, 42, 0.05);
+}
+
+.section__title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 16rpx;
+}
+
+.picker {
+  background: #f8fafc;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  color: #0f172a;
+}
+
+.picker__value {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.picker__desc {
+  font-size: 24rpx;
+  color: #64748b;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field__label {
+  font-size: 26rpx;
+  color: #475569;
+}
+
+.field__input {
+  background: #f8fafc;
+  border-radius: 16rpx;
+  padding: 16rpx 20rpx;
+  font-size: 26rpx;
+}
+
+.actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+}
+
+.btn {
+  flex: 1;
+  border-radius: 999rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.btn--primary {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+.btn--ghost {
+  background: rgba(15, 23, 42, 0.05);
+  color: #0f172a;
+}
+
+.message {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #16a34a;
+  text-align: center;
+}

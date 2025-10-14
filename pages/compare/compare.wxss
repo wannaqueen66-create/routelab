@@ -1,0 +1,136 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f8fafc;
+}
+
+.page__scroll {
+  flex: 1;
+  padding: 24rpx 32rpx 64rpx;
+  box-sizing: border-box;
+}
+
+.summary {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 32rpx;
+}
+
+.summary-card {
+  flex: 1;
+  padding: 28rpx;
+  border-radius: 24rpx;
+  background: #e2e8f0;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.summary-card--active {
+  background: #38bdf8;
+  color: #0f172a;
+  box-shadow: 0 16rpx 32rpx rgba(56, 189, 248, 0.3);
+}
+
+.summary-card__title {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.summary-card__metric {
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.summary-card__sub,
+.summary-card__count {
+  font-size: 24rpx;
+  opacity: 0.8;
+}
+
+.insights {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: 0 16rpx 32rpx rgba(15, 23, 42, 0.05);
+  margin-bottom: 32rpx;
+}
+
+.insights__title {
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+  color: #0f172a;
+}
+
+.insights__item {
+  font-size: 24rpx;
+  color: #475569;
+  padding: 12rpx 0;
+  border-bottom: 2rpx dashed rgba(148, 163, 184, 0.4);
+}
+
+.insights__item:last-child {
+  border-bottom: none;
+}
+
+.level {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: 0 16rpx 32rpx rgba(15, 23, 42, 0.05);
+}
+
+.level__head {
+  margin-bottom: 20rpx;
+}
+
+.level__title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.level__desc {
+  font-size: 24rpx;
+  color: #64748b;
+  margin-top: 8rpx;
+}
+
+.route-card {
+  background: #f8fafc;
+  border-radius: 20rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  border: 2rpx solid #e2e8f0;
+}
+
+.route-card__title {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.route-card__meta,
+.route-card__footer {
+  display: flex;
+  gap: 10rpx;
+  font-size: 24rpx;
+  color: #475569;
+}
+
+.route-card__footer {
+  justify-content: space-between;
+  color: #64748b;
+}
+
+.empty {
+  text-align: center;
+  font-size: 24rpx;
+  color: #94a3b8;
+  padding: 24rpx 0;
+}

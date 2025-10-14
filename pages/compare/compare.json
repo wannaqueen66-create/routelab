@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "RouteLab 对比分析",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
+}

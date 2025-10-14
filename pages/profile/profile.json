@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "RouteLab 偏好",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
+}

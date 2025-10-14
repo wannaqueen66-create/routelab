@@ -1,0 +1,128 @@
+<view class="page">
+  <rlab-nav
+    title="RouteLab · 轨迹详情"
+    background="#0f172a"
+    color="#ffffff"
+  ></rlab-nav>
+
+  <scroll-view class="page__scroll" scroll-y wx:if="{{detail}}">
+    <view class="map">
+      <map
+        longitude="{{centerLongitude}}"
+        latitude="{{centerLatitude}}"
+        scale="16"
+        style="width: 100%; height: 460rpx;"
+        show-scale="true"
+        markers="{{markers}}"
+        polyline="{{polyline}}"
+      ></map>
+    </view>
+
+    <view class="section">
+      <view class="section__head">
+        <text class="section__title">{{detail.title}}</text>
+        <picker
+          mode="selector"
+          range="{{privacyOptions}}"
+          range-key="label"
+          value="{{privacyIndex}}"
+          bindchange="handlePrivacyChange"
+        >
+          <view class="privacy-picker">
+            <text>{{privacyOptions[privacyIndex].label}}</text>
+          </view>
+        </picker>
+      </view>
+      <view class="section__sub">{{detail.activityLabel}} · {{detail.campusLabel}}</view>
+    </view>
+
+    <view class="section category" wx:if="{{detail.activityLevel}}">
+      <view class="category__badge" style="background-color: {{detail.activityLevel.color}};">
+        {{detail.activityLevel.label}}
+      </view>
+      <view class="category__summary">{{detail.activityLevel.summary}}</view>
+      <view class="category__desc">{{detail.activityLevel.description}}</view>
+    </view>
+
+    <view class="section category-legend" wx:if="{{levelStandards.length}}">
+      <view class="section__title">判定标准</view>
+      <view class="category-legend__grid">
+        <block wx:for="{{levelStandards}}" wx:key="key">
+          <view class="category-legend__item">
+            <view class="category-legend__dot" style="background-color: {{item.color}};"></view>
+            <view class="category-legend__content">
+              <text class="category-legend__label">{{item.label}}</text>
+              <text class="category-legend__summary">{{item.summary}}</text>
+              <text class="category-legend__desc">{{item.description}}</text>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <view class="stats">
+      <view class="stat-card">
+        <text class="stat-card__label">日期</text>
+        <text class="stat-card__value">{{detail.startDate}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">时间</text>
+        <text class="stat-card__value">{{detail.timeRange}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">用时</text>
+        <text class="stat-card__value">{{detail.duration}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">{{detail.activityLabel === '骑行' ? '平均速度' : '平均配速'}}</text>
+        <text class="stat-card__value">{{detail.paceOrSpeed}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">里程</text>
+        <text class="stat-card__value">{{detail.distance}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">热量</text>
+        <text class="stat-card__value">{{detail.calories}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">估算步数</text>
+        <text class="stat-card__value">{{detail.steps}}</text>
+      </view>
+    </view>
+
+    <view class="section" wx:if="{{detail.photos.length}}">
+      <view class="section__title">路线打卡</view>
+      <view class="photo-gallery">
+        <block wx:for="{{detail.photos}}" wx:key="path">
+          <view class="photo-gallery__item" data-index="{{index}}" bindtap="handlePreviewPhoto">
+            <image
+              class="photo-gallery__image"
+              src="{{item.path}}"
+              mode="aspectFill"
+            />
+            <view class="photo-gallery__note" wx:if="{{item.note}}">
+              <text>{{item.note}}</text>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section__title">备注</view>
+      <view class="note">
+        <text>{{detail.note}}</text>
+      </view>
+    </view>
+
+    <view class="actions">
+      <button class="btn btn--danger" bindtap="handleDelete">删除轨迹</button>
+      <button class="btn btn--ghost" open-type="share">分享概要</button>
+    </view>
+  </scroll-view>
+
+  <view wx:else class="empty">
+    <text>加载中或未找到该轨迹</text>
+  </view>
+</view>

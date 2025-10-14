@@ -1,0 +1,113 @@
+<view class="page">
+  <rlab-nav
+    title="RouteLab · 校园节奏"
+    back="{{false}}"
+    background="#0f172a"
+    color="#ffffff"
+  ></rlab-nav>
+
+  <view wx:if="{{!networkConnected}}" class="banner banner--offline">
+    <text>当前离线，轨迹仍会缓存并在联网后自动合并</text>
+  </view>
+
+  <scroll-view scroll-y class="page__scroll" enable-back-to-top>
+    <view class="section hero">
+      <view class="hero__subtitle">面向校园的轨迹记录与分析</view>
+      <view class="hero__title">发现你的运动节奏类型</view>
+      <view class="hero__desc">记录日常路线，洞察活跃类型与热点时段</view>
+      <view class="hero__cta">
+        <button class="cta__primary" bindtap="handleNavigateRecord">开始记录</button>
+        <button class="cta__secondary" bindtap="handleNavigateHistory">
+          路线历史 ({{overview.totalCount}})
+        </button>
+      </view>
+      <view class="hero__stats">
+        <view class="stat">
+          <text class="stat__value">{{overview.todayDistance}}</text>
+          <text class="stat__label">今日里程</text>
+        </view>
+        <view class="stat">
+          <text class="stat__value">{{overview.todayDuration}}</text>
+          <text class="stat__label">今日时长</text>
+        </view>
+        <view class="stat">
+          <text class="stat__value">{{overview.totalCalories}}</text>
+          <text class="stat__label">累计热量</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="section" wx:if="{{bestLoops.commute || bestLoops.run}}">
+      <view class="section__head">
+        <text class="section__title">推荐路线</text>
+      </view>
+      <view
+        class="loop-card"
+        wx:if="{{bestLoops.commute}}"
+        data-id="{{bestLoops.commute.id}}"
+        bindtap="handleNavigateRoute"
+      >
+        <view class="loop-card__tag">通勤路径</view>
+        <view class="loop-card__title">{{bestLoops.commute.title}}</view>
+        <view class="loop-card__meta">
+          <text>{{bestLoops.commute.distance}} · {{bestLoops.commute.duration}}</text>
+          <text>{{bestLoops.commute.campusLabel}}</text>
+        </view>
+        <text class="loop-card__date">{{bestLoops.commute.date}}</text>
+      </view>
+      <view
+        class="loop-card loop-card--accent"
+        wx:if="{{bestLoops.run}}"
+        data-id="{{bestLoops.run.id}}"
+        bindtap="handleNavigateRoute"
+      >
+        <view class="loop-card__tag">操场跑圈</view>
+        <view class="loop-card__title">{{bestLoops.run.title}}</view>
+        <view class="loop-card__meta">
+          <text>{{bestLoops.run.distance}} · {{bestLoops.run.duration}}</text>
+          <text>{{bestLoops.run.campusLabel}}</text>
+        </view>
+        <text class="loop-card__date">{{bestLoops.run.date}}</text>
+      </view>
+    </view>
+
+    <view class="section" wx:if="{{recentRoutes.length}}">
+      <view class="section__head">
+        <text class="section__title">最新轨迹</text>
+        <text class="section__subtitle">快速回顾你最近的三次出行</text>
+      </view>
+      <block wx:for="{{recentRoutes}}" wx:key="id">
+        <view class="history-card" data-id="{{item.id}}" bindtap="handleNavigateRoute">
+          <view class="history-card__title">
+            <text>{{item.title}}</text>
+            <text class="history-card__privacy">{{item.privacyLabel}}</text>
+          </view>
+          <view class="history-card__meta">
+            <text>{{item.distance}}</text>
+            <text>·</text>
+            <text>{{item.duration}}</text>
+          </view>
+          <view class="history-card__meta history-card__meta--campus">
+            <text>{{item.campusLabel}}</text>
+          </view>
+          <view class="history-card__date">
+            <text>{{item.week}}</text>
+            <text class="history-card__date-split">|</text>
+            <text>{{item.startDate}}</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </scroll-view>
+
+  <view class="permission-mask" wx:if="{{showLocationPrompt}}">
+    <view class="permission-dialog">
+      <text class="permission-dialog__title">需要定位权限</text>
+      <text class="permission-dialog__desc">开启定位后才能记录轨迹与查看推荐路线。</text>
+      <view class="permission-dialog__actions">
+        <button class="permission-dialog__btn permission-dialog__btn--primary" bindtap="handleRequestLocationAuthorize">去授权</button>
+        <button class="permission-dialog__btn" bindtap="handleOpenLocationSetting">打开设置</button>
+      </view>
+    </view>
+  </view>
+</view>

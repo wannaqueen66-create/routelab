@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "RouteLab 轨迹详情",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
+}

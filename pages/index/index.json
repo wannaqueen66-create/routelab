@@ -1,0 +1,5 @@
+{
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
+}
