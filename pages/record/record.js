@@ -10,10 +10,8 @@ const { formatDuration } = require('../../utils/time');
 const { estimateCalories } = require('../../utils/geo');
 const logger = require('../../utils/logger');
 const media = require('../../services/media');
-const { inferActivityType, resolveActivityMeta } = require('../../utils/activity');
+const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
-
-const DEFAULT_ACTIVITY_META = resolveActivityMeta(DEFAULT_ACTIVITY_TYPE);
 
 const DEFAULT_CENTER = {
   latitude: 30.27415,
@@ -22,18 +20,14 @@ const DEFAULT_CENTER = {
 
 const MAX_PHOTOS = 9;
 
-const ACTIVITY_ICONS = {
-  walk: '??',
-  run: '??',
-  ride: '??',
+const MARKER_ICONS = {
+  start: '/assets/icons/start.png',
+  pause: '/assets/icons/pause.png',
+  live: '/assets/icons/end.png',
 };
 
 const FINISH_PRIVACY_OPTIONS =
   PRIVACY_LEVELS.filter((item) => ['public', 'private'].includes(item.key)) || PRIVACY_LEVELS;
-
-const ACTIVITY_CHOICES = ['walk', 'run', 'ride']
-  .map((key) => ACTIVITY_TYPE_MAP[key] || resolveActivityMeta(key))
-  .filter(Boolean);
 
 const TOAST = {
   requireLocation: '请先获取定位权限',
@@ -44,13 +38,6 @@ const TOAST = {
   purposeRequired: '请选择本次运动的目的',
   purposeUpdated: '运动目的已更新',
 };
-
-function getActivityIcon(key) {
-  if (!key) {
-    return ACTIVITY_ICONS.walk;
-  }
-  return ACTIVITY_ICONS[key] || ACTIVITY_ICONS.walk;
-}
 
 function normalizePhotos(photos = []) {
   return photos.map((item) => {
@@ -71,6 +58,28 @@ function formatSpeedByActivity(activityKey, value) {
   return formatSpeed(value);
 }
 
+function inferActivityByAverageSpeed(distance = 0, duration = 0) {
+  const numericDistance = Number(distance);
+  const numericDuration = Number(duration);
+  if (!Number.isFinite(numericDistance) || !Number.isFinite(numericDuration)) {
+    return null;
+  }
+  if (numericDistance < 15 || numericDuration < 5000) {
+    return null;
+  }
+  const avgSpeed = numericDistance / (numericDuration / 1000);
+  if (!Number.isFinite(avgSpeed) || avgSpeed <= 0.3) {
+    return null;
+  }
+  if (avgSpeed < 2) {
+    return 'walk';
+  }
+  if (avgSpeed <= 4) {
+    return 'run';
+  }
+  return 'ride';
+}
+
 Page({
   data: {
     tracking: false,
@@ -82,21 +91,17 @@ Page({
     stepsText: '0',
     polyline: [],
     markers: [],
+    includePoints: [],
     pausePoints: [],
     purposeOptions: PURPOSE_OPTIONS,
     purposeSelectionKey: '',
     purposeSelectionLabel: '未选择',
-    purposeSelectionIcon: '',
-    purposeSelectionDescription: '',
     purposePickerVisible: false,
     purposePendingKey: '',
     privacyOptions: FINISH_PRIVACY_OPTIONS,
     privacyIndex: 0,
     activityKey: DEFAULT_ACTIVITY_TYPE,
-    activityLabel: DEFAULT_ACTIVITY_META.label,
-    activityDescription: DEFAULT_ACTIVITY_META.description,
-    activityStatusText: '准备开始',
-    activityIcon: getActivityIcon(DEFAULT_ACTIVITY_TYPE),
+    activityLabel: '识别中',
     title: '',
     note: '',
     keepScreenOnPreferred: false,
@@ -122,7 +127,11 @@ Page({
   },
 
   onShow() {
-    this.checkLocationPermission(false);
+    this.checkLocationPermission(false).then(() => {
+      if (this.data.locationAuthorized) {
+        this.refreshCurrentLocation();
+      }
+    });
   },
 
   onReady() {
@@ -167,6 +176,9 @@ Page({
           locationScope: status?.scope || 'none',
           showLocationPrompt: initialPrompt ? !authorized : this.data.showLocationPrompt,
         });
+        if (authorized) {
+          this.refreshCurrentLocation();
+        }
         return status;
       })
       .catch((error) => {
@@ -189,6 +201,9 @@ Page({
           locationScope: status?.scope || 'none',
           showLocationPrompt: !authorized,
         });
+        if (authorized) {
+          this.refreshCurrentLocation();
+        }
         if (!authorized) {
           wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
         }
@@ -206,21 +221,60 @@ Page({
       });
   },
 
+  refreshCurrentLocation() {
+    if (!this.data.locationAuthorized || typeof wx.getLocation !== 'function') {
+      return Promise.resolve(null);
+    }
+    if (this.locationProbePromise) {
+      return this.locationProbePromise;
+    }
+    this.locationProbePromise = new Promise((resolve) => {
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        highAccuracyExpireTime: 5000,
+        success: (res) => {
+          if (res && Number.isFinite(res.latitude) && Number.isFinite(res.longitude)) {
+            this.setData({
+              centerLatitude: res.latitude,
+              centerLongitude: res.longitude,
+            });
+          }
+          resolve(res);
+        },
+        fail: (error) => {
+          logger.warn('getLocation probe failed', error?.errMsg || error);
+          resolve(null);
+        },
+        complete: () => {
+          this.locationProbePromise = null;
+        },
+      });
+    });
+    return this.locationProbePromise;
+  },
+
   updateState(state = {}) {
     const stats = state.stats || {};
     const distance = stats.distance || 0;
     const duration = stats.duration || 0;
     const speed = stats.speed || 0;
     const points = Array.isArray(state.points) ? state.points : [];
+    const routePoints = points
+      .map((point) => ({
+        latitude: Number(point?.latitude),
+        longitude: Number(point?.longitude),
+      }))
+      .filter(
+        (point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude)
+      );
     const isTracking = Boolean(state.active);
     const isPaused = Boolean(state.paused);
 
-    let activityKey =
-      state.detectedActivityType || inferActivityType({ distance, duration, speed, points }) || this.data.activityKey;
-    if (!activityKey) {
-      activityKey = DEFAULT_ACTIVITY_TYPE;
-    }
-    const activityMeta = resolveActivityMeta(activityKey) || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
+    const inferredActivityKey = isTracking ? inferActivityByAverageSpeed(distance, duration) : null;
+    const resolvedActivityKey = inferredActivityKey || DEFAULT_ACTIVITY_TYPE;
+    const activityMeta = resolveActivityMeta(resolvedActivityKey) || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
+    const activityLabel = isTracking && inferredActivityKey ? activityMeta.label : '识别中';
     const weight = this.data.weight || 60;
     const durationText = formatDuration(duration);
     const distanceText = `${(distance / 1000).toFixed(1)} km`;
@@ -228,8 +282,8 @@ Page({
     const caloriesValue = distance ? estimateCalories(distance, weight, activityMeta.key) : 0;
     const caloriesText = formatCalories(caloriesValue);
     const stepsText = activityMeta.key === 'ride' ? '--' : `${Math.round(distance / 0.75)}`;
-    const hasPoints = points.length > 0;
-    const latestPoint = hasPoints ? points[points.length - 1] : DEFAULT_CENTER;
+    const hasRoutePoints = routePoints.length > 0;
+    const latestPoint = hasRoutePoints ? routePoints[routePoints.length - 1] : DEFAULT_CENTER;
 
     if (this.data.keepScreenSupported && this.data.keepScreenOnPreferred && isTracking) {
       try {
@@ -241,7 +295,7 @@ Page({
 
     if (
       this.mapContext &&
-      hasPoints &&
+      hasRoutePoints &&
       isTracking &&
       !isPaused &&
       (latestPoint.latitude !== this.data.centerLatitude || latestPoint.longitude !== this.data.centerLongitude)
@@ -256,39 +310,40 @@ Page({
       }
     }
 
-    const polyline = hasPoints
+    const polyline = routePoints.length >= 2
       ? [
           {
-            points: points.map((point) => ({
-              latitude: point.latitude,
-              longitude: point.longitude,
-            })),
-            color: '#2B6CFF',
-            width: 6,
+            points: routePoints,
+            color: '#2F6BFF',
+            width: 4,
             dottedLine: false,
           },
         ]
       : [];
 
     const pauseMarkers = Array.isArray(state.pausePoints)
-      ? state.pausePoints.map((point, index) => ({
-          id: `pause-${index}`,
-          latitude: point.latitude,
-          longitude: point.longitude,
-          iconPath: '/assets/icons/pause-marker.png',
-          width: 24,
-          height: 24,
-          anchor: { x: 0.5, y: 0.5 },
-        }))
+      ? state.pausePoints
+          .map((point, index) => ({
+            id: `pause-${index}`,
+            latitude: Number(point?.latitude),
+            longitude: Number(point?.longitude),
+            iconPath: MARKER_ICONS.pause,
+            width: 24,
+            height: 24,
+            anchor: { x: 0.5, y: 0.5 },
+          }))
+          .filter(
+            (marker) => Number.isFinite(marker.latitude) && Number.isFinite(marker.longitude)
+          )
       : [];
 
-    const startMarker = hasPoints
+    const startMarker = hasRoutePoints
       ? [
           {
             id: 'start',
-            latitude: points[0].latitude,
-            longitude: points[0].longitude,
-            iconPath: '/assets/icons/start-marker.png',
+            latitude: routePoints[0].latitude,
+            longitude: routePoints[0].longitude,
+            iconPath: MARKER_ICONS.start,
             width: 32,
             height: 32,
             anchor: { x: 0.5, y: 1 },
@@ -296,7 +351,24 @@ Page({
         ]
       : [];
 
-    const markers = [...startMarker, ...pauseMarkers];
+    const liveMarker = hasRoutePoints
+      ? [
+          {
+            id: 'live',
+            latitude: latestPoint.latitude,
+            longitude: latestPoint.longitude,
+            iconPath: MARKER_ICONS.live,
+            width: 28,
+            height: 28,
+            anchor: { x: 0.5, y: 1 },
+          },
+        ]
+      : [];
+
+    const markers = [...startMarker, ...pauseMarkers, ...liveMarker];
+    const includePoints = routePoints.length
+      ? routePoints.map((point) => ({ ...point }))
+      : [];
 
     this.setData({
       tracking: isTracking,
@@ -308,17 +380,11 @@ Page({
       stepsText,
       polyline,
       markers,
+      includePoints,
       pausePoints: state.pausePoints || [],
       activityKey: activityMeta.key,
-      activityLabel: activityMeta.label,
-      activityDescription: activityMeta.description,
-      activityStatusText: isTracking
-        ? state.detectedActivityType
-          ? `${activityMeta.label} · 自动识别`
-          : '自动识别中'
-        : '准备开始',
-      activityIcon: getActivityIcon(activityMeta.key),
-      hasRoutePoints: hasPoints,
+      activityLabel,
+      hasRoutePoints: hasRoutePoints,
       centerLatitude: latestPoint.latitude,
       centerLongitude: latestPoint.longitude,
     });
@@ -372,8 +438,6 @@ Page({
       purposePickerVisible: false,
       purposeSelectionKey: meta ? meta.key : '',
       purposeSelectionLabel: meta ? meta.label : '未选择',
-      purposeSelectionIcon: meta ? meta.icon : '',
-      purposeSelectionDescription: meta ? meta.description : '',
     };
     this.setData(nextState);
     if (this.data.tracking) {
@@ -424,6 +488,7 @@ Page({
       wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
       return;
     }
+    this.refreshCurrentLocation();
     this.openPurposePicker();
   },
 
@@ -581,29 +646,6 @@ Page({
     wx.previewImage({
       current: photos[Number(index)]?.path,
       urls: photos.map((item) => item.path),
-    });
-  },
-
-  handleActivityTap() {
-    if (this.data.tracking) {
-      wx.showToast({ title: '记录中不能切换运动方式', icon: 'none' });
-      return;
-    }
-    const itemList = ACTIVITY_CHOICES.map((item) => item.label);
-    wx.showActionSheet({
-      itemList,
-      success: (res) => {
-        const meta = ACTIVITY_CHOICES[res.tapIndex];
-        if (!meta) {
-          return;
-        }
-        this.setData({
-          activityKey: meta.key,
-          activityLabel: meta.label,
-          activityDescription: meta.description,
-          activityIcon: getActivityIcon(meta.key),
-        });
-      },
     });
   },
 

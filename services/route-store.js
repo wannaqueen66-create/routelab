@@ -200,12 +200,15 @@ function getMaxUpdatedAt(routes = []) {
 }
 
 function formatPointLabel(point) {
-  if (!point || typeof point.latitude !== 'number' || typeof point.longitude !== 'number') {
-    return '位置未识别';
+  if (!point) {
+    return '坐标未知';
   }
-  const lat = point.latitude.toFixed(4);
-  const lon = point.longitude.toFixed(4);
-  return `${lat},${lon}`;
+  const lat = Number(point.latitude);
+  const lon = Number(point.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return '坐标未知';
+  }
+  return `坐标 ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 }
 
 function createRoutePayload({

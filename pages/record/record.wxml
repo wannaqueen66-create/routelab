@@ -6,13 +6,14 @@
       longitude="{{centerLongitude}}"
       latitude="{{centerLatitude}}"
       scale="16"
-      show-location="true"
-      enable-satellite="false"
-      show-scale="true"
-      markers="{{markers}}"
-      polyline="{{polyline}}"
-      bindtap="handleMapTap"
-    ></map>
+      show-location="{{true}}"
+    enable-satellite="false"
+    show-scale="true"
+    markers="{{markers}}"
+    polyline="{{polyline}}"
+    include-points="{{includePoints}}"
+    bindtap="handleMapTap"
+  ></map>
 
     <view class="map-tip" wx:if="{{!tracking && !hasRoutePoints}}">
       <text>点击"开始记录"即可生成第一条校园轨迹</text>
@@ -55,22 +56,19 @@
       </view>
 
       <view class="sheet-meta">
-        <view class="meta-inline {{tracking ? 'meta-inline--disabled' : ''}}">
-          <view
-            class="meta-inline__cell"
-            bindtap="handleActivityTap"
-          >
-            <view class="meta-inline__icon">{{activityIcon}}</view>
-            <text class="meta-inline__label">{{activityLabel}}</text>
-            <text class="meta-inline__hint" wx:if="{{tracking}}">🔒</text>
+        <view class="meta-inline">
+          <view class="meta-inline__cell meta-inline__cell--static">
+            <text class="meta-inline__label-text">行进方式：</text>
+            <text class="meta-inline__value">{{activityLabel}}</text>
+            <text class="meta-inline__hint">🔒</text>
           </view>
-          <view class="meta-inline__divider">|</view>
+          <view class="meta-inline__divider"></view>
           <view
-            class="meta-inline__cell"
+            class="meta-inline__cell meta-inline__cell--action {{tracking ? 'meta-inline__cell--disabled' : ''}}"
             bindtap="handleOpenPurposePicker"
           >
-            <view class="meta-inline__icon">{{purposeSelectionIcon || '🎯'}}</view>
-            <text class="meta-inline__label">{{purposeSelectionLabel}}</text>
+            <text class="meta-inline__label-text">出行目的：</text>
+            <text class="meta-inline__value">{{purposeSelectionLabel}}</text>
             <text class="meta-inline__hint" wx:if="{{tracking}}">🔒</text>
           </view>
         </view>

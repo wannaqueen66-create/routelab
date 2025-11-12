@@ -3758,6 +3758,15 @@ function normalizeCoordinate(value, { min = -180, max = 180 } = {}) {
   return num;
 }
 
+function buildCoordinateLabel(lat, lon) {
+  const latitude = Number(lat);
+  const longitude = Number(lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return '坐标未知';
+  }
+  return `坐标 ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+}
+
 function findClosestTimeIndex(times = []) {
   if (!Array.isArray(times) || !times.length) return -1;
   const now = Date.now();
@@ -5801,8 +5810,15 @@ app.get('/api/geocode/reverse', ensureAuth, async (req, res) => {
     res.json(simplified);
   } catch (error) {
     console.error('GET /api/geocode/reverse failed', error);
-    const status = error.statusCode || 502;
-    res.status(status).json({ error: 'Failed to reverse geocode location' });
+    const fallbackLabel = buildCoordinateLabel(latitude, longitude);
+    const fallbackPayload = {
+      name: fallbackLabel,
+      displayName: fallbackLabel,
+      address: { latitude, longitude },
+      raw: null,
+      fallback: true,
+    };
+    res.status(200).json(fallbackPayload);
   }
 });
 

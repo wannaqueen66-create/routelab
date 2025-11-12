@@ -11,6 +11,7 @@
   flex: 0 0 58vh;
   max-height: 70vh;
   overflow: hidden;
+  z-index: 0;
 }
 
 .record-map {
@@ -37,6 +38,8 @@
   width: 100%;
   margin-top: -48rpx;
   padding-bottom: env(safe-area-inset-bottom);
+  position: relative;
+  z-index: 1;
 }
 
 .record-sheet {
@@ -112,30 +115,40 @@
   border: 1px solid rgba(15, 23, 42, 0.05);
 }
 
-.meta-inline--disabled {
-  opacity: 0.65;
-}
-
 .meta-inline__cell {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 10rpx;
-}
-
-.meta-inline__icon {
-  font-size: 30rpx;
-}
-
-.meta-inline__label {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #0f172a;
+  gap: 8rpx;
 }
 
 .meta-inline__hint {
   font-size: 24rpx;
   color: #94a3b8;
+}
+
+.meta-inline__cell--static .meta-inline__value {
+  color: #0f172a;
+}
+
+.meta-inline__cell--action {
+  justify-content: flex-start;
+  gap: 12rpx;
+}
+
+.meta-inline__cell--disabled {
+  opacity: 0.65;
+}
+
+.meta-inline__label-text {
+  font-size: 26rpx;
+  color: #64748b;
+}
+
+.meta-inline__value {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .meta-inline__divider {
