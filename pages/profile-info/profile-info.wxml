@@ -1,0 +1,111 @@
+﻿<view class="page">
+  <rlab-nav title="完善个人资料"></rlab-nav>
+  <scroll-view class="page__scroll" scroll-y>
+    <form class="form" bindsubmit="handleSubmit">
+      <view class="section section--avatar">
+        <view class="section__label">头像</view>
+        <view class="avatar-picker">
+          <view class="avatar-preview">
+            <image
+              wx:if="{{avatarPreview}}"
+              class="avatar-preview__image"
+              src="{{avatarPreview}}"
+              mode="aspectFill"
+            />
+            <view wx:else class="avatar-preview__placeholder">
+              <text>选择头像</text>
+            </view>
+          </view>
+          <button
+            wx:if="{{canChooseAvatar}}"
+            class="avatar-picker__button"
+            open-type="chooseAvatar"
+            bindchooseavatar="handleChooseAvatar"
+            bindtap="handleAvatarButtonTap"
+            loading="{{avatarUploading}}"
+            disabled="{{avatarUploading}}"
+          >
+            <text wx:if="{{avatarUploading}}">上传中...</text>
+            <text wx:else>选择头像</text>
+          </button>
+          <view wx:else class="avatar-picker__fallback">
+            当前微信版本暂不支持「选择头像」，请升级后再试
+          </view>
+        </view>
+        <view wx:if="{{avatarError}}" class="section__error">{{avatarError}}</view>
+        <view wx:if="{{avatarSecurityNotice}}" class="section__hint">{{avatarSecurityNotice}}</view>
+      </view>
+
+      <view class="section">
+        <view class="section__label">昵称</view>
+        <input
+          class="nickname-input"
+          type="nickname"
+          name="nickname"
+          placeholder="请输入昵称"
+          value="{{nickname}}"
+          bindinput="handleNicknameInput"
+        />
+        <view wx:if="{{nicknameError}}" class="section__error">{{nicknameError}}</view>
+        <view class="section__hint">点击键盘上方的「微信昵称」可快速填入</view>
+      </view>
+
+      <view class="section">
+        <view class="section__label">性别</view>
+        <radio-group class="radio-group" bindchange="handleGenderChange">
+          <label class="radio-group__option" wx:for="{{genderOptions}}" wx:key="value">
+            <radio
+              value="{{item.value}}"
+              checked="{{item.value === gender}}"
+              color="#2f49d1"
+            />
+            <text class="radio-group__text">{{item.label}}</text>
+          </label>
+        </radio-group>
+        <view wx:if="{{genderError}}" class="section__error">{{genderError}}</view>
+      </view>
+
+      <view class="section">
+        <view class="section__label">年龄段</view>
+        <picker
+          class="picker"
+          mode="selector"
+          range="{{ageRangeOptions}}"
+          range-key="label"
+          bindchange="handleAgeRangeChange"
+        >
+          <view class="picker__display {{ageRange ? '' : 'picker__display--placeholder'}}">
+            {{ageRange ? ageRangeLabel : '请选择年龄段'}}
+          </view>
+        </picker>
+        <view wx:if="{{ageRangeError}}" class="section__error">{{ageRangeError}}</view>
+      </view>
+
+      <view class="section">
+        <view class="section__label">身份标签</view>
+        <picker
+          class="picker"
+          mode="selector"
+          range="{{identityOptions}}"
+          range-key="label"
+          bindchange="handleIdentityChange"
+        >
+          <view class="picker__display {{identity ? '' : 'picker__display--placeholder'}}">
+            {{identity ? identityLabel : '请选择身份标签'}}
+          </view>
+        </picker>
+        <view wx:if="{{identityError}}" class="section__error">{{identityError}}</view>
+      </view>
+
+      <button
+        class="save-button"
+        type="primary"
+        form-type="submit"
+        loading="{{submitting}}"
+        disabled="{{submitting}}"
+      >
+        保存
+      </button>
+    </form>
+  </scroll-view>
+</view>

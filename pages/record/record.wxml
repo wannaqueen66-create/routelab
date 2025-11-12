@@ -1,193 +1,263 @@
-<view class="page">
-  <rlab-nav
-    title="RouteLab · 开始记录"
-    background="#101735"
-    color="#ffffff"
-  ></rlab-nav>
+<view class="record-page">
+  <view class="map-region">
+    <map
+      id="routeMap"
+      class="record-map"
+      longitude="{{centerLongitude}}"
+      latitude="{{centerLatitude}}"
+      scale="16"
+      show-location="true"
+      enable-satellite="false"
+      show-scale="true"
+      markers="{{markers}}"
+      polyline="{{polyline}}"
+      bindtap="handleMapTap"
+    ></map>
 
-  <scroll-view class="page__scroll" scroll-y enable-back-to-top>
-    <view class="map-wrapper" bindtap="handleMapTap">
-      <map
-        id="routeMap"
-        longitude="{{centerLongitude}}"
-        latitude="{{centerLatitude}}"
-        scale="16"
-        show-location="true"
-        enable-satellite="false"
-        show-scale="true"
-        style="width: 100%; height: 520rpx;"
-        markers="{{markers}}"
-        polyline="{{polyline}}"
-      ></map>
-      <view class="map-overlay" wx:if="{{!tracking}}">
-        <text>点击 START，先锁定起点再开始记录</text>
-      </view>
+    <view class="map-tip" wx:if="{{!tracking && !hasRoutePoints}}">
+      <text>点击"开始记录"即可生成第一条校园轨迹</text>
     </view>
+  </view>
 
-    <view class="section section--light">
-      <view class="section__head">
-        <text class="section__title">出行方式</text>
+  <view class="sheet-container">
+    <view class="record-sheet">
+      <view class="record-sheet__grabber"></view>
+
+      <view class="metrics-grid">
+        <view class="metric">
+          <view class="metric__icon">⏱️</view>
+          <view class="metric__texts">
+            <text class="metric__label">用时</text>
+            <text class="metric__value">{{durationText}}</text>
+          </view>
+        </view>
+        <view class="metric">
+          <view class="metric__icon">📏</view>
+          <view class="metric__texts">
+            <text class="metric__label">距离</text>
+            <text class="metric__value">{{distanceText}}</text>
+          </view>
+        </view>
+        <view class="metric">
+          <view class="metric__icon">⚡</view>
+          <view class="metric__texts">
+            <text class="metric__label">实时配速</text>
+            <text class="metric__value">{{speedText}}</text>
+          </view>
+        </view>
+        <view class="metric">
+          <view class="metric__icon">🔥</view>
+          <view class="metric__texts">
+            <text class="metric__label">估算热量</text>
+            <text class="metric__value">{{caloriesText}}</text>
+          </view>
+        </view>
       </view>
-      <view class="activity-selector">
-        <block wx:for="{{activityOptions}}" wx:key="key">
+
+      <view class="sheet-meta">
+        <view class="meta-inline {{tracking ? 'meta-inline--disabled' : ''}}">
           <view
-            class="activity-selector__item {{activityIndex === index ? 'activity-selector__item--active' : ''}}"
-            data-index="{{index}}"
-            bindtap="handleActivitySelect"
+            class="meta-inline__cell"
+            bindtap="handleActivityTap"
           >
-            <text class="activity-selector__label">{{item.label}}</text>
+            <view class="meta-inline__icon">{{activityIcon}}</view>
+            <text class="meta-inline__label">{{activityLabel}}</text>
+            <text class="meta-inline__hint" wx:if="{{tracking}}">🔒</text>
           </view>
-        </block>
-      </view>
-      <text class="activity-selector__desc">{{activityDescription}}</text>
-    </view>
+          <view class="meta-inline__divider">|</view>
+          <view
+            class="meta-inline__cell"
+            bindtap="handleOpenPurposePicker"
+          >
+            <view class="meta-inline__icon">{{purposeSelectionIcon || '🎯'}}</view>
+            <text class="meta-inline__label">{{purposeSelectionLabel}}</text>
+            <text class="meta-inline__hint" wx:if="{{tracking}}">🔒</text>
+          </view>
+        </view>
 
-    <view class="section section--light">
-      <view class="section__head">
-        <text class="section__title">路线节点</text>
+        <view class="meta-item meta-item--toggle">
+          <view class="meta-item__icon">💡</view>
+          <text class="meta-item__label meta-item__label--inline">保持屏幕常亮</text>
+          <switch
+            class="meta-item__switch"
+            checked="{{keepScreenOnPreferred}}"
+            bindchange="handleKeepScreenToggle"
+            disabled="{{!keepScreenSupported}}"
+          ></switch>
+        </view>
       </view>
-      <view class="location-row">
-        <text class="location-row__label">起点</text>
-        <picker
-          mode="multiSelector"
-          range="{{startPickerRange}}"
-          value="{{startPickerValue}}"
-          disabled="{{tracking || startSelectionLocked}}"
-          bindchange="handleStartPickerChange"
-          bindcolumnchange="handleStartPickerColumnChange"
-        >
-          <view class="picker picker--surface {{tracking || startSelectionLocked ? 'picker--disabled' : ''}} {{startSelectionLocked ? '' : 'picker--pending'}}">
-            <view class="picker__value-row">
-              <text class="picker__value">{{startSelectedText}}</text>
-              <text class="picker__status" wx:if="{{startSelectionLocked}}">已锁定</text>
+
+      <view class="sheet-controls" wx:if="{{!tracking}}">
+        <button class="btn btn--primary" bindtap="handleStart">开始记录</button>
+      </view>
+
+      <view class="sheet-controls sheet-controls--dual" wx:elif="{{tracking && !paused}}">
+        <button class="btn btn--ghost" bindtap="handlePause">暂停</button>
+        <button class="btn btn--danger" bindtap="handleFinishPrompt">结束</button>
+      </view>
+
+      <view class="sheet-controls sheet-controls--dual" wx:else>
+        <button class="btn btn--primary" bindtap="handleResume">继续</button>
+        <button class="btn btn--danger" bindtap="handleFinishPrompt">结束</button>
+      </view>
+    </view>
+  </view>
+
+  <view
+    class="purpose-picker-overlay"
+    wx:if="{{purposePickerVisible}}"
+    catchtouchmove="true"
+  >
+    <view class="purpose-picker">
+      <view class="purpose-picker__header">
+        <text class="purpose-picker__title">选择此次出行目的</text>
+        <text class="purpose-picker__subtitle">用于分析不同路线的运动偏好</text>
+      </view>
+      <view class="purpose-picker__grid">
+        <block wx:for="{{purposeOptions}}" wx:key="key">
+          <view
+            class="purpose-picker__item {{purposePendingKey === item.key ? 'purpose-picker__item--active' : ''}}"
+            data-key="{{item.key}}"
+            bindtap="handlePurposeTap"
+          >
+            <view class="purpose-picker__item-icon">
+              <text>{{item.icon}}</text>
             </view>
-            <text class="picker__hint" wx:if="{{tracking}}">录制中不可修改</text>
-            <text class="picker__hint" wx:elif="{{startSelectionLocked}}">停止记录后可重新选择</text>
-            <text class="picker__hint" wx:else>点击选择起点位置</text>
+            <text class="purpose-picker__item-label">{{item.label}}</text>
           </view>
-        </picker>
-      </view>
-      <view class="location-row">
-        <text class="location-row__label">终点</text>
-        <picker
-          mode="multiSelector"
-          range="{{endPickerRange}}"
-          value="{{endPickerValue}}"
-          bindchange="handleEndPickerChange"
-          bindcolumnchange="handleEndPickerColumnChange"
-        >
-          <view class="picker picker--surface">
-            <text class="picker__value">{{endSelectedText}}</text>
-            <text class="picker__hint">提交前可随时调整</text>
-          </view>
-        </picker>
-      </view>
-    </view>
-
-    <view class="section stats">
-      <view class="stat-card">
-        <text class="stat-card__label">已用时</text>
-        <text class="stat-card__value">{{durationText}}</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-card__label">累计里程</text>
-        <text class="stat-card__value">{{distanceText}}</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-card__label">{{currentActivityKey === 'ride' ? '平均速度' : '实时配速'}}</text>
-        <text class="stat-card__value">{{speedText}}</text>
-      </view>
-      <view class="stat-card">
-        <text class="stat-card__label">估算热量</text>
-        <text class="stat-card__value">{{caloriesText}}</text>
-      </view>
-      <view class="stat-card stat-card--wide">
-        <text class="stat-card__label">估算步数</text>
-        <text class="stat-card__value">{{stepsText}}</text>
-      </view>
-    </view>
-
-    <view class="controls">
-      <button wx:if="{{!tracking}}" class="btn btn--primary" bindtap="handleStart">START</button>
-      <view wx:elif="{{tracking}}" class="controls__group">
-        <button wx:if="{{!paused}}" class="btn btn--ghost" bindtap="handlePause">PAUSE</button>
-        <button wx:if="{{paused}}" class="btn btn--secondary" bindtap="handleResume">RESUME</button>
-        <button class="btn btn--danger" bindtap="handleStop">FINISH</button>
-      </view>
-      <view class="controls__hint" wx:if="{{paused}}">暂停时不会记录轨迹</view>
-    </view>
-
-    <view class="section section--light">
-      <view class="section__head">
-        <text class="section__title">打卡照片</text>
-        <button class="link-button" size="mini" bindtap="handleAddPhoto">添加照片</button>
-      </view>
-      <view class="photo-grid" wx:if="{{photos.length}}">
-        <block wx:for="{{photos}}" wx:key="path">
-          <view class="photo-grid__item">
-            <image
-              class="photo-grid__image"
-              src="{{item.path}}"
-              mode="aspectFill"
-              data-index="{{index}}"
-              bindtap="handlePreviewPhoto"
-            />
-            <view class="photo-grid__remove" data-index="{{index}}" bindtap="handleRemovePhoto">×</view>
-          </view>
-          <textarea
-            class="photo-grid__note"
-            placeholder="写下此刻的备注或心情"
-            value="{{item.note}}"
-            data-index="{{index}}"
-            bindinput="handlePhotoNoteInput"
-          ></textarea>
         </block>
       </view>
-      <view class="photo-section__empty" wx:if="{{!photos.length}}">
-        <text>途中拍照或上传，为本次路线留影</text>
+      <view class="purpose-picker__note">
+        <text>
+          {{tracking ? '调整后自动应用当前记录' : '取消后不会开始记录'}}
+        </text>
+      </view>
+      <view class="purpose-picker__actions">
+        <button class="btn btn--ghost" bindtap="handlePurposeCancel">取消</button>
+        <button class="btn btn--primary" bindtap="handlePurposeConfirm">
+          {{tracking ? '保存目的' : '开始记录'}}
+        </button>
       </view>
     </view>
+  </view>
 
-    <view class="section section--surface">
-      <view class="form-row">
-        <text class="form-label">隐私等级</text>
-        <picker
-          mode="selector"
-          value="{{privacyIndex}}"
-          range="{{privacyOptions}}"
-          range-key="label"
-          bindchange="handlePrivacyChange"
-        >
-          <view class="picker picker--input">
-            <text class="picker__value">{{privacyOptions[privacyIndex].label}}</text>
-            <text class="picker__hint">{{privacyOptions[privacyIndex].description}}</text>
+  <view
+    class="finish-sheet-overlay"
+    wx:if="{{finishSheetVisible}}"
+    catchtouchmove="true"
+  >
+    <view class="finish-sheet">
+      <view class="finish-sheet__header">
+        <text class="finish-sheet__title">完成记录</text>
+        <text class="finish-sheet__subtitle">补充路线名称、备注与隐私设置</text>
+      </view>
+      <view class="finish-sheet__body">
+        <view class="finish-field">
+          <text class="finish-field__label">路线名称</text>
+          <input
+            class="finish-field__input"
+            placeholder="如：午后环校骑行"
+            value="{{title}}"
+            bindinput="handleTitleInput"
+          />
+        </view>
+        <view class="finish-field finish-field--textarea">
+          <text class="finish-field__label">备注</text>
+          <textarea
+            class="finish-field__textarea"
+            placeholder="记录天气、同行伙伴或心情"
+            value="{{note}}"
+            bindinput="handleNoteInput"
+            auto-height
+          ></textarea>
+        </view>
+        <view class="finish-field">
+          <text class="finish-field__label">隐私等级</text>
+          <radio-group
+            class="finish-privacy"
+            bindchange="handlePrivacyChange"
+            value="{{privacyOptions[privacyIndex].key}}"
+          >
+            <label
+              wx:for="{{privacyOptions}}"
+              wx:key="key"
+              class="finish-privacy__item"
+            >
+              <radio value="{{item.key}}" checked="{{privacyOptions[privacyIndex].key === item.key}}" />
+              <text>{{item.label}}</text>
+            </label>
+          </radio-group>
+        </view>
+        <view class="finish-field">
+          <text class="finish-field__label">打卡照片</text>
+          <view class="finish-photo__actions">
+            <button class="btn btn--camera" bindtap="handleAddPhoto">📷 拍摄</button>
           </view>
-        </picker>
+          <view class="finish-photo__grid" wx:if="{{photos.length}}">
+            <block wx:for="{{photos}}" wx:key="path">
+              <view class="finish-photo__item">
+                <image src="{{item.path}}" mode="aspectFill" bindtap="handlePreviewPhoto" data-index="{{index}}" />
+                <view
+                  class="finish-photo__remove"
+                  data-index="{{index}}"
+                  bindtap="handleRemovePhoto"
+                >
+                  ✕
+                </view>
+              </view>
+            </block>
+          </view>
+        </view>
       </view>
-      <view class="form-row">
-        <text class="form-label">路线名称</text>
-        <input
-          class="input"
-          placeholder="如：午后环校骑行"
-          value="{{title}}"
-          bindinput="handleTitleInput"
-        />
-      </view>
-      <view class="form-row">
-        <text class="form-label">备注</text>
-        <textarea
-          class="textarea"
-          placeholder="记录天气、同行伙伴或心情"
-          value="{{note}}"
-          bindinput="handleNoteInput"
-          auto-height
-        ></textarea>
+      <view class="finish-sheet__actions">
+        <button class="btn btn--ghost" bindtap="handleFinishCancel">取消</button>
+        <button
+          class="btn btn--primary"
+          bindtap="handleFinishSave"
+          loading="{{uploading}}"
+          disabled="{{uploading}}"
+        >
+          保存
+        </button>
       </view>
     </view>
+  </view>
 
-    <view class="shortcut">
-      <button class="btn btn--ghost" bindtap="handleViewHistory">历史记录</button>
-      <button class="btn btn--ghost" bindtap="handleOpenSettings">偏好设置</button>
+  <view
+    class="location-permission-overlay"
+    wx:if="{{!locationAuthorized && showLocationPrompt}}"
+    catchtouchmove="true"
+  >
+    <view class="location-permission-dialog">
+      <view class="location-permission-dialog__badge">RouteLab</view>
+      <view class="location-permission-dialog__title">
+        需要获取定位权限
+      </view>
+      <view class="location-permission-dialog__desc">
+        RouteLab 需要持续定位以绘制轨迹、统计里程以及提供天气建议，请允许使用位置信息。
+      </view>
+      <view class="location-permission-dialog__actions">
+        <button
+          class="location-permission-dialog__primary"
+          type="primary"
+          loading="{{locationPromptPending}}"
+          disabled="{{locationPromptPending}}"
+          bindtap="handleLocationPermissionAuthorize"
+        >
+          立即授权
+        </button>
+        <button
+          class="location-permission-dialog__secondary"
+          loading="{{locationPromptPending}}"
+          disabled="{{locationPromptPending}}"
+          bindtap="handleLocationPermissionOpenSettings"
+        >
+          打开设置
+        </button>
+      </view>
+      <view class="location-permission-dialog__tip">
+        若已拒绝，请前往 设置 → 隐私 → 定位 重新开启
+      </view>
     </view>
-  </scroll-view>
+  </view>
 </view>

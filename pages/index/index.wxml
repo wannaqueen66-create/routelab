@@ -1,112 +1,266 @@
 <view class="page">
-  <rlab-nav
-    title="RouteLab · 校园节奏"
-    back="{{false}}"
-    background="#0f172a"
-    color="#ffffff"
-  ></rlab-nav>
+  <rlab-nav title="RouteLab" back="{{false}}"></rlab-nav>
 
   <view wx:if="{{!networkConnected}}" class="banner banner--offline">
-    <text>当前离线，轨迹仍会缓存并在联网后自动合并</text>
+    <text>当前网络不可用，轨迹会在恢复后自动同步</text>
+  </view>
+
+  <view class="tab-bar">
+    <block wx:for="{{tabs}}" wx:key="key">
+      <view
+        class="tab-bar__item {{activeTab === item.key ? 'tab-bar__item--active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="handleTabChange"
+      >
+        <text class="tab-bar__icon">{{item.icon}}</text>
+        <view class="tab-bar__label">{{item.label}}</view>
+        <text wx:if="{{activeTab === item.key}}" class="tab-bar__desc">{{item.description}}</text>
+      </view>
+    </block>
   </view>
 
   <scroll-view scroll-y class="page__scroll" enable-back-to-top>
-    <view class="section hero">
-      <view class="hero__subtitle">面向校园的轨迹记录与分析</view>
-      <view class="hero__title">发现你的运动节奏类型</view>
-      <view class="hero__desc">记录日常路线，洞察活跃类型与热点时段</view>
-      <view class="hero__cta">
-        <button class="cta__primary" bindtap="handleNavigateRecord">开始记录</button>
-        <button class="cta__secondary" bindtap="handleNavigateHistory">
-          路线历史 ({{overview.totalCount}})
-        </button>
+    <view wx:if="{{activeTab === 'home'}}" class="tab-content tab-content--home">
+      <view class="home-fold">
+      <view class="card card--weather">
+        <view class="card__head">
+          <text class="card__title">今日天气与建议</text>
+          <button
+            class="pill-button"
+            size="mini"
+            loading="{{weather.loading}}"
+            bindtap="handleRefreshWeather"
+          >
+            刷新
+          </button>
+        </view>
+        <view wx:if="{{weather.ready}}" class="weather">
+          <view class="weather__headline">
+            <text class="weather__temp">{{weather.temperature}}</text>
+            <view class="weather__status">
+              <text class="weather__text">{{weather.weatherText}}</text>
+              <text class="weather__apparent" wx:if="{{weather.apparentTemperature}}">
+                体感 {{weather.apparentTemperature}}
+              </text>
+            </view>
+          </view>
+          <view wx:if="{{weather.cityText}}" class="weather__location">
+            <text>{{weather.cityText}}</text>
+          </view>
+          <view class="weather__advice">
+            <view class="weather__advice-dot" style="background-color: {{weather.sportAdviceColor}}"></view>
+            <text class="weather__advice-text">{{weather.suggestion}}</text>
+          </view>
+          <view class="weather__metrics">
+            <view class="weather__metric">
+              <text class="weather__metric-label">湿度</text>
+              <text class="weather__metric-value">{{weather.humidityText}}</text>
+            </view>
+            <view class="weather__metric">
+              <text class="weather__metric-label">风速</text>
+              <text class="weather__metric-value">{{weather.windText}}</text>
+            </view>
+            <view class="weather__metric">
+              <text class="weather__metric-label">空气</text>
+              <text class="weather__metric-value">{{weather.airQualityText}}</text>
+            </view>
+          </view>
+        </view>
+        <view wx:elif="{{weather.loading}}" class="weather__empty">
+          <text>正在定位并获取天气...</text>
+        </view>
+        <view wx:else class="weather__empty">
+          <text>{{weather.error}}</text>
+        </view>
       </view>
-      <view class="hero__stats">
-        <view class="stat">
-          <text class="stat__value">{{overview.todayDistance}}</text>
-          <text class="stat__label">今日里程</text>
+
+      <view class="card card--hero">
+        <view class="hero__top">
+          <view class="hero__titles">
+            <text class="hero__eyebrow">今日概览</text>
+            <text class="hero__title">开启校园轨迹</text>
+            <text class="hero__desc">已积累 {{overview.todayDistance}} · {{overview.todayDuration}}</text>
+          </view>
+          <button class="btn btn--primary" bindtap="handleNavigateRecord">开始记录</button>
         </view>
-        <view class="stat">
-          <text class="stat__value">{{overview.todayDuration}}</text>
-          <text class="stat__label">今日时长</text>
-        </view>
-        <view class="stat">
-          <text class="stat__value">{{overview.totalCalories}}</text>
-          <text class="stat__label">累计热量</text>
+        <view class="hero__stats">
+          <view class="hero__stat">
+            <text class="hero__stat-value">{{overview.todayDistance}}</text>
+            <text class="hero__stat-label">今日里程</text>
+            </view>
+            <view class="hero__stat">
+              <text class="hero__stat-value">{{overview.todayDuration}}</text>
+              <text class="hero__stat-label">今日时长</text>
+            </view>
+            <view class="hero__stat">
+              <text class="hero__stat-value">{{overview.totalCount}}</text>
+              <text class="hero__stat-label">累计记录</text>
+            </view>
+            <view class="hero__stat">
+              <text class="hero__stat-value">{{overview.totalDistance}}</text>
+              <text class="hero__stat-label">累计里程</text>
+            </view>
         </view>
       </view>
     </view>
+    </view>
 
-    <view class="section" wx:if="{{bestLoops.commute || bestLoops.run}}">
-      <view class="section__head">
-        <text class="section__title">推荐路线</text>
-      </view>
-      <view
-        class="loop-card"
-        wx:if="{{bestLoops.commute}}"
-        data-id="{{bestLoops.commute.id}}"
-        bindtap="handleNavigateRoute"
-      >
-        <view class="loop-card__tag">通勤路径</view>
-        <view class="loop-card__title">{{bestLoops.commute.title}}</view>
-        <view class="loop-card__meta">
-          <text>{{bestLoops.commute.distance}} · {{bestLoops.commute.duration}}</text>
-          <text>{{bestLoops.commute.campusLabel}}</text>
+    <view wx:elif="{{activeTab === 'history'}}" class="tab-content tab-content--history">
+      <view class="card card--history">
+        <view class="history__header">
+          <text class="card__title">历史轨迹</text>
+          <button class="pill-button" size="mini" loading="{{historySyncing}}" bindtap="handleHistorySync">
+            {{historySyncing ? '同步中' : '同步云端'}}
+          </button>
         </view>
-        <text class="loop-card__date">{{bestLoops.commute.date}}</text>
-      </view>
-      <view
-        class="loop-card loop-card--accent"
-        wx:if="{{bestLoops.run}}"
-        data-id="{{bestLoops.run.id}}"
-        bindtap="handleNavigateRoute"
-      >
-        <view class="loop-card__tag">操场跑圈</view>
-        <view class="loop-card__title">{{bestLoops.run.title}}</view>
-        <view class="loop-card__meta">
-          <text>{{bestLoops.run.distance}} · {{bestLoops.run.duration}}</text>
-          <text>{{bestLoops.run.campusLabel}}</text>
+        <scroll-view scroll-x class="history__filters">
+          <view class="history__filters-inner">
+            <block wx:for="{{historyFilters}}" wx:key="key">
+              <view
+                class="chip {{historyActiveFilter === item.key ? 'chip--active' : ''}}"
+                data-key="{{item.key}}"
+                bindtap="handleHistoryFilterChange"
+              >
+                {{item.label}}
+              </view>
+            </block>
+          </view>
+        </scroll-view>
+        <view wx:if="{{historyEmpty}}" class="history__empty">
+          <text class="history__empty-title">暂未记录轨迹</text>
+          <text class="history__empty-desc">开启一次运动，即可在此回顾完整轨迹</text>
+          <button class="btn btn--primary" bindtap="handleNavigateRecord">立即记录</button>
         </view>
-        <text class="loop-card__date">{{bestLoops.run.date}}</text>
+        <block wx:else>
+          <block wx:for="{{historyRoutes}}" wx:key="id">
+            <view
+              class="history-route"
+              data-id="{{item.id}}"
+              bindtap="handleHistoryRouteTap"
+              bindlongpress="handleHistoryRouteLongPress"
+            >
+              <view class="history-route__header">
+                <text class="history-route__title">{{item.title}}</text>
+                <text class="history-route__privacy">{{item.privacyLabel}}</text>
+              </view>
+              <view class="history-route__meta">
+                <text>{{item.distanceText}}</text>
+                <text>·</text>
+                <text>{{item.durationText}}</text>
+                <text>·</text>
+                <text>{{item.caloriesText}}</text>
+              </view>
+              <view class="history-route__path">
+                <text>{{item.startLabel}}</text>
+                <text class="history-route__arrow">→</text>
+                <text>{{item.endLabel}}</text>
+              </view>
+              <view class="history-route__footer">
+                <text>{{item.activityLabel}}</text>
+                <text>｜{{item.weekLabel}} {{item.timeRange}}</text>
+              </view>
+              <view class="history-route__extra" wx:if="{{item.photosCount}}">
+                <text>{{item.photosCount}} 张照片</text>
+              </view>
+              <view class="history-route__date">
+                <text>{{item.startDate}}</text>
+              </view>
+            </view>
+          </block>
+        </block>
       </view>
     </view>
 
-    <view class="section" wx:if="{{recentRoutes.length}}">
-      <view class="section__head">
-        <text class="section__title">最新轨迹</text>
-        <text class="section__subtitle">快速回顾你最近的三次出行</text>
-      </view>
-      <block wx:for="{{recentRoutes}}" wx:key="id">
-        <view class="history-card" data-id="{{item.id}}" bindtap="handleNavigateRoute">
-          <view class="history-card__title">
-            <text>{{item.title}}</text>
-            <text class="history-card__privacy">{{item.privacyLabel}}</text>
+    <view wx:else class="tab-content tab-content--profile">
+      <view class="card card--profile">
+        <view class="profile-card__header">
+          <view class="profile-card__avatar" wx:if="{{!userCard.avatarUrl}}">
+            <text>{{userCard.initial}}</text>
           </view>
-          <view class="history-card__meta">
-            <text>{{item.distance}}</text>
-            <text>·</text>
-            <text>{{item.duration}}</text>
-          </view>
-          <view class="history-card__meta history-card__meta--campus">
-            <text>{{item.campusLabel}}</text>
-          </view>
-          <view class="history-card__date">
-            <text>{{item.week}}</text>
-            <text class="history-card__date-split">|</text>
-            <text>{{item.startDate}}</text>
+          <image
+            wx:else
+            class="profile-card__avatar-image"
+            src="{{userCard.avatarUrl}}"
+            mode="aspectFill"
+          />
+          <view class="profile-card__info">
+            <text class="profile-card__name">{{userCard.nickname}}</text>
+            <text class="profile-card__privacy">{{userCard.privacyLabel}}</text>
           </view>
         </view>
-      </block>
+        <view class="profile-card__stats">
+          <view class="profile-card__stat">
+            <text class="profile-card__stat-label">累计里程</text>
+            <text class="profile-card__stat-value">{{userCard.totalDistance}}</text>
+          </view>
+          <view class="profile-card__stat">
+            <text class="profile-card__stat-label">记录次数</text>
+            <text class="profile-card__stat-value">{{userCard.totalCount}}</text>
+          </view>
+          <view class="profile-card__stat">
+            <text class="profile-card__stat-label">累计消耗</text>
+            <text class="profile-card__stat-value">{{userCard.totalCalories}}</text>
+          </view>
+        </view>
+        <view class="profile-card__privacy-toggle">
+          <view class="profile-card__privacy-text">
+            <text class="profile-card__privacy-title">默认隐私</text>
+            <text class="profile-card__privacy-desc">{{userCard.privacyDescription}}</text>
+          </view>
+          <switch
+            class="profile-card__privacy-switch"
+            checked="{{privacyLevel === 'public'}}"
+            bindchange="handlePrivacySwitchChange"
+          />
+        </view>
+        <view class="profile-card__actions">
+          <button class="btn btn--ghost" bindtap="handleNavigateProfile">个人设置</button>
+          <button class="btn btn--ghost" bindtap="handleNavigateHistory">打开历史列表</button>
+        </view>
+      </view>
+
+      <view class="card card--progress">
+        <rlab-progress
+          label="里程目标"
+          value="{{overview.totalDistance}}"
+          goal="目标 {{goalLabels.distance}}"
+          percentage="{{progress.distance}}"
+          variant="primary"
+        ></rlab-progress>
+        <rlab-progress
+          label="记录次数"
+          value="{{overview.totalCount}}"
+          goal="目标 {{goalLabels.count}}"
+          percentage="{{progress.count}}"
+          variant="accent"
+        ></rlab-progress>
+        <rlab-progress
+          label="消耗热量"
+          value="{{overview.totalCalories}}"
+          goal="目标 {{goalLabels.calories}}"
+          percentage="{{progress.calories}}"
+          variant="energy"
+        ></rlab-progress>
+      </view>
     </view>
   </scroll-view>
 
   <view class="permission-mask" wx:if="{{showLocationPrompt}}">
     <view class="permission-dialog">
-      <text class="permission-dialog__title">需要定位权限</text>
-      <text class="permission-dialog__desc">开启定位后才能记录轨迹与查看推荐路线。</text>
+      <text class="permission-dialog__title">需要开启定位权限</text>
+      <text class="permission-dialog__desc">
+        RouteLab 需要使用定位以获取天气建议，并准确记录校园轨迹，请允许使用位置信息。
+      </text>
       <view class="permission-dialog__actions">
-        <button class="permission-dialog__btn permission-dialog__btn--primary" bindtap="handleRequestLocationAuthorize">去授权</button>
-        <button class="permission-dialog__btn" bindtap="handleOpenLocationSetting">打开设置</button>
+        <button
+          class="permission-dialog__btn permission-dialog__btn--primary"
+          bindtap="handleRequestLocationAuthorize"
+        >
+          去授权
+        </button>
+        <button class="permission-dialog__btn" bindtap="handleOpenLocationSetting">
+          打开设置
+        </button>
       </view>
     </view>
   </view>

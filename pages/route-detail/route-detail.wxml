@@ -1,8 +1,6 @@
-<view class="page">
+﻿<view class="page">
   <rlab-nav
-    title="RouteLab · 轨迹详情"
-    background="#0f172a"
-    color="#ffffff"
+    title="RouteLab 路线详情"
   ></rlab-nav>
 
   <scroll-view class="page__scroll" scroll-y wx:if="{{detail}}">
@@ -27,13 +25,26 @@
           range-key="label"
           value="{{privacyIndex}}"
           bindchange="handlePrivacyChange"
+          disabled="{{!ownRoute}}"
         >
-          <view class="privacy-picker">
+          <view class="privacy-picker {{!ownRoute ? 'privacy-picker--disabled' : ''}}">
             <text>{{privacyOptions[privacyIndex].label}}</text>
           </view>
         </picker>
       </view>
-      <view class="section__sub">{{detail.activityLabel}} · {{detail.campusLabel}}</view>
+      <view class="section__sub">{{detail.activityLabel}} · {{detail.startLabel}} → {{detail.endLabel}}</view>
+    </view>
+
+    <view class="section purpose-section">
+      <view class="purpose-card {{detail.hasPurpose ? '' : 'purpose-card--empty'}}">
+        <view class="purpose-card__icon">
+          <text>{{detail.purposeIcon}}</text>
+        </view>
+        <view class="purpose-card__content">
+          <text class="purpose-card__label">{{detail.purposeLabel}}</text>
+          <text class="purpose-card__desc">{{detail.purposeDescription}}</text>
+        </view>
+      </view>
     </view>
 
     <view class="section category" wx:if="{{detail.activityLevel}}">
@@ -45,7 +56,7 @@
     </view>
 
     <view class="section category-legend" wx:if="{{levelStandards.length}}">
-      <view class="section__title">判定标准</view>
+      <view class="section__title">评定标准</view>
       <view class="category-legend__grid">
         <block wx:for="{{levelStandards}}" wx:key="key">
           <view class="category-legend__item">
@@ -70,6 +81,14 @@
         <text class="stat-card__value">{{detail.timeRange}}</text>
       </view>
       <view class="stat-card">
+        <text class="stat-card__label">起点</text>
+        <text class="stat-card__value">{{detail.startLabel}}</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-card__label">终点</text>
+        <text class="stat-card__value">{{detail.endLabel}}</text>
+      </view>
+      <view class="stat-card">
         <text class="stat-card__label">用时</text>
         <text class="stat-card__value">{{detail.duration}}</text>
       </view>
@@ -92,7 +111,7 @@
     </view>
 
     <view class="section" wx:if="{{detail.photos.length}}">
-      <view class="section__title">路线打卡</view>
+      <view class="section__title">路线照片</view>
       <view class="photo-gallery">
         <block wx:for="{{detail.photos}}" wx:key="path">
           <view class="photo-gallery__item" data-index="{{index}}" bindtap="handlePreviewPhoto">
@@ -116,13 +135,82 @@
       </view>
     </view>
 
+    <view class="section section--comments">
+      <view class="section__head">
+        <text class="section__title">评论</text>
+        <button class="pill-button" size="mini" bindtap="handleAddComment">写评论</button>
+      </view>
+      <view wx:if="{{commentsLoading}}" class="comments__loading">
+        <text>正在加载评论...</text>
+      </view>
+      <view wx:elif="{{commentsError}}" class="comments__error">
+        <text>{{commentsError}}</text>
+        <button class="pill-button" size="mini" bindtap="loadComments">重试</button>
+      </view>
+      <view wx:elif="{{!comments.length}}" class="comments__empty">
+        <text>暂时没有评论，快来抢沙发！</text>
+      </view>
+      <view wx:else class="comment-list">
+        <block wx:for="{{comments}}" wx:key="id" wx:for-item="comment">
+          <view class="comment-item">
+            <view class="comment-item__header">
+              <text class="comment-item__author">{{comment.user.displayName}}</text>
+              <text class="comment-item__time">{{comment.createdAtText}}</text>
+            </view>
+            <text class="comment-item__content">{{comment.content}}</text>
+            <view class="comment-item__actions">
+              <view
+                class="comment-action {{comment.liked ? 'comment-action--active' : ''}}"
+                data-id="{{comment.id}}"
+                data-liked="{{comment.liked}}"
+                bindtap="handleToggleCommentLike"
+              >
+                <text class="comment-action__icon">👍</text>
+                <text>{{comment.likes}}</text>
+              </view>
+              <view class="comment-action" data-id="{{comment.id}}" bindtap="handleReplyComment">
+                <text class="comment-action__icon">💬</text>
+                <text>回复 {{comment.repliesCount}}</text>
+              </view>
+              <view
+                wx:if="{{comment.canDelete}}"
+                class="comment-action comment-action--danger"
+                data-comment-id="{{comment.id}}"
+                bindtap="handleDeleteComment"
+              >
+                <text class="comment-action__icon">🗑</text>
+                <text>删除</text>
+              </view>
+            </view>
+            <view wx:if="{{comment.replies.length}}" class="comment-replies">
+              <block wx:for="{{comment.replies}}" wx:key="id" wx:for-item="reply">
+                <view class="comment-reply">
+                  <view class="comment-reply__header">
+                    <text class="comment-reply__author">{{reply.user.displayName}}</text>
+                    <text class="comment-reply__time">{{reply.createdAtText}}</text>
+                  </view>
+                  <text class="comment-reply__content">{{reply.content}}</text>
+                </view>
+              </block>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
     <view class="actions">
-      <button class="btn btn--danger" bindtap="handleDelete">删除轨迹</button>
-      <button class="btn btn--ghost" open-type="share">分享概要</button>
+      <button class="btn btn--danger" bindtap="handleDelete" disabled="{{!ownRoute}}">
+        {{ownRoute ? '删除路线' : '仅限创建者删除'}}
+      </button>
+      <button class="btn btn--ghost" open-type="share">分享路线</button>
     </view>
   </scroll-view>
 
+  <view wx:elif="{{loading}}" class="empty">
+    <text>正在加载路线详情...</text>
+  </view>
+
   <view wx:else class="empty">
-    <text>加载中或未找到该轨迹</text>
+    <text>未找到该路线</text>
   </view>
 </view>
+

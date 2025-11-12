@@ -1,5 +1,6 @@
 {
   "usingComponents": {
-    "rlab-nav": "/components/navigation-bar/navigation-bar"
+    "rlab-nav": "/components/navigation-bar/navigation-bar",
+    "rlab-progress": "/components/progress-bar/progress-bar"
   }
 }

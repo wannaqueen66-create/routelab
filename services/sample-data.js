@@ -1,5 +1,4 @@
 const { storeRoute, createRoutePayload, getRoutes } = require('./route-store');
-const { buildCampusDisplayName, normalizeSelection } = require('../constants/campus');
 
 function buildRoute(baseTime, coordinates, meta) {
   const points = coordinates.map((coord, index) => ({
@@ -17,60 +16,66 @@ function buildRoute(baseTime, coordinates, meta) {
   };
 }
 
-function withCampusMeta(meta) {
-  const selection = normalizeSelection(meta.campusMeta);
-  return {
-    ...meta,
-    campusMeta: selection,
-    campusZone: buildCampusDisplayName(selection),
-  };
-}
-
 function generateSampleRoutes() {
   const now = Date.now();
   return [
-    buildRoute(now - 2 * 24 * 60 * 60 * 1000, [
-      [30.2736, 120.1549],
-      [30.2739, 120.1558],
-      [30.2745, 120.1564],
-      [30.2750, 120.1555],
-      [30.2741, 120.1548],
-    ], withCampusMeta({
-      title: 'Sunrise Track Walk',
-      campusMeta: { category: '运动场', area: '东区', location: '东区田径场' },
-      privacyLevel: 'public',
-      note: 'Easy morning walk with friends, clear sky.',
-      activityType: 'walk',
-      weight: 60,
-    })),
-    buildRoute(now - 24 * 60 * 60 * 1000, [
-      [30.2748, 120.1552],
-      [30.2752, 120.1561],
-      [30.2746, 120.1568],
-      [30.2739, 120.1559],
-      [30.2743, 120.1552],
-    ], withCampusMeta({
-      title: 'Library Coffee Ride',
-      campusMeta: { category: '其他', area: '公共设施', location: '图书馆' },
-      privacyLevel: 'group',
-      note: 'Cycling to the library for a quick coffee break.',
-      activityType: 'ride',
-      weight: 65,
-    })),
-    buildRoute(now - 60 * 60 * 1000, [
-      [30.2725, 120.1532],
-      [30.2731, 120.1540],
-      [30.2738, 120.1549],
-      [30.2745, 120.1557],
-      [30.2751, 120.1565],
-    ], withCampusMeta({
-      title: 'Dorm to Lab Walk',
-      campusMeta: { category: '宿舍区', area: '东区', location: '东二' },
-      privacyLevel: 'private',
-      note: 'Heading to the robotics lab with teammates.',
-      activityType: 'walk',
-      weight: 58,
-    })),
+    buildRoute(
+      now - 2 * 24 * 60 * 60 * 1000,
+      [
+        [30.2736, 120.1549],
+        [30.2739, 120.1558],
+        [30.2745, 120.1564],
+        [30.275, 120.1555],
+        [30.2741, 120.1548],
+      ],
+      {
+        title: 'Sunrise Track Walk',
+        startLabel: '东区操场',
+        endLabel: '东区操场',
+        privacyLevel: 'public',
+        note: '晴朗的清晨慢走热身。',
+        activityType: 'walk',
+        weight: 60,
+      }
+    ),
+    buildRoute(
+      now - 24 * 60 * 60 * 1000,
+      [
+        [30.2748, 120.1552],
+        [30.2752, 120.1561],
+        [30.2746, 120.1568],
+        [30.2739, 120.1559],
+        [30.2743, 120.1552],
+      ],
+      {
+        title: 'Library Coffee Ride',
+        startLabel: '图书馆西门',
+        endLabel: '校园咖啡角',
+        privacyLevel: 'public',
+        note: '骑车去图书馆喝一杯咖啡。',
+        activityType: 'ride',
+        weight: 65,
+      }
+    ),
+    buildRoute(
+      now - 60 * 60 * 1000,
+      [
+        [30.2725, 120.1532],
+        [30.2731, 120.154],
+        [30.2738, 120.1549],
+        [30.2745, 120.1557],
+        [30.2751, 120.1565],
+      ],
+      {
+        title: 'Dorm to Lab Walk',
+        startLabel: '东二宿舍',
+        endLabel: '机器人实验室',
+        privacyLevel: 'private',
+        note: '和队友一起去实验室准备比赛。',
+        activityType: 'walk',
+        weight: 58,
+      }
+    ),
   ];
 }
 
@@ -79,6 +84,7 @@ function ensureSeedRoutes() {
   if (existing.length) {
     return;
   }
+  const startLocation = (label) => (label ? { name: label, displayName: label, address: null, raw: null } : null);
   const samples = generateSampleRoutes();
   samples.forEach((sample) => {
     const payload = createRoutePayload({
@@ -88,10 +94,12 @@ function ensureSeedRoutes() {
       endTime: sample.endTime,
       privacyLevel: sample.privacyLevel,
       note: sample.note,
-      campusZone: sample.campusZone,
-      campusMeta: sample.campusMeta,
       activityType: sample.activityType,
       weight: sample.weight,
+      startLabel: sample.startLabel,
+      endLabel: sample.endLabel,
+      startLocation: startLocation(sample.startLabel),
+      endLocation: startLocation(sample.endLabel),
     });
     storeRoute(payload);
   });

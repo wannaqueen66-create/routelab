@@ -1,8 +1,6 @@
-<view class="page">
+﻿<view class="page">
   <rlab-nav
     title="RouteLab · 历史轨迹"
-    background="#0f172a"
-    color="#ffffff"
   ></rlab-nav>
 
   <view class="filter">
@@ -15,13 +13,16 @@
         {{item.label}}
       </view>
     </block>
+    <button class="filter__sync" loading="{{syncing}}" bindtap="handleSyncTap">
+      {{syncing ? '同步中...' : '同步云端'}}
+    </button>
   </view>
 
   <scroll-view class="list" scroll-y enable-back-to-top>
     <view wx:if="{{empty}}" class="empty">
-      <text class="empty__title">暂无轨迹</text>
-      <text class="empty__desc">点击“立即开走”即可开始你的校园路线记录</text>
-      <button class="btn" open-type="navigateTo" url="/pages/record/record">马上开走</button>
+      <text class="empty__title">暂无轨迹记录</text>
+      <text class="empty__desc">开启一次记录，RouteLab 会自动识别起点终点并生成统计。</text>
+      <button class="btn btn--primary" open-type="navigateTo" url="/pages/record/record">马上开始</button>
     </view>
     <block wx:else>
       <block wx:for="{{routes}}" wx:key="id">
@@ -42,16 +43,20 @@
             <text>·</text>
             <text>{{item.caloriesText}}</text>
           </view>
+          <view class="route-card__path">
+            <text>{{item.startLabel}}</text>
+            <text class="route-card__arrow">→</text>
+            <text>{{item.endLabel}}</text>
+          </view>
           <view class="route-card__footer">
             <text>{{item.activityLabel}}</text>
-            <text>{{item.startLabel}} → {{item.endLabel}}</text>
+            <text>{{item.timeRange}}</text>
           </view>
           <view class="route-card__extra" wx:if="{{item.photosCount}}">
             <text>{{item.photosCount}} 张打卡照片</text>
           </view>
           <view class="route-card__date">
             <text>{{item.startDate}}</text>
-            <text>{{item.timeRange}}</text>
           </view>
         </view>
       </block>

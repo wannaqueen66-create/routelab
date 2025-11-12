@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "完善个人资料",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
+}

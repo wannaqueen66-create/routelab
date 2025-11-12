@@ -1,0 +1,17 @@
+<view class="rlab-progress">
+  <view wx:if="{{label || value}}" class="rlab-progress__header">
+    <text class="rlab-progress__label">{{label}}</text>
+    <text class="rlab-progress__value">{{value}}</text>
+  </view>
+  <view class="rlab-progress__bar">
+    <view
+      class="rlab-progress__fill rlab-progress__fill--{{variant}}"
+      style="width: {{clampedPercentage}}%;"
+    ></view>
+  </view>
+  <view wx:if="{{goal || hint}}" class="rlab-progress__meta">
+    <text wx:if="{{goal}}" class="rlab-progress__goal">{{goal}}</text>
+    <text wx:if="{{hint}}" class="rlab-progress__hint">{{hint}}</text>
+  </view>
+  <slot></slot>
+</view>

@@ -7,7 +7,12 @@ const ACTIVITY_TYPES = [
   {
     key: 'ride',
     label: '骑行',
-    description: '校园骑行、共享单车通勤及其他有轮出行',
+    description: '校园骑行、共享单车通勤以及其他以车轮为主的出行方式',
+  },
+  {
+    key: 'run',
+    label: '跑步',
+    description: '训练或比赛时的跑步记录，便于查看配速与心率变化',
   },
 ];
 

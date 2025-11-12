@@ -1,21 +1,15 @@
-﻿const PRIVACY_LEVELS = [
+const PRIVACY_LEVELS = [
   {
     key: 'public',
-    label: '公开共享',
-    description: '在榜单与精选路线中展示亮点，方便他人参考',
-    badge: 'Campus Open',
-  },
-  {
-    key: 'group',
-    label: '群组可见',
-    description: '仅对班级、社团或好友圈展示路线概要',
-    badge: 'Group View',
+    label: '公开分享',
+    description: '向所有 RouteLab 用户展示完整轨迹详情，适合赛事、活动等需要共享的路线。',
+    badge: 'Public',
   },
   {
     key: 'private',
     label: '仅自己可见',
-    description: '仅保留在本机，隐去地图细节，便于个人回顾',
-    badge: 'Solo Only',
+    description: '仅本人在小程序内可见，但轨迹会同步到云端供管理员稽核与保障数据安全。',
+    badge: 'Private',
   },
 ];
 

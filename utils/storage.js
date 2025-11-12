@@ -44,6 +44,12 @@ function saveRoute(route) {
   return route;
 }
 
+function setRoutes(routes = []) {
+  const normalized = Array.isArray(routes) ? routes : [];
+  safeSet(STORAGE_KEYS.ROUTES, normalized);
+  return getRoutes();
+}
+
 function updateRoute(id, patch = {}) {
   const routes = getRoutes();
   const index = routes.findIndex((item) => item.id === id);
@@ -66,16 +72,18 @@ function removeRoute(id) {
 }
 
 function getOfflineQueue() {
-  return safeGet(STORAGE_KEYS.OFFLINE_QUEUE, []);
+  const queue = safeGet(STORAGE_KEYS.OFFLINE_QUEUE, []);
+  return Array.isArray(queue) ? queue : [];
 }
 
 function enqueueOfflineFragment(fragment) {
   const queue = getOfflineQueue();
-  queue.push({
+  const nextQueue = Array.isArray(queue) ? [...queue] : [];
+  nextQueue.push({
     ...fragment,
     timestamp: fragment.timestamp || Date.now(),
   });
-  safeSet(STORAGE_KEYS.OFFLINE_QUEUE, queue);
+  safeSet(STORAGE_KEYS.OFFLINE_QUEUE, nextQueue);
 }
 
 function clearOfflineQueue() {
@@ -91,9 +99,165 @@ function saveRecentSettings(settings = {}) {
   return settings;
 }
 
+function getKeepScreenPreference() {
+  return safeGet(STORAGE_KEYS.KEEP_SCREEN_ON, false) === true;
+}
+
+function setKeepScreenPreference(value) {
+  const normalized = !!value;
+  safeSet(STORAGE_KEYS.KEEP_SCREEN_ON, normalized);
+  return normalized;
+}
+
+function getUserProfile() {
+  const profile = safeGet(STORAGE_KEYS.USER_PROFILE, null);
+  if (!profile || typeof profile !== 'object') {
+    return null;
+  }
+  const nickname =
+    typeof profile.nickname === 'string'
+      ? profile.nickname.trim()
+      : typeof profile.nickName === 'string'
+      ? profile.nickName.trim()
+      : '';
+  const avatarUrl =
+    typeof profile.avatarUrl === 'string'
+      ? profile.avatarUrl
+      : typeof profile.avatar === 'string'
+      ? profile.avatar
+      : '';
+  const gender =
+    typeof profile.gender === 'string'
+      ? profile.gender.trim()
+      : '';
+  const ageRange =
+    typeof profile.ageRange === 'string'
+      ? profile.ageRange.trim()
+      : '';
+  const identity =
+    typeof profile.identity === 'string'
+      ? profile.identity.trim()
+      : '';
+  if (!nickname && !avatarUrl && !gender && !ageRange && !identity) {
+    return null;
+  }
+  return {
+    nickname,
+    avatarUrl,
+    gender,
+    ageRange,
+    identity,
+  };
+}
+
+function saveUserProfile(profile = null) {
+  if (!profile || typeof profile !== 'object') {
+    safeSet(STORAGE_KEYS.USER_PROFILE, null);
+    return null;
+  }
+  const nickname =
+    typeof profile.nickname === 'string'
+      ? profile.nickname.trim()
+      : typeof profile.nickName === 'string'
+      ? profile.nickName.trim()
+      : '';
+  const avatarUrl =
+    typeof profile.avatarUrl === 'string'
+      ? profile.avatarUrl
+      : typeof profile.avatar === 'string'
+      ? profile.avatar
+      : '';
+  const gender =
+    typeof profile.gender === 'string'
+      ? profile.gender.trim()
+      : '';
+  const ageRange =
+    typeof profile.ageRange === 'string'
+      ? profile.ageRange.trim()
+      : '';
+  const identity =
+    typeof profile.identity === 'string'
+      ? profile.identity.trim()
+      : '';
+  const payload = {
+    nickname,
+    avatarUrl,
+    gender,
+    ageRange,
+    identity,
+  };
+  safeSet(STORAGE_KEYS.USER_PROFILE, payload);
+  return getUserProfile();
+}
+
+function normalizeAccount(account = null) {
+  if (!account || typeof account !== 'object') {
+    return null;
+  }
+  const id = Number(account.id);
+  return {
+    id: Number.isFinite(id) ? id : null,
+    openid: account.openid || '',
+    unionid: account.unionid || '',
+    nickname: account.nickname || '',
+    avatar: account.avatar || '',
+    gender: typeof account.gender === 'string' ? account.gender.trim() : '',
+    ageRange: typeof account.ageRange === 'string' ? account.ageRange.trim() : '',
+    identity: typeof account.identity === 'string' ? account.identity.trim() : '',
+  };
+}
+
+function getUserAccount() {
+  const stored = safeGet(STORAGE_KEYS.USER_ACCOUNT, null);
+  if (!stored || typeof stored !== 'object') {
+    return null;
+  }
+  return normalizeAccount(stored);
+}
+
+function saveUserAccount(account = null) {
+  const normalized = normalizeAccount(account);
+  safeSet(STORAGE_KEYS.USER_ACCOUNT, normalized);
+  return normalized;
+}
+
+function clearUserAccount() {
+  safeSet(STORAGE_KEYS.USER_ACCOUNT, null);
+}
+
+function getAuthToken() {
+  return safeGet(STORAGE_KEYS.AUTH_TOKEN, '');
+}
+
+function setAuthToken(token) {
+  safeSet(STORAGE_KEYS.AUTH_TOKEN, token || '');
+}
+
+function clearAuthToken() {
+  safeSet(STORAGE_KEYS.AUTH_TOKEN, '');
+}
+
+function getLastSyncTimestamp() {
+  return Number(safeGet(STORAGE_KEYS.LAST_SYNC_AT, 0)) || 0;
+}
+
+function setLastSyncTimestamp(timestamp) {
+  if (!timestamp) {
+    safeSet(STORAGE_KEYS.LAST_SYNC_AT, 0);
+    return 0;
+  }
+  safeSet(STORAGE_KEYS.LAST_SYNC_AT, Number(timestamp));
+  return Number(timestamp);
+}
+
+function clearLastSyncTimestamp() {
+  safeSet(STORAGE_KEYS.LAST_SYNC_AT, 0);
+}
+
 module.exports = {
   getRoutes,
   saveRoute,
+  setRoutes,
   updateRoute,
   removeRoute,
   getOfflineQueue,
@@ -101,4 +265,17 @@ module.exports = {
   clearOfflineQueue,
   getRecentSettings,
   saveRecentSettings,
+  getKeepScreenPreference,
+  setKeepScreenPreference,
+  getUserProfile,
+  saveUserProfile,
+  getUserAccount,
+  saveUserAccount,
+  clearUserAccount,
+  getAuthToken,
+  setAuthToken,
+  clearAuthToken,
+  getLastSyncTimestamp,
+  setLastSyncTimestamp,
+  clearLastSyncTimestamp,
 };

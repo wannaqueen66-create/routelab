@@ -17,13 +17,19 @@ function formatDuration(durationMs) {
 }
 
 function formatClock(timestamp) {
-  const date = new Date(timestamp);
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  const date = new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) {
+    return '--:--:--';
+  }
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function formatDate(timestamp) {
-  const date = new Date(timestamp);
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const date = new Date(Number(timestamp));
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
 function getWeekday(timestamp) {

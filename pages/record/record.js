@@ -1,51 +1,55 @@
-﻿const { checkLocationAuthorization, requestLocationAuthorization, openLocationSetting } = require('../../utils/permissions');
+'use strict';
+
+const { checkLocationAuthorization, requestLocationAuthorization, openLocationSetting } = require('../../utils/permissions');
 const tracker = require('../../services/tracker');
 const { PRIVACY_LEVELS } = require('../../constants/privacy');
-const {
-  getCategoryNames,
-  getAreaNames,
-  getLocationNames,
-  normalizeSelection,
-  buildCampusDisplayName,
-  findSelectionIndices,
-} = require('../../constants/campus');
-const { ACTIVITY_TYPES, DEFAULT_ACTIVITY_TYPE } = require('../../constants/activity');
-const { getRecentSettings, saveRecentSettings } = require('../../utils/storage');
-const { formatDistance, formatSpeed, formatCalories } = require('../../utils/format');
+const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../../constants/activity');
+const { getRecentSettings, saveRecentSettings, getKeepScreenPreference } = require('../../utils/storage');
+const { formatSpeed, formatCalories } = require('../../utils/format');
 const { formatDuration } = require('../../utils/time');
 const { estimateCalories } = require('../../utils/geo');
+const logger = require('../../utils/logger');
+const media = require('../../services/media');
+const { inferActivityType, resolveActivityMeta } = require('../../utils/activity');
+const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
+
+const DEFAULT_ACTIVITY_META = resolveActivityMeta(DEFAULT_ACTIVITY_TYPE);
 
 const DEFAULT_CENTER = {
   latitude: 30.27415,
   longitude: 120.15515,
 };
 
-const CATEGORY_NAMES = getCategoryNames();
-const DEFAULT_SELECTION = normalizeSelection();
+const MAX_PHOTOS = 9;
 
-function buildPickerRange(selection) {
-  const normalized = normalizeSelection(selection);
-  const areaNames = getAreaNames(normalized.category);
-  const locationNames = getLocationNames(normalized.category, normalized.area);
-  return [CATEGORY_NAMES, areaNames, locationNames];
-}
+const ACTIVITY_ICONS = {
+  walk: '??',
+  run: '??',
+  ride: '??',
+};
 
-function buildPickerValue(selection) {
-  const indices = findSelectionIndices(normalizeSelection(selection));
-  return [indices.categoryIndex, indices.areaIndex, indices.locationIndex];
-}
+const FINISH_PRIVACY_OPTIONS =
+  PRIVACY_LEVELS.filter((item) => ['public', 'private'].includes(item.key)) || PRIVACY_LEVELS;
 
-function selectionFromValue(value) {
-  const categoryName = CATEGORY_NAMES[value[0]] || CATEGORY_NAMES[0];
-  const areaNames = getAreaNames(categoryName);
-  const areaName = areaNames[value[1]] || areaNames[0];
-  const locationNames = getLocationNames(categoryName, areaName);
-  const locationName = locationNames[value[2]] || locationNames[0];
-  return normalizeSelection({
-    category: categoryName,
-    area: areaName,
-    location: locationName,
-  });
+const ACTIVITY_CHOICES = ['walk', 'run', 'ride']
+  .map((key) => ACTIVITY_TYPE_MAP[key] || resolveActivityMeta(key))
+  .filter(Boolean);
+
+const TOAST = {
+  requireLocation: '请先获取定位权限',
+  maxPhotos: '最多选择 9 张图片',
+  startFailed: '无法开始记录，请稍后重试',
+  routeSaved: '路线已保存',
+  routeSaveFailed: '未能保存路线，请稍后重试',
+  purposeRequired: '请选择本次运动的目的',
+  purposeUpdated: '运动目的已更新',
+};
+
+function getActivityIcon(key) {
+  if (!key) {
+    return ACTIVITY_ICONS.walk;
+  }
+  return ACTIVITY_ICONS[key] || ACTIVITY_ICONS.walk;
 }
 
 function normalizePhotos(photos = []) {
@@ -60,511 +64,573 @@ function normalizePhotos(photos = []) {
   });
 }
 
-const DEFAULT_PICKER_RANGE = buildPickerRange(DEFAULT_SELECTION);
-const DEFAULT_PICKER_VALUE = buildPickerValue(DEFAULT_SELECTION);
-const DEFAULT_LABEL = buildCampusDisplayName(DEFAULT_SELECTION);
+function formatSpeedByActivity(activityKey, value) {
+  if (activityKey === 'ride') {
+    return `${value ? (value * 3.6).toFixed(1) : '0.0'} km/h`;
+  }
+  return formatSpeed(value);
+}
 
 Page({
   data: {
     tracking: false,
     paused: false,
-    durationText: '00:00',
-    distanceText: '0 m',
-    speedText: '0 m/s',
+    durationText: '00:00:00',
+    distanceText: '0.0 km',
+    speedText: '0.0 km/h',
     caloriesText: '0 kcal',
     stepsText: '0',
     polyline: [],
     markers: [],
     pausePoints: [],
-    privacyOptions: PRIVACY_LEVELS,
-    privacyIndex: 1,
-    activityOptions: ACTIVITY_TYPES,
-    activityIndex: ACTIVITY_TYPES.findIndex((item) => item.key === DEFAULT_ACTIVITY_TYPE),
-    activityDescription: ACTIVITY_TYPES.find((item) => item.key === DEFAULT_ACTIVITY_TYPE)?.description || '',
-    currentActivityKey: DEFAULT_ACTIVITY_TYPE,
-    startPickerRange: DEFAULT_PICKER_RANGE,
-    startPickerValue: DEFAULT_PICKER_VALUE,
-    startSelection: DEFAULT_SELECTION,
-    startSelectedText: DEFAULT_LABEL,
-    endPickerRange: DEFAULT_PICKER_RANGE,
-    endPickerValue: DEFAULT_PICKER_VALUE,
-    endSelection: DEFAULT_SELECTION,
-    endSelectedText: DEFAULT_LABEL,
-    endSelectionDirty: false,
+    purposeOptions: PURPOSE_OPTIONS,
+    purposeSelectionKey: '',
+    purposeSelectionLabel: '未选择',
+    purposeSelectionIcon: '',
+    purposeSelectionDescription: '',
+    purposePickerVisible: false,
+    purposePendingKey: '',
+    privacyOptions: FINISH_PRIVACY_OPTIONS,
+    privacyIndex: 0,
+    activityKey: DEFAULT_ACTIVITY_TYPE,
+    activityLabel: DEFAULT_ACTIVITY_META.label,
+    activityDescription: DEFAULT_ACTIVITY_META.description,
+    activityStatusText: '准备开始',
+    activityIcon: getActivityIcon(DEFAULT_ACTIVITY_TYPE),
     title: '',
     note: '',
+    keepScreenOnPreferred: false,
+    keepScreenSupported: typeof wx.setKeepScreenOn === 'function',
     locationAuthorized: true,
     hasRoutePoints: false,
     centerLatitude: DEFAULT_CENTER.latitude,
     centerLongitude: DEFAULT_CENTER.longitude,
     weight: 60,
     photos: [],
-    startSelectionLocked: false,
+    locationScope: 'none',
+    showLocationPrompt: false,
+    locationPromptPending: false,
+    uploading: false,
+    finishSheetVisible: false,
+    finishAutoPaused: false,
   },
-  onReady() {
-    this.mapContext = wx.createMapContext('routeMap', this);
-  },
-  onShow() {
-    if (!this.data.tracking) {
-      this.applySettings();
-    }
-    this.checkLocationPermission(false);
-  },
+
   onLoad() {
     this.unsubscribe = tracker.subscribe((state) => this.updateState(state));
     this.applySettings();
     this.checkLocationPermission(true);
   },
+
+  onShow() {
+    this.checkLocationPermission(false);
+  },
+
+  onReady() {
+    this.mapContext = wx.createMapContext('routeMap', this);
+  },
+
   onUnload() {
     if (this.unsubscribe) {
       this.unsubscribe();
+      this.unsubscribe = null;
     }
   },
+
   applySettings() {
     const settings = getRecentSettings() || {};
-    const startSelection = normalizeSelection(
-      settings.startCampusSelection || settings.campusSelection || DEFAULT_SELECTION
-    );
-    const endSelection = normalizeSelection(settings.endCampusSelection || startSelection);
-    const activityKey = settings.activityType || this.data.currentActivityKey || DEFAULT_ACTIVITY_TYPE;
-    const activityIndex = ACTIVITY_TYPES.findIndex((item) => item.key === activityKey);
-    const activityMeta = ACTIVITY_TYPES[activityIndex] || ACTIVITY_TYPES[0];
-
-    this.updateStartSelection(startSelection, {
-      syncEnd: !settings.endCampusSelection,
-    });
-    this.updateEndSelection(endSelection, { markDirty: !!settings.endCampusSelection });
-
+    const keepScreenPreferred =
+      typeof getKeepScreenPreference === 'function'
+        ? !!getKeepScreenPreference()
+        : !!settings.keepScreenPreferred;
+    const storedPrivacyKey = settings.privacyLevel;
+    const privacyIndex = this.data.privacyOptions.findIndex((item) => item.key === storedPrivacyKey);
     this.setData({
-      privacyIndex: Math.max(PRIVACY_LEVELS.findIndex((item) => item.key === settings.privacyLevel), 0),
-      activityIndex,
-      activityDescription: activityMeta.description,
-      currentActivityKey: activityMeta.key,
-      weight: settings.weight || this.data.weight,
-      startSelectionLocked: false,
+      keepScreenOnPreferred: keepScreenPreferred,
+      privacyIndex: privacyIndex >= 0 ? privacyIndex : 0,
+      weight: Number(settings.weight) > 0 ? Number(settings.weight) : this.data.weight,
     });
+    if (keepScreenPreferred && this.data.keepScreenSupported) {
+      try {
+        wx.setKeepScreenOn({ keepScreenOn: true });
+      } catch (error) {
+        logger.warn('setKeepScreenOn init failed', error?.errMsg || error);
+      }
+    }
   },
-  checkLocationPermission(showPrompt) {
-    checkLocationAuthorization().then(({ authorized }) => {
-      const app = getApp();
-      app.globalData.locationAuthorized = authorized;
-      this.setData({ locationAuthorized: authorized });
-      if (!authorized && showPrompt) {
-        this.promptLocationSetting();
-      }
-    });
-  },
-  requestLocationAccess() {
-    requestLocationAuthorization()
-      .then(() => {
-        const app = getApp();
-        app.globalData.locationAuthorized = true;
-        this.setData({ locationAuthorized: true });
-      })
-      .catch(() => {
-        this.promptLocationSetting();
-      });
-  },
-  promptLocationSetting() {
-    wx.showModal({
-      title: '\\u9700\\u8981\\u5b9a\\u4f4d\\u6743\\u9650',
-      content: '\\u8bf7\\u5728\\u8bbe\\u7f6e\\u4e2d\\u5f00\\u542f\\u5b9a\\u4f4d\\u670d\\u52a1\\uff0c\\u4ee5\\u4fbf\\u8bb0\\u5f55\\u5b8c\\u6574\\u8f68\\u8ff9',
-      confirmText: '\\u524d\\u5f80\\u8bbe\\u7f6e',
-      cancelText: '\\u6211\\u77e5\\u9053\\u4e86',
-      success: (res) => {
-        if (res.confirm) {
-          openLocationSetting()
-            .then(({ authorized }) => {
-              const app = getApp();
-              app.globalData.locationAuthorized = authorized;
-              this.setData({ locationAuthorized: authorized });
-              if (!authorized) {
-                wx.showToast({ title: '\\u672a\\u6388\\u4e88\\u5b9a\\u4f4d\\u6743\\u9650', icon: 'none' });
-              }
-            })
-            .catch(() => {
-              wx.showToast({ title: '\\u8bf7\\u5728\\u8bbe\\u7f6e\\u4e2d\\u5f00\\u542f\\u5b9a\\u4f4d', icon: 'none' });
-            });
-        }
-      },
-    });
-  },
-  updateState(state) {
-    const activityKey = state.active
-      ? state.options?.activityType || this.data.currentActivityKey
-      : this.data.currentActivityKey;
-    const activityIndex = ACTIVITY_TYPES.findIndex((item) => item.key === activityKey);
-    const activityMeta = ACTIVITY_TYPES[activityIndex] || ACTIVITY_TYPES[0];
-    const weight = this.data.weight;
-    const distance = state.stats.distance || 0;
-    const durationText = formatDuration(state.stats.duration);
-    const distanceText = formatDistance(distance);
-    const speedText =
-      activityKey === 'ride'
-        ? `${(state.stats.speed ? state.stats.speed * 3.6 : 0).toFixed(1)} km/h`
-        : formatSpeed(state.stats.speed);
-    const caloriesValue = distance ? estimateCalories(distance, weight, activityKey) : 0;
-    const caloriesText = formatCalories(caloriesValue);
-    const stepsText = activityKey === 'ride' ? '--' : `${Math.round(distance / 0.75)}`;
-    const hasPoints = Array.isArray(state.points) && state.points.length > 0;
-    const centerPoint = hasPoints ? state.points[state.points.length - 1] : DEFAULT_CENTER;
 
-    const markers = [];
-    if (hasPoints) {
-      const startPoint = state.points[0];
-      markers.push({
-        id: 'start',
-        latitude: startPoint.latitude,
-        longitude: startPoint.longitude,
-        iconPath: '/assets/icons/start.png',
-        width: 28,
-        height: 28,
-        callout: {
-          content: '鐠ч鍋?,
-          color: '#ffffff',
-          bgColor: '#22c55e',
-          padding: 6,
-          borderRadius: 16,
-          display: 'ALWAYS',
-        },
+  checkLocationPermission(initialPrompt = false) {
+    return checkLocationAuthorization()
+      .then((status) => {
+        const authorized = !!status?.authorized;
+        this.setData({
+          locationAuthorized: authorized,
+          locationScope: status?.scope || 'none',
+          showLocationPrompt: initialPrompt ? !authorized : this.data.showLocationPrompt,
+        });
+        return status;
+      })
+      .catch((error) => {
+        logger.warn('checkLocationAuthorization failed', error?.errMsg || error);
+        this.setData({
+          locationAuthorized: false,
+          locationScope: 'none',
+          showLocationPrompt: initialPrompt ? true : this.data.showLocationPrompt,
+        });
+        return { authorized: false, scope: 'none' };
       });
-      const endPoint = state.points[state.points.length - 1];
-      markers.push({
-        id: 'end',
-        latitude: endPoint.latitude,
-        longitude: endPoint.longitude,
-        iconPath: '/assets/icons/end.png',
-        width: 28,
-        height: 28,
-        callout: {
-          content: '缂佸牏鍋?,
-          color: '#ffffff',
-          bgColor: '#ef4444',
-          padding: 6,
-          borderRadius: 16,
-          display: 'ALWAYS',
-        },
+  },
+
+  requestLocationAccess() {
+    return requestLocationAuthorization()
+      .then((status) => {
+        const authorized = !!status?.authorized;
+        this.setData({
+          locationAuthorized: authorized,
+          locationScope: status?.scope || 'none',
+          showLocationPrompt: !authorized,
+        });
+        if (!authorized) {
+          wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
+        }
+        return status;
+      })
+      .catch((error) => {
+        logger.warn('requestLocationAuthorization failed', error?.errMsg || error);
+        wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
+        this.setData({
+          locationAuthorized: false,
+          locationScope: 'none',
+          showLocationPrompt: true,
+        });
+        throw error;
       });
+  },
+
+  updateState(state = {}) {
+    const stats = state.stats || {};
+    const distance = stats.distance || 0;
+    const duration = stats.duration || 0;
+    const speed = stats.speed || 0;
+    const points = Array.isArray(state.points) ? state.points : [];
+    const isTracking = Boolean(state.active);
+    const isPaused = Boolean(state.paused);
+
+    let activityKey =
+      state.detectedActivityType || inferActivityType({ distance, duration, speed, points }) || this.data.activityKey;
+    if (!activityKey) {
+      activityKey = DEFAULT_ACTIVITY_TYPE;
+    }
+    const activityMeta = resolveActivityMeta(activityKey) || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
+    const weight = this.data.weight || 60;
+    const durationText = formatDuration(duration);
+    const distanceText = `${(distance / 1000).toFixed(1)} km`;
+    const speedText = formatSpeedByActivity(activityMeta.key, speed);
+    const caloriesValue = distance ? estimateCalories(distance, weight, activityMeta.key) : 0;
+    const caloriesText = formatCalories(caloriesValue);
+    const stepsText = activityMeta.key === 'ride' ? '--' : `${Math.round(distance / 0.75)}`;
+    const hasPoints = points.length > 0;
+    const latestPoint = hasPoints ? points[points.length - 1] : DEFAULT_CENTER;
+
+    if (this.data.keepScreenSupported && this.data.keepScreenOnPreferred && isTracking) {
+      try {
+        wx.setKeepScreenOn({ keepScreenOn: true });
+      } catch (error) {
+        logger.warn('setKeepScreenOn failed', error?.errMsg || error);
+      }
     }
 
-    (state.pausePoints || []).forEach((point, index) => {
-      markers.push({
-        id: `pause-${index}`,
-        latitude: point.latitude,
-        longitude: point.longitude,
-        iconPath: '/assets/icons/pause.png',
-        width: 24,
-        height: 24,
-        callout: {
-          content: '閺嗗倸浠?,
-          color: '#1e293b',
-          bgColor: '#fde68a',
-          padding: 4,
-          borderRadius: 12,
-          display: 'ALWAYS',
-        },
-      });
-    });
+    if (
+      this.mapContext &&
+      hasPoints &&
+      isTracking &&
+      !isPaused &&
+      (latestPoint.latitude !== this.data.centerLatitude || latestPoint.longitude !== this.data.centerLongitude)
+    ) {
+      try {
+        this.mapContext.moveToLocation({
+          latitude: latestPoint.latitude,
+          longitude: latestPoint.longitude,
+        });
+      } catch (error) {
+        logger.warn('moveToLocation failed', error?.errMsg || error);
+      }
+    }
+
+    const polyline = hasPoints
+      ? [
+          {
+            points: points.map((point) => ({
+              latitude: point.latitude,
+              longitude: point.longitude,
+            })),
+            color: '#2B6CFF',
+            width: 6,
+            dottedLine: false,
+          },
+        ]
+      : [];
+
+    const pauseMarkers = Array.isArray(state.pausePoints)
+      ? state.pausePoints.map((point, index) => ({
+          id: `pause-${index}`,
+          latitude: point.latitude,
+          longitude: point.longitude,
+          iconPath: '/assets/icons/pause-marker.png',
+          width: 24,
+          height: 24,
+          anchor: { x: 0.5, y: 0.5 },
+        }))
+      : [];
+
+    const startMarker = hasPoints
+      ? [
+          {
+            id: 'start',
+            latitude: points[0].latitude,
+            longitude: points[0].longitude,
+            iconPath: '/assets/icons/start-marker.png',
+            width: 32,
+            height: 32,
+            anchor: { x: 0.5, y: 1 },
+          },
+        ]
+      : [];
+
+    const markers = [...startMarker, ...pauseMarkers];
 
     this.setData({
-      tracking: state.active,
-      paused: state.paused,
+      tracking: isTracking,
+      paused: isPaused,
       durationText,
       distanceText,
       speedText,
       caloriesText,
       stepsText,
-      hasRoutePoints: hasPoints,
-      centerLatitude: centerPoint.latitude,
-      centerLongitude: centerPoint.longitude,
+      polyline,
       markers,
-      activityIndex,
-      activityDescription: activityMeta.description,
-      currentActivityKey: activityMeta.key,
       pausePoints: state.pausePoints || [],
-      polyline: hasPoints
-        ? [
-            {
-              points: state.points.map((point) => ({
-                latitude: point.latitude,
-                longitude: point.longitude,
-              })),
-              color: '#60a5fa',
-              width: 6,
-              arrowLine: true,
-            },
-          ]
-        : [],
+      activityKey: activityMeta.key,
+      activityLabel: activityMeta.label,
+      activityDescription: activityMeta.description,
+      activityStatusText: isTracking
+        ? state.detectedActivityType
+          ? `${activityMeta.label} · 自动识别`
+          : '自动识别中'
+        : '准备开始',
+      activityIcon: getActivityIcon(activityMeta.key),
+      hasRoutePoints: hasPoints,
+      centerLatitude: latestPoint.latitude,
+      centerLongitude: latestPoint.longitude,
     });
+  },
 
-    if (hasPoints && this.mapContext && !state.paused) {
+  handleMapTap() {
+    if (!this.data.hasRoutePoints) {
+      wx.showToast({ title: '开始记录后可查看路线', icon: 'none' });
+      return;
+    }
+    if (this.mapContext) {
       this.mapContext.moveToLocation({
-        latitude: centerPoint.latitude,
-        longitude: centerPoint.longitude,
+        latitude: this.data.centerLatitude,
+        longitude: this.data.centerLongitude,
       });
     }
   },
-  updateStartSelection(selection, { syncEnd = false } = {}) {
-    const normalized = normalizeSelection(selection);
-    const pickerRange = buildPickerRange(normalized);
-    const pickerValue = buildPickerValue(normalized);
+
+  openPurposePicker() {
+    const fallback = this.data.purposeSelectionKey || this.data.purposePendingKey || '';
     this.setData({
-      startSelection: normalized,
-      startPickerRange: pickerRange,
-      startPickerValue: pickerValue,
-      startSelectedText: buildCampusDisplayName(normalized),
-    });
-    if (syncEnd) {
-      this.updateEndSelection(normalized, { markDirty: false });
-    }
-  },
-  updateEndSelection(selection, { markDirty = true } = {}) {
-    const normalized = normalizeSelection(selection);
-    const pickerRange = buildPickerRange(normalized);
-    const pickerValue = buildPickerValue(normalized);
-    this.setData({
-      endSelection: normalized,
-      endPickerRange: pickerRange,
-      endPickerValue: pickerValue,
-      endSelectedText: buildCampusDisplayName(normalized),
-      endSelectionDirty: markDirty || this.data.endSelectionDirty,
-    });
-    if (!markDirty) {
-      this.setData({ endSelectionDirty: false });
-    }
-  },
-  handleActivitySelect(event) {
-    if (this.data.tracking) {
-      wx.showToast({
-        title: '鐠佹澘缍嶆潻娑滎攽娑擃叏绱濋弳鍌欑瑝閺€顖涘瘮閸掑洦宕插Ο鈥崇础',
-        icon: 'none',
-      });
-      return;
-    }
-    const { index } = event.currentTarget.dataset;
-    const activity = this.data.activityOptions[Number(index)] || this.data.activityOptions[0];
-    this.setData({
-      activityIndex: Number(index),
-      activityDescription: activity.description,
-      currentActivityKey: activity.key,
+      purposePickerVisible: true,
+      purposePendingKey: fallback,
     });
   },
-  handleStartPickerColumnChange(event) {
+
+  handleOpenPurposePicker() {
     if (this.data.tracking) {
       return;
     }
-    const { column, value } = event.detail;
-    const currentValue = [...this.data.startPickerValue];
-    currentValue[column] = value;
-    if (column === 0) {
-      const categoryName = CATEGORY_NAMES[value];
-      const areaNames = getAreaNames(categoryName);
-      const locationNames = getLocationNames(categoryName, areaNames[0]);
-      this.setData({
-        startPickerRange: [CATEGORY_NAMES, areaNames, locationNames],
-        startPickerValue: [value, 0, 0],
-      });
-    } else if (column === 1) {
-      const categoryIndex = currentValue[0];
-      const categoryName = CATEGORY_NAMES[categoryIndex];
-      const areaNames = getAreaNames(categoryName);
-      const areaName = areaNames[value] || areaNames[0];
-      const locationNames = getLocationNames(categoryName, areaName);
-      this.setData({
-        startPickerRange: [CATEGORY_NAMES, areaNames, locationNames],
-        startPickerValue: [categoryIndex, value, 0],
-      });
-    } else {
-      this.setData({ startPickerValue: currentValue });
-    }
+    this.openPurposePicker();
   },
-  handleStartPickerChange(event) {
-    if (this.data.tracking || this.data.startSelectionLocked) {
-      wx.showToast({ title: '\u6b63\u5728\u8bb0\u5f55\uff0c\u65e0\u6cd5\u4fee\u6539\u8d77\u70b9', icon: 'none' });
+
+  handlePurposeTap(event) {
+    const { key } = event.currentTarget.dataset || {};
+    this.setData({ purposePendingKey: key });
+  },
+
+  handlePurposeCancel() {
+    this.setData({ purposePickerVisible: false });
+  },
+
+  handlePurposeConfirm() {
+    const pendingKey = this.data.purposePendingKey;
+    const meta = pendingKey && PURPOSE_MAP[pendingKey] ? PURPOSE_MAP[pendingKey] : null;
+    if (!meta && !this.data.tracking) {
+      wx.showToast({ title: TOAST.purposeRequired, icon: 'none' });
       return;
     }
-    const value = event.detail.value;
-    const selection = selectionFromValue(value);
-    this.updateStartSelection(selection, {
-      syncEnd: !this.data.endSelectionDirty,
-    });
-    this.setData({ startSelectionLocked: false });
-  },
-  handleEndPickerColumnChange(event) {
-    const { column, value } = event.detail;
-    const currentValue = [...this.data.endPickerValue];
-    currentValue[column] = value;
-    if (column === 0) {
-      const categoryName = CATEGORY_NAMES[value];
-      const areaNames = getAreaNames(categoryName);
-      const locationNames = getLocationNames(categoryName, areaNames[0]);
-      this.setData({
-        endPickerRange: [CATEGORY_NAMES, areaNames, locationNames],
-        endPickerValue: [value, 0, 0],
-      });
-    } else if (column === 1) {
-      const categoryIndex = currentValue[0];
-      const categoryName = CATEGORY_NAMES[categoryIndex];
-      const areaNames = getAreaNames(categoryName);
-      const areaName = areaNames[value] || areaNames[0];
-      const locationNames = getLocationNames(categoryName, areaName);
-      this.setData({
-        endPickerRange: [CATEGORY_NAMES, areaNames, locationNames],
-        endPickerValue: [categoryIndex, value, 0],
-      });
-    } else {
-      this.setData({ endPickerValue: currentValue });
-    }
-  },
-  handleEndPickerChange(event) {
-    const selection = selectionFromValue(event.detail.value);
-    this.updateEndSelection(selection, { markDirty: true });
-  },
-  handleAddPhoto() {
-    const maxPhotos = 9;
-    const remain = maxPhotos - this.data.photos.length;
-    if (remain <= 0) {
-      wx.showToast({ title: '閺堚偓婢舵艾褰查柅澶嬪9瀵姷鍙庨悧?, icon: 'none' });
+    const nextState = {
+      purposePickerVisible: false,
+      purposeSelectionKey: meta ? meta.key : '',
+      purposeSelectionLabel: meta ? meta.label : '未选择',
+      purposeSelectionIcon: meta ? meta.icon : '',
+      purposeSelectionDescription: meta ? meta.description : '',
+    };
+    this.setData(nextState);
+    if (this.data.tracking) {
+      if (typeof tracker.updatePurposeType === 'function') {
+        tracker.updatePurposeType(meta ? meta.key : '');
+      }
+      wx.showToast({ title: TOAST.purposeUpdated, icon: 'none' });
       return;
     }
-    wx.chooseMedia({
-      count: remain,
-      mediaType: ['image'],
-      sourceType: ['camera', 'album'],
-      success: (res) => {
-        const newPhotos = normalizePhotos((res.tempFiles || []).map((file) => file.tempFilePath));
-        this.setData({
-          photos: [...this.data.photos, ...newPhotos],
-        });
-      },
-    });
+    this.beginTrackingWithPurpose(meta ? meta.key : '');
   },
-  handleRemovePhoto(event) {
-    if (event.stopPropagation) {
-      event.stopPropagation();
-    }
-    const { index } = event.currentTarget.dataset;
-    const photos = [...this.data.photos];
-    photos.splice(Number(index), 1);
-    this.setData({ photos });
-  },
-  handlePreviewPhoto(event) {
-    const { index } = event.currentTarget.dataset;
-    const photos = this.data.photos;
-    wx.previewImage({
-      current: photos[Number(index)].path,
-      urls: photos.map((item) => item.path),
-    });
-  },
-  handlePhotoNoteInput(event) {
-    const { index } = event.currentTarget.dataset;
-    const value = event.detail.value;
-    const photos = [...this.data.photos];
-    if (photos[Number(index)]) {
-      photos[Number(index)] = {
-        ...photos[Number(index)],
-        note: value,
-      };
-      this.setData({ photos });
-    }
-  },
-  handleStart() {
-    if (!this.data.startSelection) {
-      wx.showToast({ title: '鐠囩兘鈧瀚ㄧ挧椋庡仯', icon: 'none' });
+
+  beginTrackingWithPurpose(purposeKey) {
+    if (!this.data.locationAuthorized) {
+      this.setData({ showLocationPrompt: true });
+      wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
       return;
     }
     const weight = this.data.weight || 60;
-    const activityType = this.data.activityOptions[this.data.activityIndex]?.key || DEFAULT_ACTIVITY_TYPE;
+    const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
     tracker
       .startTracking({
-        privacyLevel: this.data.privacyOptions[this.data.privacyIndex]?.key || 'group',
-        startCampusMeta: this.data.startSelection,
-        endCampusMeta: this.data.endSelection,
+        privacyLevel,
         title: this.data.title,
         note: this.data.note,
-        activityType,
         weight,
+        purposeType: purposeKey,
       })
       .then(() => {
         const recent = getRecentSettings() || {};
         saveRecentSettings({
           ...recent,
-          privacyLevel: this.data.privacyOptions[this.data.privacyIndex]?.key || 'group',
-          startCampusSelection: this.data.startSelection,
-          endCampusSelection: this.data.endSelection,
-          activityType,
+          privacyLevel,
           weight,
+          keepScreenPreferred: this.data.keepScreenOnPreferred,
         });
-        this.setData({ locationAuthorized: true, photos: [], startSelectionLocked: true });
+        this.setData({ photos: [] });
       })
       .catch((error) => {
-        console.warn('RouteLab: start tracking failed', error);
-        this.setData({ locationAuthorized: false, startSelectionLocked: false });
-        wx.showModal({
-          title: '闂団偓鐟曚礁鐣炬担宥嗘綀闂?,
-          content: '鐠囧嘲鍘戠拋绋跨暰娴ｅ秵婀囬崝鈽呯礉娴犮儰绌剁拋鏉跨秿鐎瑰本鏆ｆ潪銊ㄦ姉',
-          confirmText: '閸撳秴绶氱拋鍓х枂',
-          success: (res) => {
-            if (res.confirm) {
-              wx.openSetting && wx.openSetting({});
-            }
-          },
-        });
+        logger.warn('startTracking failed', error?.errMsg || error);
+        wx.showToast({ title: TOAST.startFailed, icon: 'none' });
       });
   },
+
+  handleStart() {
+    if (!this.data.locationAuthorized) {
+      this.setData({ showLocationPrompt: true });
+      wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
+      return;
+    }
+    this.openPurposePicker();
+  },
+
   handlePause() {
     tracker.pauseTracking();
   },
+
   handleResume() {
     tracker.resumeTracking();
   },
-  handleStop() {
-    const activityType = this.data.currentActivityKey || DEFAULT_ACTIVITY_TYPE;
-    const route = tracker.stopTracking({
-      title: this.data.title,
-      note: this.data.note,
-      privacyLevel: this.data.privacyOptions[this.data.privacyIndex]?.key || 'group',
-      startCampusMeta: this.data.startSelection,
-      endCampusMeta: this.data.endSelection,
-      activityType,
-      photos: this.data.photos,
-      weight: this.data.weight || 60,
-    });
-    if (route) {
-      wx.showToast({
-        title: '\u8f68\u8ff9\u5df2\u4fdd\u5b58',
-        icon: 'success',
-      });
+
+  handleFinishPrompt() {
+    if (!this.data.tracking) {
+      return;
+    }
+    const autoPaused = !this.data.paused;
+    if (autoPaused) {
+      tracker.pauseTracking();
     }
     this.setData({
-      title: '',
-      note: '',
-      photos: [],
-      endSelectionDirty: false,
-      startSelectionLocked: false,
+      finishSheetVisible: true,
+      finishAutoPaused: autoPaused,
     });
   },
-  handleViewHistory() {
-    wx.navigateTo({
-      url: '/pages/history/history',
+
+  handleFinishCancel() {
+    const shouldResume = this.data.finishAutoPaused && this.data.tracking;
+    this.setData({
+      finishSheetVisible: false,
+      finishAutoPaused: false,
     });
-  },
-  handleOpenSettings() {
-    wx.navigateTo({
-      url: '/pages/profile/profile',
-    });
-  },
-  handleMapTap() {
-    if (!this.data.hasRoutePoints) {
-      wx.showToast({
-        title: '瀵偓婵顔囪ぐ鏇炴倵閸欘垱鐓￠惇瀣杽閺冩儼寤烘潻?,
-        icon: 'none',
-      });
+    if (shouldResume) {
+      tracker.resumeTracking();
     }
   },
+
+  handleFinishSave() {
+    if (this.data.uploading) {
+      return;
+    }
+    this.finalizeTracking().then((success) => {
+      if (success) {
+        this.setData({
+          finishSheetVisible: false,
+          finishAutoPaused: false,
+          photos: [],
+        });
+        setTimeout(() => {
+          wx.switchTab({ url: '/pages/index/index' });
+        }, 500);
+      }
+    });
+  },
+
+  finalizeTracking() {
+    if (this.data.uploading) {
+      return Promise.resolve(false);
+    }
+    const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
+    const weight = this.data.weight || 60;
+    this.setData({ uploading: true });
+    return media
+      .ensureRemotePhotos(this.data.photos)
+      .then((uploadedPhotos) =>
+        tracker.stopTracking({
+          title: this.data.title,
+          note: this.data.note,
+          privacyLevel,
+          photos: uploadedPhotos,
+          weight,
+          purposeType: this.data.purposeSelectionKey,
+        })
+      )
+      .then((route) => {
+        const success = Boolean(route);
+        wx.showToast({
+          title: success ? TOAST.routeSaved : TOAST.routeSaveFailed,
+          icon: success ? 'success' : 'none',
+        });
+        return success;
+      })
+      .catch((error) => {
+        logger.warn('stopTracking failed', error?.errMsg || error);
+        wx.showToast({ title: TOAST.routeSaveFailed, icon: 'none' });
+        return false;
+      })
+      .finally(() => {
+        this.setData({ uploading: false });
+      });
+  },
+
+  handleTitleInput(event) {
+    this.setData({ title: event.detail.value });
+  },
+
+  handleNoteInput(event) {
+    this.setData({ note: event.detail.value });
+  },
+
+  handlePrivacyChange(event) {
+    const key = event.detail.value;
+    const index = this.data.privacyOptions.findIndex((item) => item.key === key);
+    if (index >= 0) {
+      this.setData({ privacyIndex: index });
+    }
+  },
+
+  handleKeepScreenToggle(event) {
+    const keepOn = Boolean(event?.detail?.value);
+    this.setData({ keepScreenOnPreferred: keepOn });
+    if (typeof tracker.setKeepScreenPreference === 'function') {
+      tracker.setKeepScreenPreference(keepOn);
+    }
+    const recent = getRecentSettings() || {};
+    saveRecentSettings({ ...recent, keepScreenPreferred: keepOn });
+    if (typeof wx.setKeepScreenOn === 'function') {
+      try {
+        wx.setKeepScreenOn({ keepScreenOn: keepOn });
+      } catch (error) {
+        logger.warn('setKeepScreenOn toggle failed', error?.errMsg || error);
+      }
+    }
+  },
+
+  handleAddPhoto() {
+    if (this.data.photos.length >= MAX_PHOTOS) {
+      wx.showToast({ title: TOAST.maxPhotos, icon: 'none' });
+      return;
+    }
+    wx.chooseMedia({
+      count: MAX_PHOTOS - this.data.photos.length,
+      mediaType: ['image'],
+      sourceType: ['camera'],
+      sizeType: ['compressed'],
+      success: (res) => {
+        const newPhotos = res.tempFiles.map((file) => ({ path: file.tempFilePath, note: '' }));
+        const normalized = normalizePhotos([...this.data.photos, ...newPhotos]);
+        this.setData({ photos: normalized });
+      },
+    });
+  },
+
+  handleRemovePhoto(event) {
+    const { index } = event.currentTarget.dataset || {};
+    const nextPhotos = this.data.photos.filter((_, i) => i !== Number(index));
+    this.setData({ photos: nextPhotos });
+  },
+
+  handlePreviewPhoto(event) {
+    const { index } = event.currentTarget.dataset || {};
+    const photos = this.data.photos;
+    if (!photos.length) {
+      return;
+    }
+    wx.previewImage({
+      current: photos[Number(index)]?.path,
+      urls: photos.map((item) => item.path),
+    });
+  },
+
+  handleActivityTap() {
+    if (this.data.tracking) {
+      wx.showToast({ title: '记录中不能切换运动方式', icon: 'none' });
+      return;
+    }
+    const itemList = ACTIVITY_CHOICES.map((item) => item.label);
+    wx.showActionSheet({
+      itemList,
+      success: (res) => {
+        const meta = ACTIVITY_CHOICES[res.tapIndex];
+        if (!meta) {
+          return;
+        }
+        this.setData({
+          activityKey: meta.key,
+          activityLabel: meta.label,
+          activityDescription: meta.description,
+          activityIcon: getActivityIcon(meta.key),
+        });
+      },
+    });
+  },
+
+  handleLocationPermissionAuthorize() {
+    if (this.data.locationPromptPending) {
+      return;
+    }
+    this.setData({ locationPromptPending: true });
+    this.requestLocationAccess()
+      .finally(() => {
+        this.setData({ locationPromptPending: false });
+      });
+  },
+
+  handleLocationPermissionOpenSettings() {
+    if (this.data.locationPromptPending) {
+      return;
+    }
+    this.setData({ locationPromptPending: true });
+    openLocationSetting()
+      .then(() => this.checkLocationPermission(false))
+      .catch((error) => {
+        logger.warn('openLocationSetting failed', error?.errMsg || error);
+        wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
+      })
+      .finally(() => {
+        this.setData({ locationPromptPending: false });
+      });
+  },
 });
-
-
-
-
-
