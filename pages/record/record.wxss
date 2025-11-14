@@ -233,11 +233,11 @@
 
 .locate-button {
   position: absolute;
-  right: 12rpx;
-  bottom: calc(36rpx + constant(safe-area-inset-bottom));
-  bottom: calc(36rpx + env(safe-area-inset-bottom));
-  width: 56rpx;
-  height: 56rpx;
+  right: 2rpx;
+  bottom: calc(50rpx + constant(safe-area-inset-bottom));
+  bottom: calc(50rpx + env(safe-area-inset-bottom));
+  width: 100rpx;
+  height: 100rpx;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -246,7 +246,7 @@
 }
 
 .locate-button__icon {
-  font-size: 28rpx;
+  font-size: 56rpx;
   text-shadow: 0 0 8rpx rgba(255, 255, 255, 0.8), 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
   touch-action: manipulation;
 }
@@ -254,10 +254,10 @@
 .locate-button::after {
   content: '';
   position: absolute;
-  top: -8rpx;
-  bottom: -8rpx;
-  left: -8rpx;
-  right: -8rpx;
+  top: -16rpx;
+  bottom: -16rpx;
+  left: -16rpx;
+  right: -16rpx;
 }
 
 .locate-button.is-active {
