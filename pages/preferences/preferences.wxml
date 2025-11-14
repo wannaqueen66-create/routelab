@@ -1,0 +1,62 @@
+<view class="page">
+  <rlab-nav title="RouteLab · 偏好设置"></rlab-nav>
+
+  <scroll-view class="page__scroll" scroll-y>
+    <view class="section section--profile-cta">
+      <view class="section__title">账户信息</view>
+      <view class="section__desc">完善头像与昵称后，可在公共内容中展示专属资料</view>
+      <button class="btn btn--accent" bindtap="handleEditProfile">完善个人信息</button>
+    </view>
+
+    <view class="section">
+      <view class="section__title">默认隐私等级</view>
+      <picker
+        mode="selector"
+        range="{{privacyOptions}}"
+        range-key="label"
+        value="{{privacyIndex}}"
+        bindchange="handlePrivacyChange"
+      >
+        <view class="picker">
+          <text class="picker__value">{{privacyOptions[privacyIndex].label}}</text>
+          <text class="picker__desc">{{privacyOptions[privacyIndex].description}}</text>
+        </view>
+      </picker>
+      <view class="hint">
+        <text>所选隐私等级将影响新轨迹的默认分享范围，可随时在完成页面再次调整。</text>
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section__title">体重</view>
+      <view class="field">
+        <text class="field__label">体重 (kg)</text>
+        <input
+          class="field__input"
+          type="number"
+          placeholder="60"
+          value="{{weight}}"
+          bindinput="handleWeightInput"
+        />
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section__title">自动同步</view>
+      <view class="field field--inline">
+        <text class="field__label">联网后自动合并离线路径</text>
+        <switch checked="{{autoSync}}" bindchange="handleAutoSyncChange" />
+      </view>
+    </view>
+
+    <view class="actions">
+      <button class="btn btn--primary" bindtap="handleSave">保存偏好</button>
+      <button class="btn btn--ghost" bindtap="handleClearOffline">清理离线缓存</button>
+    </view>
+
+    <view wx:if="{{message}}" class="message">
+      <text>{{message}}</text>
+    </view>
+  </scroll-view>
+</view>
+

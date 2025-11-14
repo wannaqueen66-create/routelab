@@ -5,6 +5,8 @@ const {
   saveUserProfile,
   getUserAccount,
   saveUserAccount,
+  getRecentSettings,
+  saveRecentSettings,
 } = require('../../utils/storage');
 
 const GENDER_OPTIONS = [
@@ -41,6 +43,13 @@ function findOptionLabel(list, value) {
   return matched ? matched.label : '';
 }
 
+function formatDateInput(date = new Date()) {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 Page({
   data: {
     avatarPreview: '',
@@ -63,6 +72,13 @@ Page({
     identity: '',
     identityLabel: '请选择身份标签',
     identityError: '',
+    birthday: '',
+    birthdayError: '',
+    height: '',
+    heightError: '',
+    weight: '',
+    weightError: '',
+    maxBirthday: formatDateInput(),
   },
   onLoad() {
     const storedProfile = getUserProfile();
@@ -91,6 +107,9 @@ Page({
       ? identityValue
       : '';
 
+    const settings = getRecentSettings ? getRecentSettings() || {} : {};
+    const maxBirthday = formatDateInput(new Date());
+
     this.setData({
       avatarPreview: avatar || '',
       avatarRemoteUrl: avatar || '',
@@ -101,6 +120,13 @@ Page({
       ageRangeLabel: findOptionLabel(AGE_RANGE_OPTIONS, resolvedAgeRange) || '请选择年龄段',
       identity: resolvedIdentity,
       identityLabel: findOptionLabel(IDENTITY_OPTIONS, resolvedIdentity) || '请选择身份标签',
+      birthday: storedProfile?.birthday || '',
+      birthdayError: '',
+      height: storedProfile?.height || '',
+      heightError: '',
+      weight: storedProfile?.weight || settings?.weight || '',
+      weightError: '',
+      maxBirthday,
     });
   },
   onUnload() {
@@ -209,7 +235,25 @@ Page({
       identityError: '',
     });
   },
-  validate({ nickname, avatarUrl, gender, ageRange, identity }) {
+  handleBirthdayChange(event) {
+    this.setData({
+      birthday: event?.detail?.value || '',
+      birthdayError: '',
+    });
+  },
+  handleHeightInput(event) {
+    this.setData({
+      height: event?.detail?.value || '',
+      heightError: '',
+    });
+  },
+  handleWeightInput(event) {
+    this.setData({
+      weight: event?.detail?.value || '',
+      weightError: '',
+    });
+  },
+  validate({ nickname, avatarUrl, gender, ageRange, identity, height, weight }) {
     if (!avatarUrl) {
       this.setData({
         avatarError: '请选择并上传头像',
@@ -240,7 +284,26 @@ Page({
       });
       return false;
     }
-    return true;
+    let valid = true;
+    if (height) {
+      const numericHeight = Number(height);
+      if (!Number.isFinite(numericHeight) || numericHeight <= 0) {
+        this.setData({
+          heightError: '身高需为正数',
+        });
+        valid = false;
+      }
+    }
+    if (weight) {
+      const numericWeight = Number(weight);
+      if (!Number.isFinite(numericWeight) || numericWeight <= 0) {
+        this.setData({
+          weightError: '体重需为正数',
+        });
+        valid = false;
+      }
+    }
+    return valid;
   },
   handleSubmit(event) {
     if (this.data.submitting) {
@@ -248,7 +311,9 @@ Page({
     }
     const nickname = (event?.detail?.value?.nickname || this.data.nickname || '').trim();
     const avatarUrl = this.data.avatarRemoteUrl || '';
-    const { gender, ageRange, identity } = this.data;
+    const { gender, ageRange, identity, birthday, height, weight } = this.data;
+    const heightValue = (height || '').trim();
+    const weightValue = (weight || '').trim();
     this.setData({
       nickname,
       nicknameError: '',
@@ -256,10 +321,23 @@ Page({
       genderError: '',
       ageRangeError: '',
       identityError: '',
+      birthdayError: '',
+      heightError: '',
+      weightError: '',
     });
-    if (!this.validate({ nickname, avatarUrl, gender, ageRange, identity })) {
+    if (
+      !this.validate({
+        nickname,
+        avatarUrl,
+        gender,
+        ageRange,
+        identity,
+        height: heightValue,
+        weight: weightValue,
+      })
+    ) {
       wx.showToast({
-        title: '请完善必填资料',
+        title: '请检查填写的数据',
         icon: 'none',
       });
       return;
@@ -267,10 +345,38 @@ Page({
     this.setData({
       submitting: true,
     });
+    const numericHeight = Number(heightValue);
+    const numericWeight = Number(weightValue);
+    const payload = {
+      nickname,
+      avatarUrl,
+      gender,
+      ageRange,
+      identity,
+      birthday,
+      height: Number.isFinite(numericHeight) && numericHeight > 0 ? numericHeight : null,
+      weight: Number.isFinite(numericWeight) && numericWeight > 0 ? numericWeight : null,
+    };
     api
-      .updateUserProfile({ nickname, avatarUrl, gender, ageRange, identity })
+      .updateUserProfile(payload)
       .then(() => {
-        saveUserProfile({ nickname, avatarUrl, gender, ageRange, identity });
+        saveUserProfile({
+          nickname,
+          avatarUrl,
+          gender,
+          ageRange,
+          identity,
+          birthday,
+          height: payload.height || heightValue,
+          weight: payload.weight || weightValue,
+        });
+        const settings = getRecentSettings ? getRecentSettings() || {} : {};
+        if (Number.isFinite(numericWeight) && numericWeight > 0) {
+          saveRecentSettings({
+            ...settings,
+            weight: numericWeight,
+          });
+        }
         const account = getUserAccount();
         if (account) {
           saveUserAccount({

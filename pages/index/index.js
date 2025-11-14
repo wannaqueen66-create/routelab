@@ -31,7 +31,7 @@ const { STORAGE_KEYS } = require('../../constants/storage');
 const TAB_META = [
   { key: 'home', label: '首页', description: '记录运动', icon: '🏃' },
   { key: 'history', label: '历史', description: '回顾轨迹', icon: '🕘' },
-  { key: 'profile', label: '我的', description: '统计与设置', icon: '👤' },
+  { key: 'profile', label: '我的', description: '个人中心', icon: '👤' },
 ];
 
 const HISTORY_FILTERS = [
@@ -270,7 +270,43 @@ function filterHistoryRoutes(routes = [], filterKey = 'all') {
   return list;
 }
 
-function createProfileCard({ overview, settings, profile, account }) {
+function formatGenderLabel(value) {
+  if (value === 'male') {
+    return '男';
+  }
+  if (value === 'female') {
+    return '女';
+  }
+  return '未填写';
+}
+
+const AGE_RANGE_LABELS = {
+  under18: '18岁以下',
+  '18_24': '18-24岁',
+  '25_34': '25-34岁',
+  '35_44': '35-44岁',
+  '45_54': '45-54岁',
+  '55_plus': '55岁及以上',
+};
+
+const IDENTITY_LABELS = {
+  minor: '未成年',
+  undergrad: '本科生',
+  postgrad: '研究生',
+  staff: '教职工',
+  resident: '居民',
+  other: '其他',
+};
+
+function formatAgeRangeLabel(value) {
+  return AGE_RANGE_LABELS[value] || '未填写';
+}
+
+function formatIdentityLabel(value) {
+  return IDENTITY_LABELS[value] || '未填写';
+}
+
+function createProfileCard({ settings, profile, account }) {
   const nickname =
     profile?.nickname ||
     account?.nickname ||
@@ -278,6 +314,33 @@ function createProfileCard({ overview, settings, profile, account }) {
     account?.displayName ||
     'RouteLab 用户';
   const privacyLevel = settings?.privacyLevel || 'private';
+  const defaultPublic = privacyLevel === 'public';
+  const weightSource =
+    profile?.weight !== undefined && profile?.weight !== null && profile?.weight !== ''
+      ? Number(profile.weight)
+      : settings?.weight;
+  const weightText =
+    Number.isFinite(Number(weightSource)) && Number(weightSource) > 0
+      ? `${Number(weightSource).toFixed(1).replace(/\.0$/, '')} kg`
+      : '未填写';
+  const heightSource =
+    profile?.height !== undefined && profile?.height !== null && profile?.height !== ''
+      ? Number(profile.height)
+      : null;
+  const heightText =
+    Number.isFinite(heightSource) && heightSource > 0
+      ? `${heightSource.toFixed(1).replace(/\.0$/, '')} cm`
+      : '未填写';
+  const birthdayText = profile?.birthday || '未填写';
+  const personalInfo = [
+    { key: 'name', label: '姓名', value: nickname || '未填写' },
+    { key: 'gender', label: '性别', value: formatGenderLabel(profile?.gender || account?.gender) },
+    { key: 'ageRange', label: '年龄段', value: formatAgeRangeLabel(profile?.ageRange || account?.ageRange) },
+    { key: 'identity', label: '身份标签', value: formatIdentityLabel(profile?.identity || account?.identity) },
+    { key: 'birthday', label: '生日', value: birthdayText },
+    { key: 'weight', label: '体重', value: weightText },
+    { key: 'height', label: '身高', value: heightText },
+  ];
   return {
     nickname,
     avatarUrl: profile?.avatarUrl || account?.avatar,
@@ -287,10 +350,11 @@ function createProfileCard({ overview, settings, profile, account }) {
       privacyLevel === 'public'
         ? '默认将新轨迹同步到公开社区'
         : '仅自己可见，需要时可手动公开',
-    totalDistance: overview.totalDistance,
-    totalCount: overview.totalCount,
-    totalCalories: overview.totalCalories,
     initial: nickname.charAt(0).toUpperCase(),
+    shareStatus: defaultPublic ? '公开分享' : '私密记录',
+    userIdLabel: account?.id ? `User ID: ${account.id}` : 'User ID: --',
+    personalInfo,
+    defaultPublic,
   };
 }
 
@@ -307,7 +371,6 @@ const EMPTY_OVERVIEW = createOverview([]);
 const EMPTY_PROGRESS = buildProgressFromOverview(EMPTY_OVERVIEW);
 const DEFAULT_WEATHER = createWeatherState({ loading: true });
 const DEFAULT_USER_CARD = createProfileCard({
-  overview: EMPTY_OVERVIEW,
   settings: {},
   profile: null,
   account: null,
@@ -735,8 +798,19 @@ Page({
     wx.navigateTo({ url: '/pages/history/history' });
   },
 
-  handleNavigateProfile() {
-    wx.navigateTo({ url: '/pages/profile/profile' });
+  handleCompleteProfile() {
+    wx.navigateTo({
+      url: '/pages/profile-info/profile-info',
+    });
+  },
+
+  handleOpenAbout() {
+    wx.showModal({
+      title: '关于 RouteLab',
+      content: 'RouteLab 致力于提供安全、可靠的校园轨迹记录与分享服务。',
+      showCancel: false,
+      confirmText: '知道了',
+    });
   },
 
   handlePrivacySwitchChange(event) {

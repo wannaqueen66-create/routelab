@@ -1,5 +1,5 @@
-﻿<view class="page">
-  <rlab-nav title="完善个人资料"></rlab-nav>
+<view class="page">
+  <rlab-nav title="RouteLab · 个人信息"></rlab-nav>
   <scroll-view class="page__scroll" scroll-y>
     <form class="form" bindsubmit="handleSubmit">
       <view class="section section--avatar">
@@ -29,7 +29,7 @@
             <text wx:else>选择头像</text>
           </button>
           <view wx:else class="avatar-picker__fallback">
-            当前微信版本暂不支持「选择头像」，请升级后再试
+            当前微信版本暂不支持“选择头像”，请更新后再试。
           </view>
         </view>
         <view wx:if="{{avatarError}}" class="section__error">{{avatarError}}</view>
@@ -47,7 +47,7 @@
           bindinput="handleNicknameInput"
         />
         <view wx:if="{{nicknameError}}" class="section__error">{{nicknameError}}</view>
-        <view class="section__hint">点击键盘上方的「微信昵称」可快速填入</view>
+        <view class="section__hint">昵称会展示在公开内容中，可与微信昵称保持一致。</view>
       </view>
 
       <view class="section">
@@ -95,6 +95,49 @@
           </view>
         </picker>
         <view wx:if="{{identityError}}" class="section__error">{{identityError}}</view>
+      </view>
+
+      <view class="section">
+        <view class="section__label">生日</view>
+        <picker
+          class="picker"
+          mode="date"
+          value="{{birthday}}"
+          end="{{maxBirthday}}"
+          bindchange="handleBirthdayChange"
+        >
+          <view class="picker__display {{birthday ? '' : 'picker__display--placeholder'}}">
+            {{birthday || '请选择生日'}}
+          </view>
+        </picker>
+        <view class="section__hint">填写生日可帮助获得更准确的年龄段判断。</view>
+      </view>
+
+      <view class="section section--metrics">
+        <view class="section__label">身体数据</view>
+        <view class="field">
+          <text class="field__label">身高 (cm)</text>
+          <input
+            class="field__input"
+            type="digit"
+            placeholder="170"
+            value="{{height}}"
+            bindinput="handleHeightInput"
+          />
+          <view wx:if="{{heightError}}" class="section__error">{{heightError}}</view>
+        </view>
+        <view class="field">
+          <text class="field__label">体重 (kg)</text>
+          <input
+            class="field__input"
+            type="digit"
+            placeholder="60"
+            value="{{weight}}"
+            bindinput="handleWeightInput"
+          />
+          <view wx:if="{{weightError}}" class="section__error">{{weightError}}</view>
+        </view>
+        <view class="section__hint">补充身高体重可以生成更精准的运动统计。</view>
       </view>
 
       <button

@@ -126,19 +126,28 @@ function getUserProfile() {
       : typeof profile.avatar === 'string'
       ? profile.avatar
       : '';
-  const gender =
-    typeof profile.gender === 'string'
-      ? profile.gender.trim()
+  const gender = typeof profile.gender === 'string' ? profile.gender.trim() : '';
+  const ageRange = typeof profile.ageRange === 'string' ? profile.ageRange.trim() : '';
+  const identity = typeof profile.identity === 'string' ? profile.identity.trim() : '';
+  const birthday = typeof profile.birthday === 'string' ? profile.birthday.trim() : '';
+  const height =
+    profile.height !== undefined && profile.height !== null && profile.height !== ''
+      ? String(profile.height).trim()
       : '';
-  const ageRange =
-    typeof profile.ageRange === 'string'
-      ? profile.ageRange.trim()
+  const weight =
+    profile.weight !== undefined && profile.weight !== null && profile.weight !== ''
+      ? String(profile.weight).trim()
       : '';
-  const identity =
-    typeof profile.identity === 'string'
-      ? profile.identity.trim()
-      : '';
-  if (!nickname && !avatarUrl && !gender && !ageRange && !identity) {
+  if (
+    !nickname &&
+    !avatarUrl &&
+    !gender &&
+    !ageRange &&
+    !identity &&
+    !birthday &&
+    !height &&
+    !weight
+  ) {
     return null;
   }
   return {
@@ -147,6 +156,9 @@ function getUserProfile() {
     gender,
     ageRange,
     identity,
+    birthday,
+    height,
+    weight,
   };
 }
 
@@ -167,17 +179,17 @@ function saveUserProfile(profile = null) {
       : typeof profile.avatar === 'string'
       ? profile.avatar
       : '';
-  const gender =
-    typeof profile.gender === 'string'
-      ? profile.gender.trim()
+  const gender = typeof profile.gender === 'string' ? profile.gender.trim() : '';
+  const ageRange = typeof profile.ageRange === 'string' ? profile.ageRange.trim() : '';
+  const identity = typeof profile.identity === 'string' ? profile.identity.trim() : '';
+  const birthday = typeof profile.birthday === 'string' ? profile.birthday.trim() : '';
+  const height =
+    profile.height !== undefined && profile.height !== null && profile.height !== ''
+      ? String(profile.height).trim()
       : '';
-  const ageRange =
-    typeof profile.ageRange === 'string'
-      ? profile.ageRange.trim()
-      : '';
-  const identity =
-    typeof profile.identity === 'string'
-      ? profile.identity.trim()
+  const weight =
+    profile.weight !== undefined && profile.weight !== null && profile.weight !== ''
+      ? String(profile.weight).trim()
       : '';
   const payload = {
     nickname,
@@ -185,6 +197,9 @@ function saveUserProfile(profile = null) {
     gender,
     ageRange,
     identity,
+    birthday,
+    height,
+    weight,
   };
   safeSet(STORAGE_KEYS.USER_PROFILE, payload);
   return getUserProfile();

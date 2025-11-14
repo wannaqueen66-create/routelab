@@ -1,57 +1,53 @@
-﻿<view class="page">
-  <rlab-nav
-    title="RouteLab · 偏好设置"
-  ></rlab-nav>
+<view class="profile-page">
+  <rlab-nav title="RouteLab · 我的"></rlab-nav>
 
-    <scroll-view class="page__scroll" scroll-y>
-    <view class="section section--profile-cta">
-      <view class="section__title">账号信息</view>
-      <view class="section__desc">完善头像与昵称后，可在公共内容中展示专属资料</view>
-      <button class="btn btn--accent" bindtap="handleEditProfile">完善个人信息</button>
+  <scroll-view class="profile-scroll" scroll-y>
+    <view class="profile-card profile-card--identity">
+      <view class="profile-card__avatar">
+        <image wx:if="{{avatarUrl}}" src="{{avatarUrl}}" mode="aspectFill"></image>
+        <view wx:else class="profile-card__avatar-placeholder">{{avatarInitial}}</view>
+      </view>
+      <view class="profile-card__meta">
+        <text class="profile-card__name">{{displayName}}</text>
+        <text class="profile-card__status">{{shareStatus}}</text>
+        <text class="profile-card__id">{{userIdLabel}}</text>
+      </view>
     </view>
-    <view class="section">
-      <view class="section__title">默认隐私等级</view>
-      <picker mode="selector" range="{{privacyOptions}}" range-key="label" value="{{privacyIndex}}" bindchange="handlePrivacyChange">
-        <view class="picker">
-          <text class="picker__value">{{privacyOptions[privacyIndex].label}}</text>
-          <text class="picker__desc">{{privacyOptions[privacyIndex].description}}</text>
+
+    <view class="profile-section profile-section--info">
+      <view class="section-header">
+        <text class="section-title">个人信息</text>
+        <text class="section-subtitle">完善资料可获得更准确的运动统计</text>
+      </view>
+      <view class="info-list">
+        <block wx:for="{{personalInfo}}" wx:key="key">
+          <view class="info-row">
+            <text class="info-row__label">{{item.label}}</text>
+            <text class="info-row__value">{{item.value}}</text>
+          </view>
+        </block>
+      </view>
+      <button class="btn btn--primary profile-section__cta" bindtap="handleCompleteProfile">
+        完善个人信息
+      </button>
+    </view>
+
+    <view class="profile-section profile-section--settings">
+      <view class="settings-row">
+        <view class="settings-row__texts">
+          <text class="settings-row__title">默认隐私</text>
+          <text class="settings-row__desc">默认将新轨迹同步到公共社区</text>
         </view>
-      </picker>
-      <view class="hint">
-        <text>无论选择哪种隐私等级，轨迹都会同步到云端，管理员可用于安全审核。</text>
+        <switch checked="{{defaultPublic}}" bindchange="handleDefaultPrivacyToggle"></switch>
       </view>
-    </view>
-
-    <view class="section">
-      <view class="section__title">身体参数</view>
-      <view class="field">
-        <text class="field__label">体重 (kg)</text>
-        <input
-          class="field__input"
-          type="number"
-          placeholder="60"
-          value="{{weight}}"
-          bindinput="handleWeightInput"
-        />
+      <view class="settings-divider"></view>
+      <view class="settings-row settings-row--link" bindtap="handleOpenAbout">
+        <view class="settings-row__texts">
+          <text class="settings-row__title">关于 RouteLab</text>
+          <text class="settings-row__desc">了解应用版本与协议信息</text>
+        </view>
+        <text class="settings-row__link-text">查看</text>
       </view>
-    </view>
-
-    <view class="section">
-      <view class="section__title">自动同步</view>
-      <view class="field field--inline">
-        <text class="field__label">联网后自动合并离线路迹</text>
-        <switch checked="{{autoSync}}" bindchange="handleAutoSyncChange" />
-      </view>
-    </view>
-
-    <view class="actions">
-      <button class="btn btn--primary" bindtap="handleSave">保存偏好</button>
-      <button class="btn btn--ghost" bindtap="handleClearOffline">清理离线缓存</button>
-    </view>
-
-    <view wx:if="{{message}}" class="message">
-      <text>{{message}}</text>
     </view>
   </scroll-view>
 </view>
-

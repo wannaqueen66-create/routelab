@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "RouteLab · 我的",
+  "navigationBarTitleText": "RouteLab · 偏好设置",
   "usingComponents": {
     "rlab-nav": "/components/navigation-bar/navigation-bar"
   }

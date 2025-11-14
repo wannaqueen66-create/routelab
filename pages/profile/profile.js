@@ -1,65 +1,127 @@
-const { PRIVACY_LEVELS } = require('../../constants/privacy');
-const { getRecentSettings, saveRecentSettings, clearOfflineQueue } = require('../../utils/storage');
+'use strict';
+
+const {
+  getRecentSettings,
+  saveRecentSettings,
+  getUserProfile,
+  getUserAccount,
+} = require('../../utils/storage');
+
+function formatGender(value) {
+  if (value === 'male') {
+    return '男';
+  }
+  if (value === 'female') {
+    return '女';
+  }
+  return '未填写';
+}
+
+const AGE_RANGE_LABELS = {
+  under18: '18岁以下',
+  '18_24': '18-24岁',
+  '25_34': '25-34岁',
+  '35_44': '35-44岁',
+  '45_54': '45-54岁',
+  '55_plus': '55岁及以上',
+};
+
+const IDENTITY_LABELS = {
+  minor: '未成年',
+  undergrad: '本科生',
+  postgrad: '研究生',
+  staff: '教职工',
+  resident: '居民',
+  other: '其他',
+};
+
+function formatAgeRange(value) {
+  return AGE_RANGE_LABELS[value] || '未填写';
+}
+
+function formatIdentity(value) {
+  return IDENTITY_LABELS[value] || '未填写';
+}
 
 Page({
   data: {
-    privacyOptions: PRIVACY_LEVELS,
-    privacyIndex: Math.max(PRIVACY_LEVELS.findIndex((item) => item.key === 'private'), 0),
-    weight: 60,
-    autoSync: true,
-    message: '',
+    avatarUrl: '',
+    avatarInitial: 'R',
+    displayName: 'RouteLab 用户',
+    shareStatus: '公开分享',
+    userIdLabel: 'User ID: --',
+    personalInfo: [],
+    defaultPublic: true,
   },
-  onLoad() {
+
+  onShow() {
+    this.refreshProfile();
+  },
+
+  refreshProfile() {
+    const profile = getUserProfile() || {};
+    const account = getUserAccount() || {};
     const settings = getRecentSettings() || {};
-    const privacyIndex = Math.max(
-      PRIVACY_LEVELS.findIndex((item) => item.key === settings.privacyLevel),
-      0
-    );
+    const nickname = profile?.nickname || account?.nickname || 'RouteLab 用户';
+    const avatarUrl = profile?.avatarUrl || account?.avatar || '';
+    const initials = nickname ? nickname.slice(0, 1).toUpperCase() : 'R';
+    const privacyLevel = settings.privacyLevel || 'public';
+    const defaultPublic = privacyLevel !== 'private';
+    const weightValue = Number(settings.weight);
+    const weightText =
+      Number.isFinite(weightValue) && weightValue > 0 ? `${weightValue} kg` : '未填写';
+
+    const personalInfo = [
+      { key: 'name', label: '姓名', value: nickname || '未填写' },
+      { key: 'gender', label: '性别', value: formatGender(profile?.gender || account?.gender) },
+      { key: 'ageRange', label: '年龄段', value: formatAgeRange(profile?.ageRange || account?.ageRange) },
+      { key: 'identity', label: '身份标签', value: formatIdentity(profile?.identity || account?.identity) },
+      { key: 'birthday', label: '生日', value: profile?.birthday || '未填写' },
+      { key: 'weight', label: '体重', value: weightText },
+      {
+        key: 'height',
+        label: '身高',
+        value:
+          profile?.height && Number.isFinite(Number(profile.height))
+            ? `${Number(profile.height)} cm`
+            : '未填写',
+      },
+    ];
+
     this.setData({
-      privacyIndex,
-      weight: settings.weight || 60,
-      autoSync: settings.autoSync !== undefined ? settings.autoSync : true,
+      avatarUrl,
+      avatarInitial: initials,
+      displayName: nickname,
+      shareStatus: defaultPublic ? '公开分享' : '私密记录',
+      userIdLabel: account?.id ? `User ID: ${account.id}` : 'User ID: --',
+      personalInfo,
+      defaultPublic,
     });
   },
-  handlePrivacyChange(event) {
-    this.setData({
-      privacyIndex: Number(event.detail.value),
-    });
-  },
-  handleWeightInput(event) {
-    const weight = Number(event.detail.value) || 0;
-    this.setData({
-      weight,
-    });
-  },
-  handleAutoSyncChange(event) {
-    this.setData({
-      autoSync: event.detail.value,
-    });
-  },
-  handleSave() {
-    const payload = {
-      privacyLevel: this.data.privacyOptions[this.data.privacyIndex].key,
-      weight: this.data.weight,
-      autoSync: this.data.autoSync,
-    };
-    saveRecentSettings(payload);
-    wx.showToast({
-      title: '偏好设置已保存',
-      icon: 'success',
-    });
-    this.setData({ message: '偏好设置已保存' });
-  },
-  handleClearOffline() {
-    clearOfflineQueue();
-    wx.showToast({
-      title: '离线缓存已清空',
-      icon: 'success',
-    });
-  },
-  handleEditProfile() {
+
+  handleCompleteProfile() {
     wx.navigateTo({
       url: '/pages/profile-info/profile-info',
+    });
+  },
+
+  handleDefaultPrivacyToggle(event) {
+    const defaultPublic = Boolean(event?.detail?.value);
+    const recent = getRecentSettings() || {};
+    const nextPrivacy = defaultPublic ? 'public' : 'private';
+    saveRecentSettings({
+      ...recent,
+      privacyLevel: nextPrivacy,
+    });
+    this.setData({ defaultPublic, shareStatus: defaultPublic ? '公开分享' : '私密记录' });
+  },
+
+  handleOpenAbout() {
+    wx.showModal({
+      title: '关于 RouteLab',
+      content: 'RouteLab 致力于提供安全、可靠的校园轨迹记录与分享服务。',
+      showCancel: false,
+      confirmText: '知道了',
     });
   },
 });

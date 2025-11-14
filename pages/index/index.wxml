@@ -57,7 +57,7 @@
               <text class="weather__metric-value">{{weather.humidityText}}</text>
             </view>
             <view class="weather__metric">
-              <text class="weather__metric-label">风速</text>
+              <text class="weather__metric-label">风力</text>
               <text class="weather__metric-value">{{weather.windText}}</text>
             </view>
             <view class="weather__metric">
@@ -172,75 +172,54 @@
     </view>
 
     <view wx:else class="tab-content tab-content--profile">
-      <view class="card card--profile">
-        <view class="profile-card__header">
-          <view class="profile-card__avatar" wx:if="{{!userCard.avatarUrl}}">
-            <text>{{userCard.initial}}</text>
+      <view class="profile-center">
+        <view class="profile-card profile-card--identity">
+          <view class="profile-card__avatar">
+            <image wx:if="{{userCard.avatarUrl}}" src="{{userCard.avatarUrl}}" mode="aspectFill"></image>
+            <view wx:else class="profile-card__avatar-placeholder">{{userCard.initial}}</view>
           </view>
-          <image
-            wx:else
-            class="profile-card__avatar-image"
-            src="{{userCard.avatarUrl}}"
-            mode="aspectFill"
-          />
-          <view class="profile-card__info">
+          <view class="profile-card__meta">
             <text class="profile-card__name">{{userCard.nickname}}</text>
-            <text class="profile-card__privacy">{{userCard.privacyLabel}}</text>
+            <text class="profile-card__status">{{userCard.shareStatus}}</text>
+            <text class="profile-card__id">{{userCard.userIdLabel}}</text>
           </view>
         </view>
-        <view class="profile-card__stats">
-          <view class="profile-card__stat">
-            <text class="profile-card__stat-label">累计里程</text>
-            <text class="profile-card__stat-value">{{userCard.totalDistance}}</text>
-          </view>
-          <view class="profile-card__stat">
-            <text class="profile-card__stat-label">记录次数</text>
-            <text class="profile-card__stat-value">{{userCard.totalCount}}</text>
-          </view>
-          <view class="profile-card__stat">
-            <text class="profile-card__stat-label">累计消耗</text>
-            <text class="profile-card__stat-value">{{userCard.totalCalories}}</text>
-          </view>
-        </view>
-        <view class="profile-card__privacy-toggle">
-          <view class="profile-card__privacy-text">
-            <text class="profile-card__privacy-title">默认隐私</text>
-            <text class="profile-card__privacy-desc">{{userCard.privacyDescription}}</text>
-          </view>
-          <switch
-            class="profile-card__privacy-switch"
-            checked="{{privacyLevel === 'public'}}"
-            bindchange="handlePrivacySwitchChange"
-          />
-        </view>
-        <view class="profile-card__actions">
-          <button class="btn btn--ghost" bindtap="handleNavigateProfile">个人设置</button>
-          <button class="btn btn--ghost" bindtap="handleNavigateHistory">打开历史列表</button>
-        </view>
-      </view>
 
-      <view class="card card--progress">
-        <rlab-progress
-          label="里程目标"
-          value="{{overview.totalDistance}}"
-          goal="目标 {{goalLabels.distance}}"
-          percentage="{{progress.distance}}"
-          variant="primary"
-        ></rlab-progress>
-        <rlab-progress
-          label="记录次数"
-          value="{{overview.totalCount}}"
-          goal="目标 {{goalLabels.count}}"
-          percentage="{{progress.count}}"
-          variant="accent"
-        ></rlab-progress>
-        <rlab-progress
-          label="消耗热量"
-          value="{{overview.totalCalories}}"
-          goal="目标 {{goalLabels.calories}}"
-          percentage="{{progress.calories}}"
-          variant="energy"
-        ></rlab-progress>
+        <view class="profile-section profile-section--info">
+          <view class="section-header">
+            <text class="section-title">个人信息</text>
+            <text class="section-subtitle">完善资料可获得更准确的运动统计</text>
+          </view>
+          <view class="info-list">
+            <block wx:for="{{userCard.personalInfo}}" wx:key="key">
+              <view class="info-row">
+                <text class="info-row__label">{{item.label}}</text>
+                <text class="info-row__value">{{item.value}}</text>
+              </view>
+            </block>
+          </view>
+          <button class="btn btn--primary profile-section__cta" bindtap="handleCompleteProfile">
+            完善个人信息
+          </button>
+        </view>
+
+        <view class="profile-section profile-section--settings">
+          <view class="settings-row">
+            <view class="settings-row__texts">
+              <text class="settings-row__title">默认隐私</text>
+              <text class="settings-row__desc">{{userCard.privacyDescription}}</text>
+            </view>
+            <switch checked="{{userCard.defaultPublic}}" bindchange="handlePrivacySwitchChange"></switch>
+          </view>
+          <view class="settings-divider"></view>
+          <view class="settings-row settings-row--link" bindtap="handleOpenAbout">
+            <view class="settings-row__texts">
+              <text class="settings-row__title">关于 RouteLab</text>
+              <text class="settings-row__desc">了解应用版本与协议信息</text>
+            </view>
+            <text class="settings-row__link-text">查看</text>
+          </view>
+        </view>
       </view>
     </view>
   </scroll-view>
