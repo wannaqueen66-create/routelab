@@ -1,5 +1,3 @@
-@import "../../components/navigation-bar/navigation-bar.wxss";
-
 .record-page {
   min-height: 100vh;
   background: #020817;
@@ -17,21 +15,22 @@
   z-index: 0;
 }
 
-.record-back {
-  position: absolute;
-  top: calc(24rpx + constant(safe-area-inset-top));
-  top: calc(24rpx + env(safe-area-inset-top));
-  left: 24rpx;
-  z-index: 100;
-}
-
-.record-back::after {
-  display: none;
-}
-
 .record-map {
   width: 100%;
   height: 100%;
+}
+
+.record-nav {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.record-nav rlab-nav {
+  pointer-events: auto;
 }
 
 .map-tip {
@@ -234,9 +233,9 @@
 
 .locate-button {
   position: absolute;
-  right: 16rpx;
-  bottom: calc(40rpx + constant(safe-area-inset-bottom));
-  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  right: 12rpx;
+  bottom: calc(36rpx + constant(safe-area-inset-bottom));
+  bottom: calc(36rpx + env(safe-area-inset-bottom));
   width: 56rpx;
   height: 56rpx;
   border-radius: 50%;

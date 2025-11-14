@@ -1,12 +1,13 @@
 <view class="record-page">
   <view class="map-region">
-    <button
-      class="record-back weui-navigation-bar__btn_goback_wrapper"
-      bindtap="handleNavigateBack"
-      hover-class="is-active"
-    >
-      <view class="weui-navigation-bar__btn_goback"></view>
-    </button>
+    <view class="record-nav">
+      <rlab-nav
+        background="transparent"
+        color="#1F2329"
+        home-button="{{false}}"
+        bindback="handleNavigateBack"
+      ></rlab-nav>
+    </view>
     <map
       id="routeMap"
       class="record-map"
