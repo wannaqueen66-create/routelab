@@ -1,5 +1,12 @@
 <view class="record-page">
   <view class="map-region">
+    <button
+      class="record-back weui-navigation-bar__btn_goback_wrapper"
+      bindtap="handleNavigateBack"
+      hover-class="is-active"
+    >
+      <view class="weui-navigation-bar__btn_goback"></view>
+    </button>
     <map
       id="routeMap"
       class="record-map"
@@ -13,11 +20,19 @@
     polyline="{{polyline}}"
     include-points="{{includePoints}}"
     bindtap="handleMapTap"
-  ></map>
+    ></map>
 
     <view class="map-tip" wx:if="{{!tracking && !hasRoutePoints}}">
       <text>点击"开始记录"即可生成第一条校园轨迹</text>
     </view>
+
+    <button
+      class="locate-button {{locateAnimationActive ? 'locate-button--active' : ''}}"
+      bindtap="handleLocateTap"
+      hover-class="is-active"
+    >
+      <text class="locate-button__icon">📍</text>
+    </button>
   </view>
 
   <view class="sheet-container">

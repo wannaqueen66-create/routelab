@@ -1,9 +1,12 @@
+@import "../../components/navigation-bar/navigation-bar.wxss";
+
 .record-page {
   min-height: 100vh;
   background: #020817;
   color: #0f172a;
   display: flex;
   flex-direction: column;
+  -webkit-overflow-scrolling: touch;
 }
 
 .map-region {
@@ -12,6 +15,18 @@
   max-height: 70vh;
   overflow: hidden;
   z-index: 0;
+}
+
+.record-back {
+  position: absolute;
+  top: calc(24rpx + constant(safe-area-inset-top));
+  top: calc(24rpx + env(safe-area-inset-top));
+  left: 24rpx;
+  z-index: 100;
+}
+
+.record-back::after {
+  display: none;
 }
 
 .record-map {
@@ -37,14 +52,21 @@
   flex: 1;
   width: 100%;
   margin-top: -48rpx;
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: calc(32rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(32rpx + env(safe-area-inset-bottom));
   position: relative;
   z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: #020817;
 }
 
 .record-sheet {
-  margin: 0 24rpx 32rpx;
-  padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  margin: 0 24rpx;
+  padding: 28rpx 32rpx;
+  padding-bottom: calc(48rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(20rpx);
   border-radius: 40rpx;
@@ -97,6 +119,8 @@
   font-size: 32rpx;
   font-weight: 600;
   color: #0f172a;
+  line-height: 1.2;
+  -webkit-font-smoothing: antialiased;
 }
 
 .sheet-meta {
@@ -196,6 +220,62 @@
 
 .sheet-controls--dual .btn {
   flex: 1;
+}
+
+.btn:active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.is-active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.locate-button {
+  position: absolute;
+  right: 16rpx;
+  bottom: calc(40rpx + constant(safe-area-inset-bottom));
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  z-index: 99;
+}
+
+.locate-button__icon {
+  font-size: 28rpx;
+  text-shadow: 0 0 8rpx rgba(255, 255, 255, 0.8), 0 2rpx 4rpx rgba(0, 0, 0, 0.3);
+  touch-action: manipulation;
+}
+
+.locate-button::after {
+  content: '';
+  position: absolute;
+  top: -8rpx;
+  bottom: -8rpx;
+  left: -8rpx;
+  right: -8rpx;
+}
+
+.locate-button.is-active {
+  background: rgba(47, 107, 255, 0.08);
+}
+
+.locate-button--active {
+  animation: locatePulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes locatePulse {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(0.95);
+  }
 }
 
 .btn {

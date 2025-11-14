@@ -110,6 +110,9 @@ Page({
     hasRoutePoints: false,
     centerLatitude: DEFAULT_CENTER.latitude,
     centerLongitude: DEFAULT_CENTER.longitude,
+    userLatitude: null,
+    userLongitude: null,
+    mapScale: 16,
     weight: 60,
     photos: [],
     locationScope: 'none',
@@ -118,6 +121,7 @@ Page({
     uploading: false,
     finishSheetVisible: false,
     finishAutoPaused: false,
+    locateAnimationActive: false,
   },
 
   onLoad() {
@@ -238,6 +242,8 @@ Page({
             this.setData({
               centerLatitude: res.latitude,
               centerLongitude: res.longitude,
+              userLatitude: res.latitude,
+              userLongitude: res.longitude,
             });
           }
           resolve(res);
@@ -284,6 +290,8 @@ Page({
     const stepsText = activityMeta.key === 'ride' ? '--' : `${Math.round(distance / 0.75)}`;
     const hasRoutePoints = routePoints.length > 0;
     const latestPoint = hasRoutePoints ? routePoints[routePoints.length - 1] : DEFAULT_CENTER;
+    const userLatitude = hasRoutePoints ? latestPoint.latitude : this.data.userLatitude;
+    const userLongitude = hasRoutePoints ? latestPoint.longitude : this.data.userLongitude;
 
     if (this.data.keepScreenSupported && this.data.keepScreenOnPreferred && isTracking) {
       try {
@@ -387,6 +395,8 @@ Page({
       hasRoutePoints: hasRoutePoints,
       centerLatitude: latestPoint.latitude,
       centerLongitude: latestPoint.longitude,
+      userLatitude,
+      userLongitude,
     });
   },
 
@@ -490,6 +500,41 @@ Page({
     }
     this.refreshCurrentLocation();
     this.openPurposePicker();
+  },
+
+  handleLocateTap() {
+    const latitude = Number(this.data.userLatitude);
+    const longitude = Number(this.data.userLongitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      wx.showToast({ title: '正在获取位置...', icon: 'none' });
+      this.refreshCurrentLocation();
+      return;
+    }
+    this.setData({ locateAnimationActive: true });
+    if (this.mapContext) {
+      this.mapContext.moveToLocation({ latitude, longitude });
+    }
+    setTimeout(() => {
+      this.setData({ locateAnimationActive: false });
+    }, 300);
+  },
+
+  handleNavigateBack() {
+    if (this.data.tracking || this.data.paused) {
+      wx.showModal({
+        title: '提示',
+        content: '记录尚未完成，确定要退出吗？退出后当前数据将丢失。',
+        confirmText: '退出',
+        cancelText: '继续记录',
+        success: (res) => {
+          if (res.confirm) {
+            wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
+          }
+        },
+      });
+      return;
+    }
+    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
   },
 
   handlePause() {
