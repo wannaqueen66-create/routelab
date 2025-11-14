@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const {
   checkLocationAuthorization,
@@ -27,6 +27,7 @@ const {
   getUserAccount,
 } = require('../../utils/storage');
 const { STORAGE_KEYS } = require('../../constants/storage');
+const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
 
 const TAB_META = [
   { key: 'home', label: '首页', description: '记录运动', icon: '🏃' },
@@ -306,13 +307,23 @@ function formatIdentityLabel(value) {
   return IDENTITY_LABELS[value] || '未填写';
 }
 
-function createProfileCard({ settings, profile, account }) {
-  const nickname =
+function resolveProfileNickname(profile, account) {
+  const fallback = getDefaultNickname(account);
+  return (
     profile?.nickname ||
     account?.nickname ||
     account?.username ||
     account?.displayName ||
-    'RouteLab 用户';
+    fallback
+  );
+}
+
+function createProfileCard({ settings, profile, account }) {
+  const nickname = resolveProfileNickname(profile, account);
+  const avatarUrl = profile?.avatarUrl || account?.avatar || '';
+  const avatarSeed = avatarUrl || account?.id || nickname;
+  const avatarColor = getAvatarColor(avatarSeed);
+  const initial = getInitialFromName(nickname || avatarSeed);
   const privacyLevel = settings?.privacyLevel || 'private';
   const defaultPublic = privacyLevel === 'public';
   const weightSource =
@@ -343,21 +354,21 @@ function createProfileCard({ settings, profile, account }) {
   ];
   return {
     nickname,
-    avatarUrl: profile?.avatarUrl || account?.avatar,
+    avatarUrl,
+    avatarColor,
     privacyLevel,
     privacyLabel: PRIVACY_LEVEL_MAP[privacyLevel]?.label || '仅自己可见',
     privacyDescription:
       privacyLevel === 'public'
-        ? '默认将新轨迹同步到公开社区'
+        ? '默认将新轨迹同步到公共社区'
         : '仅自己可见，需要时可手动公开',
-    initial: nickname.charAt(0).toUpperCase(),
+    initial,
     shareStatus: defaultPublic ? '公开分享' : '私密记录',
     userIdLabel: account?.id ? `User ID: ${account.id}` : 'User ID: --',
     personalInfo,
     defaultPublic,
   };
 }
-
 function shouldFixPlaceName(name = '') {
   if (!name || typeof name !== 'string') return true;
   const value = name.trim();

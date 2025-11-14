@@ -6,6 +6,7 @@ const {
   getUserProfile,
   getUserAccount,
 } = require('../../utils/storage');
+const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
 
 function formatGender(value) {
   if (value === 'male') {
@@ -46,6 +47,7 @@ function formatIdentity(value) {
 Page({
   data: {
     avatarUrl: '',
+    avatarColor: '#e2e8f0',
     avatarInitial: 'R',
     displayName: 'RouteLab 用户',
     shareStatus: '公开分享',
@@ -62,9 +64,16 @@ Page({
     const profile = getUserProfile() || {};
     const account = getUserAccount() || {};
     const settings = getRecentSettings() || {};
-    const nickname = profile?.nickname || account?.nickname || 'RouteLab 用户';
+    const nickname =
+      profile?.nickname ||
+      account?.nickname ||
+      account?.username ||
+      account?.displayName ||
+      getDefaultNickname(account);
     const avatarUrl = profile?.avatarUrl || account?.avatar || '';
-    const initials = nickname ? nickname.slice(0, 1).toUpperCase() : 'R';
+    const avatarSeed = avatarUrl || account?.id || nickname;
+    const initials = getInitialFromName(nickname || avatarSeed);
+    const avatarColor = getAvatarColor(avatarSeed);
     const privacyLevel = settings.privacyLevel || 'public';
     const defaultPublic = privacyLevel !== 'private';
     const weightValue = Number(settings.weight);
@@ -90,6 +99,7 @@ Page({
 
     this.setData({
       avatarUrl,
+      avatarColor,
       avatarInitial: initials,
       displayName: nickname,
       shareStatus: defaultPublic ? '公开分享' : '私密记录',

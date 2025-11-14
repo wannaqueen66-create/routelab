@@ -8,6 +8,7 @@ const {
   getRecentSettings,
   saveRecentSettings,
 } = require('../../utils/storage');
+const { getDefaultNickname } = require('../../utils/profile-meta');
 
 const GENDER_OPTIONS = [
   { value: 'male', label: '男' },
@@ -85,8 +86,13 @@ Page({
     const account = getUserAccount();
     const avatar =
       storedProfile?.avatarUrl || account?.avatar || storedProfile?.avatar || account?.avatarUrl || '';
+    const defaultNickname = getDefaultNickname(account);
     const nickname =
-      storedProfile?.nickname || account?.nickname || storedProfile?.nickName || account?.nickName || '';
+      storedProfile?.nickname ||
+      account?.nickname ||
+      storedProfile?.nickName ||
+      account?.nickName ||
+      defaultNickname;
     const canChooseAvatar =
       typeof wx !== 'undefined' && typeof wx.canIUse === 'function'
         ? wx.canIUse('button.open-type.chooseAvatar')
@@ -113,7 +119,7 @@ Page({
     this.setData({
       avatarPreview: avatar || '',
       avatarRemoteUrl: avatar || '',
-      nickname: nickname || '',
+      nickname: nickname || defaultNickname,
       canChooseAvatar,
       gender: resolvedGender,
       ageRange: resolvedAgeRange,
@@ -253,19 +259,7 @@ Page({
       weightError: '',
     });
   },
-  validate({ nickname, avatarUrl, gender, ageRange, identity, height, weight }) {
-    if (!avatarUrl) {
-      this.setData({
-        avatarError: '请选择并上传头像',
-      });
-      return false;
-    }
-    if (!nickname) {
-      this.setData({
-        nicknameError: '昵称不能为空',
-      });
-      return false;
-    }
+  validate({ gender, ageRange, identity, height, weight }) {
     if (!gender) {
       this.setData({
         genderError: '请选择性别',
@@ -314,8 +308,12 @@ Page({
     const { gender, ageRange, identity, birthday, height, weight } = this.data;
     const heightValue = (height || '').trim();
     const weightValue = (weight || '').trim();
+    const account = getUserAccount() || {};
+    const fallbackNickname = getDefaultNickname(account);
+    const finalNickname = nickname || fallbackNickname;
+    const finalAvatarUrl = avatarUrl || account?.avatar || '';
     this.setData({
-      nickname,
+      nickname: finalNickname,
       nicknameError: '',
       avatarError: '',
       genderError: '',
@@ -327,8 +325,6 @@ Page({
     });
     if (
       !this.validate({
-        nickname,
-        avatarUrl,
         gender,
         ageRange,
         identity,
@@ -348,8 +344,8 @@ Page({
     const numericHeight = Number(heightValue);
     const numericWeight = Number(weightValue);
     const payload = {
-      nickname,
-      avatarUrl,
+      nickname: finalNickname,
+      avatarUrl: finalAvatarUrl,
       gender,
       ageRange,
       identity,
@@ -361,8 +357,8 @@ Page({
       .updateUserProfile(payload)
       .then(() => {
         saveUserProfile({
-          nickname,
-          avatarUrl,
+          nickname: finalNickname,
+          avatarUrl: finalAvatarUrl,
           gender,
           ageRange,
           identity,
@@ -377,12 +373,12 @@ Page({
             weight: numericWeight,
           });
         }
-        const account = getUserAccount();
-        if (account) {
+        const nextAccount = getUserAccount();
+        if (nextAccount) {
           saveUserAccount({
-            ...account,
-            nickname,
-            avatar: avatarUrl,
+            ...nextAccount,
+            nickname: finalNickname,
+            avatar: finalAvatarUrl,
             gender,
             ageRange,
             identity,

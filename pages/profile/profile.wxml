@@ -5,7 +5,13 @@
     <view class="profile-card profile-card--identity">
       <view class="profile-card__avatar">
         <image wx:if="{{avatarUrl}}" src="{{avatarUrl}}" mode="aspectFill"></image>
-        <view wx:else class="profile-card__avatar-placeholder">{{avatarInitial}}</view>
+        <view
+          wx:else
+          class="profile-card__avatar-placeholder"
+          style="background-color: {{avatarColor}}"
+        >
+          {{avatarInitial}}
+        </view>
       </view>
       <view class="profile-card__meta">
         <text class="profile-card__name">{{displayName}}</text>
