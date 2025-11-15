@@ -7,6 +7,7 @@ const {
   getUserAccount,
 } = require('../../utils/storage');
 const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
+const rewards = require('../../services/rewards');
 
 function formatGender(value) {
   if (value === 'male') {
@@ -54,6 +55,11 @@ Page({
     userIdLabel: 'User ID: --',
     personalInfo: [],
     defaultPublic: true,
+    totalPoints: 0,
+    badgeIcon: '🏃',
+    badgeLabel: '新手上路',
+    badgeUnlockedText: '已获勋章：0/6',
+    badgeNextHint: '再接再厉，继续加油！',
   },
 
   onShow() {
@@ -97,6 +103,12 @@ Page({
       },
     ];
 
+    const achievementSnapshot = rewards.getAchievementSnapshot();
+    const unlockedText = `已获勋章：${achievementSnapshot.unlockedCount}/${achievementSnapshot.badgeCount}`;
+    const nextHint = achievementSnapshot.nextBadge
+      ? `距 ${achievementSnapshot.nextBadge.icon} ${achievementSnapshot.nextBadge.label} 还差 ${achievementSnapshot.remainingToNext} 分`
+      : '已解锁全部勋章';
+
     this.setData({
       avatarUrl,
       avatarColor,
@@ -106,6 +118,11 @@ Page({
       userIdLabel: account?.id ? `User ID: ${account.id}` : 'User ID: --',
       personalInfo,
       defaultPublic,
+      totalPoints: achievementSnapshot.totalPoints,
+      badgeIcon: achievementSnapshot.badgeIcon,
+      badgeLabel: achievementSnapshot.badgeLabel,
+      badgeUnlockedText: unlockedText,
+      badgeNextHint: nextHint,
     });
   },
 
@@ -124,6 +141,12 @@ Page({
       privacyLevel: nextPrivacy,
     });
     this.setData({ defaultPublic, shareStatus: defaultPublic ? '公开分享' : '私密记录' });
+  },
+
+  handleOpenBadgeWall() {
+    wx.navigateTo({
+      url: '/pages/badges/badges',
+    });
   },
 
   handleOpenAbout() {

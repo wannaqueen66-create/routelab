@@ -1,0 +1,102 @@
+.badge-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #f4f6fb 0%, #eef2ff 100%);
+  color: #0f172a;
+}
+
+.badge-scroll {
+  flex: 1;
+  padding: 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  box-sizing: border-box;
+}
+
+.badge-summary {
+  background: #ffffff;
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-shadow: 0 20rpx 40rpx rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  text-align: center;
+}
+
+.badge-summary__title {
+  font-size: 28rpx;
+  color: #64748b;
+}
+
+.badge-summary__points {
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.badge-summary__current {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  font-size: 30rpx;
+}
+
+.badge-summary__icon {
+  font-size: 40rpx;
+}
+
+.badge-summary__hint {
+  font-size: 24rpx;
+  color: #475569;
+}
+
+.badge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.badge-card {
+  display: flex;
+  gap: 16rpx;
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  align-items: center;
+}
+
+.badge-card--unlocked {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 16rpx 36rpx rgba(59, 130, 246, 0.15);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(147, 197, 253, 0.2));
+}
+
+.badge-card__icon {
+  font-size: 48rpx;
+}
+
+.badge-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.badge-card__title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.badge-card__range,
+.badge-card__status {
+  font-size: 24rpx;
+  color: #475569;
+}
+
+.badge-card--unlocked .badge-card__status {
+  color: #16a34a;
+}

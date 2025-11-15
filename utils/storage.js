@@ -269,6 +269,63 @@ function clearLastSyncTimestamp() {
   safeSet(STORAGE_KEYS.LAST_SYNC_AT, 0);
 }
 
+const ACHIEVEMENT_DEFAULTS = {
+  totalPoints: 0,
+  currentBadge: 'rookie',
+  routeHistory: {},
+};
+
+function getAchievementStats() {
+  const stored = safeGet(STORAGE_KEYS.USER_ACHIEVEMENTS, null);
+  if (!stored || typeof stored !== 'object') {
+    return { ...ACHIEVEMENT_DEFAULTS };
+  }
+  const totalPointsCandidate = Number(stored.totalPoints);
+  const totalPoints =
+    Number.isFinite(totalPointsCandidate) && totalPointsCandidate > 0
+      ? Math.floor(totalPointsCandidate)
+      : 0;
+  const currentBadge =
+    typeof stored.currentBadge === 'string' && stored.currentBadge.trim()
+      ? stored.currentBadge.trim()
+      : ACHIEVEMENT_DEFAULTS.currentBadge;
+  const routeHistory =
+    stored.routeHistory && typeof stored.routeHistory === 'object'
+      ? { ...stored.routeHistory }
+      : { ...ACHIEVEMENT_DEFAULTS.routeHistory };
+  return {
+    totalPoints,
+    currentBadge,
+    routeHistory,
+  };
+}
+
+function saveAchievementStats(stats = {}) {
+  const base = getAchievementStats();
+  const totalPointsCandidate = Number(stats.totalPoints);
+  const normalizedPoints =
+    Number.isFinite(totalPointsCandidate) && totalPointsCandidate >= 0
+      ? Math.floor(totalPointsCandidate)
+      : base.totalPoints;
+  const currentBadge =
+    typeof stats.currentBadge === 'string' && stats.currentBadge.trim()
+      ? stats.currentBadge.trim()
+      : base.currentBadge;
+  const historyPatch =
+    stats.routeHistory && typeof stats.routeHistory === 'object'
+      ? { ...stats.routeHistory }
+      : null;
+  const routeHistory = historyPatch ? { ...base.routeHistory, ...historyPatch } : base.routeHistory;
+  const payload = {
+    totalPoints: normalizedPoints,
+    currentBadge,
+    routeHistory,
+    updatedAt: Date.now(),
+  };
+  safeSet(STORAGE_KEYS.USER_ACHIEVEMENTS, payload);
+  return payload;
+}
+
 module.exports = {
   getRoutes,
   saveRoute,
@@ -293,4 +350,6 @@ module.exports = {
   getLastSyncTimestamp,
   setLastSyncTimestamp,
   clearLastSyncTimestamp,
+  getAchievementStats,
+  saveAchievementStats,
 };

@@ -12,6 +12,7 @@ const logger = require('../../utils/logger');
 const media = require('../../services/media');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
+const rewards = require('../../services/rewards');
 
 const ACTIVITY_CHOICES = [
   { key: 'walk', label: '步行', icon: '🚶' },
@@ -50,6 +51,7 @@ const TOAST = {
   activityLocked: '开始记录后可设置行进方式',
   activityUpdated: '行进方式已更新',
   activityAuto: '已恢复自动识别',
+  rewardInvalid: '记录已保存（用时或距离不足，未获得积分）',
 };
 
 function normalizePhotos(photos = []) {
@@ -126,6 +128,8 @@ Page({
     keepScreenOnPreferred: false,
     keepScreenSupported: typeof wx.setKeepScreenOn === 'function',
     locationAuthorized: true,
+    rewardModalVisible: false,
+    rewardSummary: null,
     hasRoutePoints: false,
     centerLatitude: DEFAULT_CENTER.latitude,
     centerLongitude: DEFAULT_CENTER.longitude,
@@ -643,23 +647,23 @@ Page({
     if (this.data.uploading) {
       return;
     }
-    this.finalizeTracking().then((success) => {
-      if (success) {
-        this.setData({
-          finishSheetVisible: false,
-          finishAutoPaused: false,
-          photos: [],
-        });
-        setTimeout(() => {
-          wx.switchTab({ url: '/pages/index/index' });
-        }, 500);
+    this.finalizeTracking().then((result) => {
+      const { success, route } = result || {};
+      if (!success) {
+        return;
       }
+      this.setData({
+        finishSheetVisible: false,
+        finishAutoPaused: false,
+        photos: [],
+      });
+      this.handleRouteReward(route);
     });
   },
 
   finalizeTracking() {
     if (this.data.uploading) {
-      return Promise.resolve(false);
+      return Promise.resolve({ success: false, route: null });
     }
     const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
     const weight = this.data.weight || 60;
@@ -682,16 +686,81 @@ Page({
           title: success ? TOAST.routeSaved : TOAST.routeSaveFailed,
           icon: success ? 'success' : 'none',
         });
-        return success;
+        return { success, route: success ? route : null };
       })
       .catch((error) => {
         logger.warn('stopTracking failed', error?.errMsg || error);
         wx.showToast({ title: TOAST.routeSaveFailed, icon: 'none' });
-        return false;
+        return { success: false, route: null };
       })
       .finally(() => {
         this.setData({ uploading: false });
       });
+  },
+
+  handleRouteReward(route) {
+    if (!route || !route.id) {
+      wx.switchTab({ url: '/pages/index/index' });
+      return;
+    }
+    let rewardResult = null;
+    try {
+      rewardResult = rewards.awardPointsForRoute(route);
+    } catch (error) {
+      logger.warn('awardPointsForRoute failed', error?.errMsg || error?.message || error);
+    }
+    if (!rewardResult || !rewardResult.evaluation) {
+      wx.switchTab({ url: '/pages/index/index' });
+      return;
+    }
+    if (!rewardResult.evaluation.valid || rewardResult.pointsAwarded <= 0) {
+      wx.showToast({ title: TOAST.rewardInvalid, icon: 'none' });
+      setTimeout(() => {
+        wx.switchTab({ url: '/pages/index/index' });
+      }, 800);
+      return;
+    }
+    const distanceMeters = Number(route?.stats?.distance) || 0;
+    const distanceText = `${(distanceMeters / 1000).toFixed(1)} km`;
+    const durationText = this.formatRewardDuration(route?.stats?.duration);
+    const summary = {
+      title: rewardResult.hasPhoto ? '🎉 完成记录并打卡！' : '🎉 完成记录！',
+      distanceText,
+      durationText,
+      hasPhoto: rewardResult.hasPhoto,
+      photoCount: rewardResult.photoCount || 0,
+      gainedPoints: rewardResult.pointsAwarded,
+      totalPoints: rewardResult.totalPoints,
+      starIcons: rewardResult.pointsAwarded === 2 ? '⭐⭐' : '⭐',
+    };
+    this.setData({
+      rewardModalVisible: true,
+      rewardSummary: summary,
+    });
+  },
+
+  formatRewardDuration(durationMs) {
+    const duration = Number(durationMs) || 0;
+    if (duration <= 0) {
+      return '00:00';
+    }
+    const totalSeconds = Math.floor(duration / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = (value) => (value < 10 ? `0${value}` : `${value}`);
+    if (hours > 0) {
+      return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+    return `${pad(minutes)}:${pad(seconds)}`;
+  },
+
+  handleRewardConfirm() {
+    this.setData({
+      rewardModalVisible: false,
+      rewardSummary: null,
+    });
+    wx.switchTab({ url: '/pages/index/index' });
   },
 
   handleTitleInput(event) {

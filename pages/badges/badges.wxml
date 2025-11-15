@@ -1,0 +1,29 @@
+<view class="badge-page">
+  <rlab-nav title="勋章墙"></rlab-nav>
+
+  <scroll-view class="badge-scroll" scroll-y>
+    <view class="badge-summary">
+      <text class="badge-summary__title">当前成就</text>
+      <text class="badge-summary__points">⭐ 总积分：{{totalPoints}}</text>
+      <view class="badge-summary__current">
+        <text class="badge-summary__icon">{{badgeIcon}}</text>
+        <text class="badge-summary__label">{{badgeLabel}}</text>
+      </view>
+      <text class="badge-summary__hint">{{nextBadgeHint}}</text>
+    </view>
+
+    <view class="badge-list">
+      <block wx:for="{{badges}}" wx:key="key">
+        <view class="badge-card {{item.unlocked ? 'badge-card--unlocked' : ''}}">
+          <view class="badge-card__icon">{{item.icon}}</view>
+          <view class="badge-card__info">
+            <text class="badge-card__title">{{item.label}}</text>
+            <text class="badge-card__range">{{item.rangeText}}</text>
+            <text class="badge-card__status" wx:if="{{item.unlocked}}">已解锁</text>
+            <text class="badge-card__status" wx:else>还差 {{item.remaining}} 分解锁</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </scroll-view>
+</view>

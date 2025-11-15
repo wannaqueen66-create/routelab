@@ -466,6 +466,17 @@
   color: #475569;
 }
 
+.finish-field__hint {
+  font-size: 24rpx;
+  color: #ea580c;
+  background: rgba(234, 88, 12, 0.08);
+  border-radius: 16rpx;
+  padding: 8rpx 14rpx;
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
 .finish-field__input,
 .finish-field__textarea {
   width: 100%;
@@ -594,4 +605,99 @@
   font-size: 28rpx;
   padding: 24rpx;
   border: 1px solid rgba(37, 99, 235, 0.2);
+}
+.reward-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx 32rpx;
+  box-sizing: border-box;
+  background: rgba(2, 6, 23, 0.65);
+  backdrop-filter: blur(10rpx);
+  z-index: 30;
+}
+
+.reward-modal {
+  width: 100%;
+  max-width: 640rpx;
+  background: #ffffff;
+  border-radius: 36rpx;
+  padding: 40rpx 32rpx;
+  box-shadow: 0 50rpx 120rpx rgba(15, 23, 42, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  text-align: center;
+}
+
+.reward-modal__title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.reward-modal__stats {
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 24rpx;
+  padding: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.reward-modal__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 26rpx;
+  color: #475569;
+}
+
+.reward-modal__label {
+  font-weight: 500;
+}
+
+.reward-modal__value {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.reward-modal__points {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8rpx;
+  font-size: 28rpx;
+  color: #0f172a;
+}
+
+.reward-modal__points-label {
+  color: #475569;
+}
+
+.reward-modal__points-gain {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.reward-modal__points-stars {
+  font-size: 30rpx;
+}
+
+.reward-modal__total {
+  font-size: 26rpx;
+  color: #475569;
+}
+
+.reward-modal__total-value {
+  font-weight: 700;
+  color: #2563eb;
+  margin-left: 4rpx;
+}
+
+.reward-modal__cta {
+  margin-top: 8rpx;
 }

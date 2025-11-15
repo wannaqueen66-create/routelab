@@ -5,6 +5,7 @@
     "pages/history/history",
     "pages/route-detail/route-detail",
     "pages/profile/profile",
+    "pages/badges/badges",
     "pages/preferences/preferences",
     "pages/profile-info/profile-info"
   ],

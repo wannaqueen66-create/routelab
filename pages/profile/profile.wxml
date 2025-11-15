@@ -17,6 +17,20 @@
         <text class="profile-card__name">{{displayName}}</text>
         <text class="profile-card__status">{{shareStatus}}</text>
         <text class="profile-card__id">{{userIdLabel}}</text>
+        <view class="profile-card__achievements" bindtap="handleOpenBadgeWall">
+          <view class="profile-card__points">
+            <text class="profile-card__points-label">⭐ 积分</text>
+            <text class="profile-card__points-value">{{totalPoints}}</text>
+          </view>
+          <view class="profile-card__badge">
+            <text class="profile-card__badge-icon">{{badgeIcon}}</text>
+            <view class="profile-card__badge-info">
+              <text class="profile-card__badge-label">{{badgeLabel}}</text>
+              <text class="profile-card__badge-sub">{{badgeUnlockedText}}</text>
+            </view>
+          </view>
+          <text class="profile-card__badge-hint">{{badgeNextHint}}</text>
+        </view>
       </view>
     </view>
 

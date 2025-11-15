@@ -211,6 +211,7 @@
         </view>
         <view class="finish-field">
           <text class="finish-field__label">打卡照片</text>
+          <text class="finish-field__hint">💡 拍照打卡可获得双倍积分！</text>
           <view class="finish-photo__actions">
             <button class="btn btn--camera" bindtap="handleAddPhoto">📷 拍摄</button>
           </view>
@@ -241,6 +242,41 @@
           保存
         </button>
       </view>
+    </view>
+  </view>
+
+  <view
+    class="reward-modal-overlay"
+    wx:if="{{rewardModalVisible && rewardSummary}}"
+    catchtouchmove="true"
+  >
+    <view class="reward-modal">
+      <text class="reward-modal__title">{{rewardSummary.title}}</text>
+      <view class="reward-modal__stats">
+        <view class="reward-modal__row">
+          <text class="reward-modal__label">本次运动</text>
+          <text class="reward-modal__value">{{rewardSummary.distanceText}}</text>
+        </view>
+        <view class="reward-modal__row">
+          <text class="reward-modal__label">用时</text>
+          <text class="reward-modal__value">{{rewardSummary.durationText}}</text>
+        </view>
+        <view class="reward-modal__row" wx:if="{{rewardSummary.hasPhoto}}">
+          <text class="reward-modal__label">📸 已上传</text>
+          <text class="reward-modal__value">{{rewardSummary.photoCount}} 张照片</text>
+        </view>
+      </view>
+      <view class="reward-modal__points">
+        <text class="reward-modal__points-label">获得积分</text>
+        <text class="reward-modal__points-gain">+{{rewardSummary.gainedPoints}}</text>
+        <text class="reward-modal__points-stars">{{rewardSummary.starIcons}}</text>
+      </view>
+      <view class="reward-modal__total">
+        当前总积分：<text class="reward-modal__total-value">{{rewardSummary.totalPoints}}</text>
+      </view>
+      <button class="btn btn--primary reward-modal__cta" bindtap="handleRewardConfirm">
+        确定
+      </button>
     </view>
   </view>
 
