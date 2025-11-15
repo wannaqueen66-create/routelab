@@ -25,6 +25,12 @@
   align-items: center;
 }
 
+.profile-card--identity {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 24rpx;
+}
+
 .profile-card__avatar {
   width: 96rpx;
   height: 96rpx;
@@ -47,13 +53,6 @@
   color: #475569;
 }
 
-.profile-card__meta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
-
 .profile-card__name {
   font-size: 36rpx;
   font-weight: 700;
@@ -69,31 +68,58 @@
   color: #94a3b8;
 }
 
-.profile-card__achievements {
-  margin-top: 12rpx;
-  padding: 18rpx;
-  border-radius: 20rpx;
-  background: rgba(37, 99, 235, 0.06);
+.profile-card__header {
+  width: 100%;
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.profile-card__info {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.profile-card__identity {
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 6rpx;
 }
 
 .profile-card__points {
+  min-width: 170rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 20rpx;
+  background: rgba(37, 99, 235, 0.08);
   display: flex;
-  align-items: baseline;
-  gap: 8rpx;
-}
-
-.profile-card__points-label {
-  font-size: 24rpx;
-  color: #475569;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4rpx;
+  color: #1d4ed8;
+  flex-shrink: 0;
 }
 
 .profile-card__points-value {
   font-size: 36rpx;
   font-weight: 700;
   color: #0f172a;
+}
+
+.profile-card__points-label {
+  font-size: 24rpx;
+}
+
+.profile-card__achievements {
+  width: 100%;
+  padding: 18rpx;
+  border-radius: 20rpx;
+  background: rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
 
 .profile-card__badge {
@@ -103,7 +129,7 @@
 }
 
 .profile-card__badge-icon {
-  font-size: 32rpx;
+  font-size: 36rpx;
 }
 
 .profile-card__badge-info {
@@ -120,12 +146,24 @@
 
 .profile-card__badge-sub {
   font-size: 24rpx;
-  color: #64748b;
+  color: #475569;
+}
+
+.profile-card__hint-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16rpx;
 }
 
 .profile-card__badge-hint {
   font-size: 22rpx;
   color: #94a3b8;
+}
+
+.profile-card__badge-cta {
+  font-size: 24rpx;
+  color: #2563eb;
 }
 
 .profile-section {

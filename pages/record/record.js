@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const { checkLocationAuthorization, requestLocationAuthorization, openLocationSetting } = require('../../utils/permissions');
 const tracker = require('../../services/tracker');
@@ -13,6 +13,8 @@ const media = require('../../services/media');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
 const rewards = require('../../services/rewards');
+
+const app = typeof getApp === 'function' ? getApp() : null;
 
 const ACTIVITY_CHOICES = [
   { key: 'walk', label: '步行', icon: '🚶' },
@@ -52,6 +54,7 @@ const TOAST = {
   activityUpdated: '行进方式已更新',
   activityAuto: '已恢复自动识别',
   rewardInvalid: '记录已保存（用时或距离不足，未获得积分）',
+  profileIncomplete: '请先完善个人信息',
 };
 
 function normalizePhotos(photos = []) {
@@ -566,6 +569,9 @@ Page({
   },
 
   handleStart() {
+    if (!this.ensureProfileReadyForTracking()) {
+      return;
+    }
     if (!this.data.locationAuthorized) {
       this.setData({ showLocationPrompt: true });
       wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
@@ -659,6 +665,22 @@ Page({
       });
       this.handleRouteReward(route);
     });
+  },
+
+  ensureProfileReadyForTracking() {
+    if (!app || typeof app.getProfileCompletionStatus !== 'function') {
+      return true;
+    }
+    const { complete } = app.getProfileCompletionStatus();
+    if (complete) {
+      return true;
+    }
+    if (typeof app.checkAndPromptProfileCompletion === 'function') {
+      app.checkAndPromptProfileCompletion('record_start');
+    } else {
+      wx.showToast({ title: TOAST.profileIncomplete, icon: 'none' });
+    }
+    return false;
   },
 
   finalizeTracking() {
@@ -859,3 +881,4 @@ Page({
       });
   },
 });
+

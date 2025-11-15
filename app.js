@@ -51,23 +51,16 @@ const {
     };
   }
   
-  function isStoredProfileComplete(profile) {
-    if (!profile || typeof profile !== 'object') {
-      return false;
-    }
-    return (
-      typeof profile.nickname === 'string' &&
-      profile.nickname &&
-      typeof profile.avatarUrl === 'string' &&
-      profile.avatarUrl &&
-      typeof profile.gender === 'string' &&
-      profile.gender &&
-      typeof profile.ageRange === 'string' &&
-      profile.ageRange &&
-      typeof profile.identity === 'string' &&
-      profile.identity
-    );
+function isStoredProfileComplete(profile) {
+  if (!profile || typeof profile !== 'object') {
+    return false;
   }
+  const REQUIRED_FIELDS = ['gender', 'ageRange', 'identity'];
+  return REQUIRED_FIELDS.every((field) => {
+    const value = typeof profile[field] === 'string' ? profile[field].trim() : '';
+    return Boolean(value);
+  });
+}
   
 App({
   globalData: {

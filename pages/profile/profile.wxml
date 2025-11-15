@@ -3,33 +3,40 @@
 
   <scroll-view class="profile-scroll" scroll-y>
     <view class="profile-card profile-card--identity">
-      <view class="profile-card__avatar">
-        <image wx:if="{{avatarUrl}}" src="{{avatarUrl}}" mode="aspectFill"></image>
-        <view
-          wx:else
-          class="profile-card__avatar-placeholder"
-          style="background-color: {{avatarColor}}"
-        >
-          {{avatarInitial}}
+      <view class="profile-card__header">
+        <view class="profile-card__avatar">
+          <image wx:if="{{avatarUrl}}" src="{{avatarUrl}}" mode="aspectFill"></image>
+          <view
+            wx:else
+            class="profile-card__avatar-placeholder"
+            style="background-color: {{avatarColor}}"
+          >
+            {{avatarInitial}}
+          </view>
+        </view>
+        <view class="profile-card__info">
+          <view class="profile-card__identity">
+            <text class="profile-card__name">{{displayName}}</text>
+            <text class="profile-card__status">{{shareStatus}}</text>
+            <text class="profile-card__id">{{userIdLabel}}</text>
+          </view>
+          <view class="profile-card__points" bindtap="handleOpenBadgeWall">
+            <text class="profile-card__points-value">{{totalPoints}}</text>
+            <text class="profile-card__points-label">⭐ 积分</text>
+          </view>
         </view>
       </view>
-      <view class="profile-card__meta">
-        <text class="profile-card__name">{{displayName}}</text>
-        <text class="profile-card__status">{{shareStatus}}</text>
-        <text class="profile-card__id">{{userIdLabel}}</text>
-        <view class="profile-card__achievements" bindtap="handleOpenBadgeWall">
-          <view class="profile-card__points">
-            <text class="profile-card__points-label">⭐ 积分</text>
-            <text class="profile-card__points-value">{{totalPoints}}</text>
+      <view class="profile-card__achievements" bindtap="handleOpenBadgeWall">
+        <view class="profile-card__badge">
+          <text class="profile-card__badge-icon">{{badgeIcon}}</text>
+          <view class="profile-card__badge-info">
+            <text class="profile-card__badge-label">{{badgeLabel}}</text>
+            <text class="profile-card__badge-sub">{{badgeUnlockedText}}</text>
           </view>
-          <view class="profile-card__badge">
-            <text class="profile-card__badge-icon">{{badgeIcon}}</text>
-            <view class="profile-card__badge-info">
-              <text class="profile-card__badge-label">{{badgeLabel}}</text>
-              <text class="profile-card__badge-sub">{{badgeUnlockedText}}</text>
-            </view>
-          </view>
+        </view>
+        <view class="profile-card__hint-row">
           <text class="profile-card__badge-hint">{{badgeNextHint}}</text>
+          <text class="profile-card__badge-cta">查看勋章墙 →</text>
         </view>
       </view>
     </view>

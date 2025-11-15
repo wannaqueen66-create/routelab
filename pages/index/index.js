@@ -29,6 +29,8 @@ const {
 const { STORAGE_KEYS } = require('../../constants/storage');
 const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
 
+const app = typeof getApp === 'function' ? getApp() : null;
+
 const TAB_META = [
   { key: 'home', label: '首页', description: '记录运动', icon: '🏃' },
   { key: 'history', label: '历史', description: '回顾轨迹', icon: '🕘' },
@@ -377,7 +379,6 @@ function shouldFixPlaceName(name = '') {
   return value.includes('待') || value.includes('未') || value.includes('坐标');
 }
 
-const app = getApp();
 const EMPTY_OVERVIEW = createOverview([]);
 const EMPTY_PROGRESS = buildProgressFromOverview(EMPTY_OVERVIEW);
 const DEFAULT_WEATHER = createWeatherState({ loading: true });
@@ -802,7 +803,24 @@ Page({
   },
 
   handleNavigateRecord() {
+    if (!this.ensureProfileReadyForRecordStart()) {
+      return;
+    }
     wx.navigateTo({ url: '/pages/record/record' });
+  },
+
+  ensureProfileReadyForRecordStart() {
+    if (!app || typeof app.getProfileCompletionStatus !== 'function') {
+      return true;
+    }
+    const { complete } = app.getProfileCompletionStatus();
+    if (complete) {
+      return true;
+    }
+    if (typeof app.checkAndPromptProfileCompletion === 'function') {
+      app.checkAndPromptProfileCompletion('home_record');
+    }
+    return false;
   },
 
   handleNavigateHistory() {
