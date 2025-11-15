@@ -13,6 +13,16 @@ const media = require('../../services/media');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
 
+const ACTIVITY_CHOICES = [
+  { key: 'walk', label: '步行', icon: '🚶' },
+  { key: 'run', label: '跑步', icon: '🏃' },
+  { key: 'ride', label: '骑行', icon: '🚴' },
+];
+const ACTIVITY_CHOICE_MAP = ACTIVITY_CHOICES.reduce((acc, item) => {
+  acc[item.key] = item;
+  return acc;
+}, {});
+
 const DEFAULT_CENTER = {
   latitude: 30.27415,
   longitude: 120.15515,
@@ -37,6 +47,9 @@ const TOAST = {
   routeSaveFailed: '未能保存路线，请稍后重试',
   purposeRequired: '请选择本次运动的目的',
   purposeUpdated: '运动目的已更新',
+  activityLocked: '开始记录后可设置行进方式',
+  activityUpdated: '行进方式已更新',
+  activityAuto: '已恢复自动识别',
 };
 
 function normalizePhotos(photos = []) {
@@ -98,10 +111,16 @@ Page({
     purposeSelectionLabel: '未选择',
     purposePickerVisible: false,
     purposePendingKey: '',
+    purposeNoteTracking: '仅修改出行目的，不影响记录',
+    purposeNoteIdle: '取消后不会开始记录',
+    purposeConfirmTracking: '确定',
+    purposeConfirmIdle: '开始记录',
     privacyOptions: FINISH_PRIVACY_OPTIONS,
     privacyIndex: 0,
     activityKey: DEFAULT_ACTIVITY_TYPE,
     activityLabel: '识别中',
+    manualActivityKey: '',
+    activityManual: false,
     title: '',
     note: '',
     keepScreenOnPreferred: false,
@@ -277,10 +296,16 @@ Page({
     const isTracking = Boolean(state.active);
     const isPaused = Boolean(state.paused);
 
-    const inferredActivityKey = isTracking ? inferActivityByAverageSpeed(distance, duration) : null;
-    const resolvedActivityKey = inferredActivityKey || DEFAULT_ACTIVITY_TYPE;
+    const manualActivityKey = state?.options?.activityType || this.data.manualActivityKey || '';
+    const hasManualActivity = Boolean(manualActivityKey && ACTIVITY_TYPE_MAP[manualActivityKey]);
+    const inferredActivityKey =
+      !hasManualActivity && isTracking ? inferActivityByAverageSpeed(distance, duration) : null;
+    const resolvedActivityKey = hasManualActivity
+      ? manualActivityKey
+      : inferredActivityKey || DEFAULT_ACTIVITY_TYPE;
     const activityMeta = resolveActivityMeta(resolvedActivityKey) || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
-    const activityLabel = isTracking && inferredActivityKey ? activityMeta.label : '识别中';
+    const activityLabel =
+      hasManualActivity || (isTracking && inferredActivityKey) ? activityMeta.label : '识别中';
     const weight = this.data.weight || 60;
     const durationText = formatDuration(duration);
     const distanceText = `${(distance / 1000).toFixed(1)} km`;
@@ -392,6 +417,8 @@ Page({
       pausePoints: state.pausePoints || [],
       activityKey: activityMeta.key,
       activityLabel,
+      manualActivityKey: hasManualActivity ? manualActivityKey : '',
+      activityManual: hasManualActivity,
       hasRoutePoints: hasRoutePoints,
       centerLatitude: latestPoint.latitude,
       centerLongitude: latestPoint.longitude,
@@ -422,10 +449,44 @@ Page({
   },
 
   handleOpenPurposePicker() {
-    if (this.data.tracking) {
+    this.openPurposePicker();
+  },
+
+  handleActivityCellTap() {
+    if (!this.data.tracking) {
+      wx.showToast({ title: TOAST.activityLocked, icon: 'none' });
       return;
     }
-    this.openPurposePicker();
+    const options = [...ACTIVITY_CHOICES, { key: '', label: '恢复自动识别', icon: '🔄' }];
+    wx.showActionSheet({
+      itemList: options.map((item) => `${item.icon} ${item.label}`),
+      success: (res) => {
+        const choice = options[res.tapIndex];
+        if (!choice) {
+          return;
+        }
+        this.applyManualActivity(choice.key);
+      },
+    });
+  },
+
+  applyManualActivity(activityKey = '') {
+    const normalized =
+      activityKey && ACTIVITY_CHOICE_MAP[activityKey] ? activityKey : '';
+    const isManual = Boolean(normalized);
+    const manualLabel = isManual ? ACTIVITY_CHOICE_MAP[normalized].label : null;
+    this.setData({
+      manualActivityKey: normalized,
+      activityManual: isManual,
+      activityLabel: isManual ? manualLabel : '识别中',
+    });
+    if (typeof tracker.updateActivityTypeOverride === 'function') {
+      tracker.updateActivityTypeOverride(normalized);
+    }
+    const toastText = isManual
+      ? `${TOAST.activityUpdated}${manualLabel ? `（${manualLabel}）` : ''}`
+      : TOAST.activityAuto;
+    wx.showToast({ title: toastText, icon: 'none' });
   },
 
   handlePurposeTap(event) {
@@ -440,24 +501,27 @@ Page({
   handlePurposeConfirm() {
     const pendingKey = this.data.purposePendingKey;
     const meta = pendingKey && PURPOSE_MAP[pendingKey] ? PURPOSE_MAP[pendingKey] : null;
-    if (!meta && !this.data.tracking) {
+    const previousKey = this.data.purposeSelectionKey || '';
+    const nextKey = meta ? meta.key : previousKey;
+    if (!nextKey && !this.data.tracking) {
       wx.showToast({ title: TOAST.purposeRequired, icon: 'none' });
       return;
     }
     const nextState = {
       purposePickerVisible: false,
-      purposeSelectionKey: meta ? meta.key : '',
-      purposeSelectionLabel: meta ? meta.label : '未选择',
+      purposeSelectionKey: nextKey || '',
+      purposeSelectionLabel: meta ? meta.label : (PURPOSE_MAP[nextKey]?.label || '未选择'),
+      purposePendingKey: nextKey || '',
     };
     this.setData(nextState);
     if (this.data.tracking) {
       if (typeof tracker.updatePurposeType === 'function') {
-        tracker.updatePurposeType(meta ? meta.key : '');
+        tracker.updatePurposeType(nextKey || '');
       }
       wx.showToast({ title: TOAST.purposeUpdated, icon: 'none' });
       return;
     }
-    this.beginTrackingWithPurpose(meta ? meta.key : '');
+    this.beginTrackingWithPurpose(nextKey || '');
   },
 
   beginTrackingWithPurpose(purposeKey) {
@@ -468,6 +532,10 @@ Page({
     }
     const weight = this.data.weight || 60;
     const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
+    this.setData({ manualActivityKey: '', activityManual: false });
+    if (typeof tracker.updateActivityTypeOverride === 'function') {
+      tracker.updateActivityTypeOverride('');
+    }
     tracker
       .startTracking({
         privacyLevel,
@@ -475,6 +543,7 @@ Page({
         note: this.data.note,
         weight,
         purposeType: purposeKey,
+        activityType: '',
       })
       .then(() => {
         const recent = getRecentSettings() || {};

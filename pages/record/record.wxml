@@ -73,19 +73,26 @@
 
       <view class="sheet-meta">
         <view class="meta-inline">
-          <view class="meta-inline__cell meta-inline__cell--static">
-            <text class="meta-inline__label-text">行进方式：</text>
-            <text class="meta-inline__value">{{activityLabel}}</text>
-            <text class="meta-inline__hint">🔒</text>
+          <view
+            class="meta-inline__cell meta-inline__cell--action {{tracking ? '' : 'meta-inline__cell--disabled'}}"
+            bindtap="handleActivityCellTap"
+          >
+            <view class="meta-inline__texts">
+              <text class="meta-inline__label-text">行进方式</text>
+              <view class="meta-inline__value-wrap">
+                <text class="meta-inline__value">{{activityLabel}}</text>
+                <text class="meta-inline__badge" wx:if="{{activityManual}}">手动</text>
+              </view>
+            </view>
+            <text class="meta-inline__hint" wx:if="{{!tracking}}">识别中</text>
           </view>
           <view class="meta-inline__divider"></view>
-          <view
-            class="meta-inline__cell meta-inline__cell--action {{tracking ? 'meta-inline__cell--disabled' : ''}}"
-            bindtap="handleOpenPurposePicker"
-          >
-            <text class="meta-inline__label-text">出行目的：</text>
-            <text class="meta-inline__value">{{purposeSelectionLabel}}</text>
-            <text class="meta-inline__hint" wx:if="{{tracking}}">🔒</text>
+          <view class="meta-inline__cell meta-inline__cell--action" bindtap="handleOpenPurposePicker">
+            <view class="meta-inline__texts">
+              <text class="meta-inline__label-text">出行目的</text>
+              <text class="meta-inline__value">{{purposeSelectionLabel}}</text>
+            </view>
+            <text class="meta-inline__hint">可调整</text>
           </view>
         </view>
 
@@ -143,13 +150,13 @@
       </view>
       <view class="purpose-picker__note">
         <text>
-          {{tracking ? '调整后自动应用当前记录' : '取消后不会开始记录'}}
+          {{tracking ? purposeNoteTracking : purposeNoteIdle}}
         </text>
       </view>
       <view class="purpose-picker__actions">
         <button class="btn btn--ghost" bindtap="handlePurposeCancel">取消</button>
         <button class="btn btn--primary" bindtap="handlePurposeConfirm">
-          {{tracking ? '保存目的' : '开始记录'}}
+          {{tracking ? purposeConfirmTracking : purposeConfirmIdle}}
         </button>
       </view>
     </view>

@@ -2,7 +2,7 @@ const { createRoutePayload, storeRoute, cacheFragment, flushOfflineFragments } =
 const geocodeLocal = require('./geocode-local');
 const { formatDuration } = require('../utils/time');
 const { calculateSegmentDistance, calculateTotalDistance } = require('../utils/geo');
-const { DEFAULT_ACTIVITY_TYPE } = require('../constants/activity');
+const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../constants/activity');
 const { inferActivityType } = require('../utils/activity');
 const logger = require('../utils/logger');
 const {
@@ -149,6 +149,7 @@ const trackerState = {
     note: '',
     photos: [],
     purposeType: '',
+    activityType: '',
   },
   detectedActivityType: DEFAULT_ACTIVITY_TYPE,
 };
@@ -725,6 +726,11 @@ function logSessionQualitySummary(points = [], pausePoints = []) {
 }
 
 function updateDetectedActivityType() {
+  const override = trackerState.options?.activityType;
+  if (override && ACTIVITY_TYPE_MAP[override]) {
+    trackerState.detectedActivityType = override;
+    return trackerState.detectedActivityType;
+  }
   const detected = inferActivityType({
     distance: trackerState.stats.distance || 0,
     duration: trackerState.stats.duration || 0,
@@ -817,6 +823,8 @@ function resetState() {
     title: '',
     note: '',
     photos: [],
+    purposeType: '',
+    activityType: '',
   };
   trackerState.detectedActivityType = DEFAULT_ACTIVITY_TYPE;
   locationStreamActive = false;
@@ -1184,6 +1192,10 @@ function startTracking(options = {}) {
       typeof options.purposeType === 'string'
         ? options.purposeType
         : trackerState.options.purposeType || '',
+    activityType:
+      typeof options.activityType === 'string' && ACTIVITY_TYPE_MAP[options.activityType]
+        ? options.activityType
+        : trackerState.options.activityType || '',
   };
   trackerState.detectedActivityType = DEFAULT_ACTIVITY_TYPE;
 
@@ -1918,6 +1930,10 @@ function stopTracking(meta = {}) {
     endTime,
     privacyLevel: options.privacyLevel || 'private',
     note: options.note,
+    activityType:
+      typeof options.activityType === 'string' && ACTIVITY_TYPE_MAP[options.activityType]
+        ? options.activityType
+        : trackerState.options.activityType || '',
     photos: Array.isArray(options.photos) ? options.photos : trackerState.options.photos,
     weight: options.weight || trackerState.options.weight || 60,
     purposeType:
@@ -1992,6 +2008,20 @@ function updatePurposeType(purposeType = '') {
   return { ...trackerState };
 }
 
+function updateActivityTypeOverride(activityType = '') {
+  const normalized =
+    typeof activityType === 'string' && ACTIVITY_TYPE_MAP[activityType] ? activityType : '';
+  if (!trackerState.options) {
+    trackerState.options = {};
+  }
+  if ((trackerState.options.activityType || '') === normalized) {
+    return { ...trackerState };
+  }
+  trackerState.options.activityType = normalized;
+  notifyTracker();
+  return { ...trackerState };
+}
+
 module.exports = {
   subscribe,
   startTracking,
@@ -2005,6 +2035,7 @@ module.exports = {
   getKeepScreenPreference,
   applyKeepScreenState,
   updatePurposeType,
+  updateActivityTypeOverride,
 };
 
 
