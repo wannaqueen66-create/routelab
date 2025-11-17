@@ -41,14 +41,6 @@
       </view>
     </view>
 
-    <view class="section">
-      <view class="section__title">自动同步</view>
-      <view class="field field--inline">
-        <text class="field__label">联网后自动合并离线路径</text>
-        <switch checked="{{autoSync}}" bindchange="handleAutoSyncChange" />
-      </view>
-    </view>
-
     <view class="actions">
       <button class="btn btn--primary" bindtap="handleSave">保存偏好</button>
       <button class="btn btn--ghost" bindtap="handleClearOffline">清理离线缓存</button>
@@ -59,4 +51,3 @@
     </view>
   </scroll-view>
 </view>
-

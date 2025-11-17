@@ -169,10 +169,7 @@ App({
                   const local = {
                     privacyLevel: settings.privacyLevel,
                     weight: settings.weight,
-                    autoSync:
-                      settings.autoSync === undefined || settings.autoSync === null
-                        ? true
-                        : Boolean(settings.autoSync),
+                    autoSync: true,
                     keepScreenPreferred: Boolean(settings.keepScreenPreferred),
                   };
                   saveRecentSettings(local);
@@ -343,8 +340,7 @@ App({
     },
   
     shouldAutoSync() {
-      const settings = getRecentSettings() || {};
-      return settings.autoSync !== false;
+      return true;
     },
   
     flushOfflineCache() {

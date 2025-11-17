@@ -9,7 +9,6 @@ Page({
     privacyOptions: PRIVACY_LEVELS,
     privacyIndex: Math.max(PRIVACY_LEVELS.findIndex((item) => item.key === 'private'), 0),
     weight: 60,
-    autoSync: true,
     message: '',
   },
 
@@ -22,7 +21,6 @@ Page({
     this.setData({
       privacyIndex,
       weight: settings.weight || 60,
-      autoSync: settings.autoSync !== undefined ? settings.autoSync : true,
     });
   },
 
@@ -39,17 +37,11 @@ Page({
     });
   },
 
-  handleAutoSyncChange(event) {
-    this.setData({
-      autoSync: event.detail.value,
-    });
-  },
-
   handleSave() {
     const payload = {
       privacyLevel: this.data.privacyOptions[this.data.privacyIndex].key,
       weight: this.data.weight,
-      autoSync: this.data.autoSync,
+      autoSync: true,
     };
     saveRecentSettings(payload);
     api.saveUserSettings(payload).catch(() => {});
