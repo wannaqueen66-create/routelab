@@ -2,6 +2,7 @@
 
 const { PRIVACY_LEVELS } = require('../../constants/privacy');
 const { getRecentSettings, saveRecentSettings, clearOfflineQueue } = require('../../utils/storage');
+const api = require('../../services/api');
 
 Page({
   data: {
@@ -51,6 +52,7 @@ Page({
       autoSync: this.data.autoSync,
     };
     saveRecentSettings(payload);
+    api.saveUserSettings(payload).catch(() => {});
     wx.showToast({
       title: '偏好设置已保存',
       icon: 'success',
@@ -72,4 +74,3 @@ Page({
     });
   },
 });
-

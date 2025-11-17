@@ -9,7 +9,7 @@
   } = require('./services/route-store');
 const auth = require('./services/auth');
 const { getRecentSettings, getUserProfile, getUserAccount, saveAchievementStats } = require('./utils/storage');
-const { ensureSeedRoutes } = require('./services/sample-data');
+const { saveRecentSettings, setKeepScreenPreference } = require('./utils/storage');
 const {
   checkLocationAuthorization,
   requestLocationAuthorization,
@@ -135,10 +135,6 @@ App({
       this.getProfileCompletionStatus();
   
       this.globalData.routes = getRoutes();
-      if (!this.globalData.routes.length) {
-        ensureSeedRoutes();
-        this.globalData.routes = getRoutes();
-      }
   
       this.unsubscribe = subscribe((routes) => {
         this.globalData.routes = routes;
@@ -157,17 +153,36 @@ App({
   
       this.ensurePrerequisites()
         .then(() =>
-          api
-            .getUserAchievements()
-            .then((payload) => {
-              if (payload && typeof payload === 'object') {
-                saveAchievementStats(payload);
-              }
-            })
-            .catch(() => {})
-            .then(() => {
-              runInitialSync();
-            })
+          Promise.all([
+            api
+              .getUserAchievements()
+              .then((payload) => {
+                if (payload && typeof payload === 'object') {
+                  saveAchievementStats(payload);
+                }
+              })
+              .catch(() => {}),
+            api
+              .getUserSettings()
+              .then((settings) => {
+                if (settings && typeof settings === 'object') {
+                  const local = {
+                    privacyLevel: settings.privacyLevel,
+                    weight: settings.weight,
+                    autoSync:
+                      settings.autoSync === undefined || settings.autoSync === null
+                        ? true
+                        : Boolean(settings.autoSync),
+                    keepScreenPreferred: Boolean(settings.keepScreenPreferred),
+                  };
+                  saveRecentSettings(local);
+                  setKeepScreenPreference(Boolean(settings.keepScreenPreferred));
+                }
+              })
+              .catch(() => {}),
+          ]).then(() => {
+            runInitialSync();
+          })
         )
         .catch((error) => {
           logger.warn('Prerequisite check incomplete', error?.errMsg || error?.message || error);

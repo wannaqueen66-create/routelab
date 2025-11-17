@@ -5,6 +5,7 @@ const tracker = require('../../services/tracker');
 const { PRIVACY_LEVELS } = require('../../constants/privacy');
 const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../../constants/activity');
 const { getRecentSettings, saveRecentSettings, getKeepScreenPreference } = require('../../utils/storage');
+const api = require('../../services/api');
 const { formatSpeed, formatCalories } = require('../../utils/format');
 const { formatDuration } = require('../../utils/time');
 const { estimateCalories } = require('../../utils/geo');
@@ -560,6 +561,14 @@ Page({
           weight,
           keepScreenPreferred: this.data.keepScreenOnPreferred,
         });
+        api
+          .saveUserSettings({
+            privacyLevel,
+            weight,
+            autoSync: recent.autoSync,
+            keepScreenPreferred: this.data.keepScreenOnPreferred,
+          })
+          .catch(() => {});
         this.setData({ photos: [] });
       })
       .catch((error) => {
@@ -809,6 +818,14 @@ Page({
     }
     const recent = getRecentSettings() || {};
     saveRecentSettings({ ...recent, keepScreenPreferred: keepOn });
+    api
+      .saveUserSettings({
+        privacyLevel: recent.privacyLevel,
+        weight: recent.weight,
+        autoSync: recent.autoSync,
+        keepScreenPreferred: keepOn,
+      })
+      .catch(() => {});
     if (typeof wx.setKeepScreenOn === 'function') {
       try {
         wx.setKeepScreenOn({ keepScreenOn: keepOn });

@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS users (
   gender TEXT,
   age_range TEXT,
   identity_label TEXT,
+  birthday TEXT,
+  height_cm INTEGER,
+  weight_kg NUMERIC,
   session_key TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -125,6 +128,17 @@ CREATE TABLE IF NOT EXISTS user_achievements (
 
 CREATE INDEX IF NOT EXISTS idx_user_achievements_updated_at ON user_achievements(updated_at DESC);
 
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  default_privacy_level TEXT,
+  default_weight_kg NUMERIC,
+  auto_sync BOOLEAN,
+  keep_screen_preferred BOOLEAN,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_settings_updated_at ON user_settings(updated_at DESC);
+
 ALTER TABLE route_comments
   ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 
@@ -152,3 +166,9 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS age_range TEXT;
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS identity_label TEXT;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS birthday TEXT;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS height_cm INTEGER;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS weight_kg NUMERIC;

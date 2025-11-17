@@ -471,7 +471,17 @@ function getRouteById(id) {
   });
 }
 
-function updateUserProfile({ nickname, avatarUrl, code, gender, ageRange, identity } = {}) {
+function updateUserProfile({
+  nickname,
+  avatarUrl,
+  code,
+  gender,
+  ageRange,
+  identity,
+  birthday,
+  height,
+  weight,
+} = {}) {
   const payload = {};
   if (typeof nickname === 'string') {
     payload.nickname = nickname.trim();
@@ -491,8 +501,54 @@ function updateUserProfile({ nickname, avatarUrl, code, gender, ageRange, identi
   if (typeof identity === 'string' && identity.trim()) {
     payload.identity = identity.trim();
   }
+  if (typeof birthday === 'string' && birthday.trim()) {
+    payload.birthday = birthday.trim();
+  }
+  if (height !== undefined && height !== null && height !== '') {
+    const heightNumeric = Number(height);
+    if (Number.isFinite(heightNumeric) && heightNumeric > 0) {
+      payload.height = heightNumeric;
+    }
+  }
+  if (weight !== undefined && weight !== null && weight !== '') {
+    const weightNumeric = Number(weight);
+    if (Number.isFinite(weightNumeric) && weightNumeric > 0) {
+      payload.weight = weightNumeric;
+    }
+  }
   return request({
     path: '/user/profile',
+    method: 'POST',
+    data: payload,
+  });
+}
+
+function getUserSettings() {
+  return request({
+    path: '/user/settings',
+    method: 'GET',
+  });
+}
+
+function saveUserSettings(settings = {}) {
+  const payload = {};
+  if (typeof settings.privacyLevel === 'string') {
+    payload.privacyLevel = settings.privacyLevel.trim();
+  }
+  if (settings.weight !== undefined && settings.weight !== null && settings.weight !== '') {
+    const numeric = Number(settings.weight);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      payload.weight = numeric;
+    }
+  }
+  if (settings.autoSync !== undefined) {
+    payload.autoSync = Boolean(settings.autoSync);
+  }
+  if (settings.keepScreenPreferred !== undefined) {
+    payload.keepScreenPreferred = Boolean(settings.keepScreenPreferred);
+  }
+  return request({
+    path: '/user/settings',
     method: 'POST',
     data: payload,
   });
@@ -589,6 +645,8 @@ module.exports = {
   reverseGeocodeSafe,
   getRouteById,
   updateUserProfile,
+  getUserSettings,
+  saveUserSettings,
   getUserAchievements,
   saveUserAchievements,
 };

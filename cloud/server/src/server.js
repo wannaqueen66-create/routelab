@@ -4154,7 +4154,19 @@ app.post('/api/user/profile', ensureAuth, async (req, res) => {
   if (!req.userId) {
     return res.status(403).json({ error: 'User context required' });
   }
-  const { nickname, nickName, avatarUrl, avatar, code, gender, ageRange, identity } = req.body || {};
+  const {
+    nickname,
+    nickName,
+    avatarUrl,
+    avatar,
+    code,
+    gender,
+    ageRange,
+    identity,
+    birthday,
+    height,
+    weight,
+  } = req.body || {};
   const rawNickname = typeof nickname === 'string' ? nickname : typeof nickName === 'string' ? nickName : '';
   const rawAvatar = typeof avatarUrl === 'string' ? avatarUrl : typeof avatar === 'string' ? avatar : '';
   const normalizedNickname = rawNickname ? rawNickname.trim() : '';
@@ -4163,6 +4175,18 @@ app.post('/api/user/profile', ensureAuth, async (req, res) => {
   const normalizedGender = sanitizeEnumValue(gender, USER_GENDER_VALUES);
   const normalizedAgeRange = sanitizeEnumValue(ageRange, USER_AGE_RANGE_VALUES);
   const normalizedIdentity = sanitizeEnumValue(identity, USER_IDENTITY_VALUES);
+  const normalizedBirthday =
+    typeof birthday === 'string' && birthday.trim() ? birthday.trim().slice(0, 64) : null;
+  const heightNumeric = Number(height);
+  const normalizedHeight =
+    Number.isFinite(heightNumeric) && heightNumeric > 0 && heightNumeric < 300
+      ? Math.round(heightNumeric)
+      : null;
+  const weightNumeric = Number(weight);
+  const normalizedWeight =
+    Number.isFinite(weightNumeric) && weightNumeric > 0 && weightNumeric < 400
+      ? Number(weightNumeric.toFixed(1))
+      : null;
 
   if (typeof gender === 'string' && gender.trim() && !normalizedGender) {
     return res.status(400).json({ error: 'Invalid gender value' });
@@ -4208,14 +4232,20 @@ app.post('/api/user/profile', ensureAuth, async (req, res) => {
              gender = $3,
              age_range = $4,
              identity_label = $5,
+             birthday = $6,
+             height_cm = $7,
+             weight_kg = $8,
              updated_at = NOW()
-       WHERE id = $6`,
+       WHERE id = $9`,
       [
         normalizedNickname || null,
         normalizedAvatar || null,
         normalizedGender || null,
         normalizedAgeRange || null,
         normalizedIdentity || null,
+        normalizedBirthday,
+        normalizedHeight,
+        normalizedWeight,
         req.userId,
       ]
     );
@@ -4323,6 +4353,142 @@ app.post('/api/user/achievements', ensureAuth, async (req, res) => {
       stack: error?.stack,
     });
     res.status(500).json({ error: 'Failed to update achievements' });
+  }
+});
+
+app.get('/api/user/settings', ensureAuth, async (req, res) => {
+  if (!req.userId) {
+    return res.status(403).json({ error: 'User context required' });
+  }
+  try {
+    const result = await pool.query(
+      `SELECT default_privacy_level,
+              default_weight_kg,
+              auto_sync,
+              keep_screen_preferred,
+              updated_at
+         FROM user_settings
+        WHERE user_id = $1`,
+      [req.userId]
+    );
+    let privacyLevel = 'public';
+    let weight = null;
+    let autoSync = true;
+    let keepScreenPreferred = false;
+    let updatedAt = Date.now();
+
+    if (result.rows.length) {
+      const row = result.rows[0];
+      if (typeof row.default_privacy_level === 'string' && row.default_privacy_level.trim()) {
+        privacyLevel = row.default_privacy_level.trim();
+      }
+      const weightNumeric = Number(row.default_weight_kg);
+      if (Number.isFinite(weightNumeric) && weightNumeric > 0) {
+        weight = Number(weightNumeric.toFixed(1));
+      }
+      if (row.auto_sync !== null && row.auto_sync !== undefined) {
+        autoSync = Boolean(row.auto_sync);
+      }
+      keepScreenPreferred = row.keep_screen_preferred === true;
+      if (row.updated_at instanceof Date) {
+        updatedAt = row.updated_at.getTime();
+      }
+    }
+
+    res.json({
+      privacyLevel,
+      weight,
+      autoSync,
+      keepScreenPreferred,
+      updatedAt,
+    });
+  } catch (error) {
+    console.error('GET /api/user/settings failed', {
+      userId: req.userId,
+      message: error?.message,
+      stack: error?.stack,
+    });
+    res.status(500).json({ error: 'Failed to fetch user settings' });
+  }
+});
+
+app.post('/api/user/settings', ensureAuth, async (req, res) => {
+  if (!req.userId) {
+    return res.status(403).json({ error: 'User context required' });
+  }
+  const { privacyLevel, weight, autoSync, keepScreenPreferred } = req.body || {};
+  const rawPrivacy =
+    typeof privacyLevel === 'string' && privacyLevel.trim() ? privacyLevel.trim().toLowerCase() : '';
+  const normalizedPrivacy =
+    rawPrivacy === 'public' || rawPrivacy === 'private' ? rawPrivacy : null;
+  const weightNumeric = Number(weight);
+  const normalizedWeight =
+    Number.isFinite(weightNumeric) && weightNumeric > 0 && weightNumeric < 400
+      ? Number(weightNumeric.toFixed(1))
+      : null;
+  const normalizedAutoSync =
+    autoSync === null || autoSync === undefined ? null : Boolean(autoSync);
+  const normalizedKeepScreen =
+    keepScreenPreferred === null || keepScreenPreferred === undefined
+      ? null
+      : Boolean(keepScreenPreferred);
+  const now = new Date();
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO user_settings (
+         user_id,
+         default_privacy_level,
+         default_weight_kg,
+         auto_sync,
+         keep_screen_preferred,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (user_id) DO UPDATE SET
+         default_privacy_level = COALESCE(EXCLUDED.default_privacy_level, user_settings.default_privacy_level),
+         default_weight_kg = COALESCE(EXCLUDED.default_weight_kg, user_settings.default_weight_kg),
+         auto_sync = COALESCE(EXCLUDED.auto_sync, user_settings.auto_sync),
+         keep_screen_preferred = COALESCE(EXCLUDED.keep_screen_preferred, user_settings.keep_screen_preferred),
+         updated_at = EXCLUDED.updated_at
+       RETURNING default_privacy_level,
+                 default_weight_kg,
+                 auto_sync,
+                 keep_screen_preferred,
+                 updated_at`,
+      [req.userId, normalizedPrivacy, normalizedWeight, normalizedAutoSync, normalizedKeepScreen, now]
+    );
+
+    const row = result.rows[0];
+    let privacyLevelOut = 'public';
+    if (typeof row.default_privacy_level === 'string' && row.default_privacy_level.trim()) {
+      privacyLevelOut = row.default_privacy_level.trim();
+    }
+    const weightOutNumeric = Number(row.default_weight_kg);
+    const weightOut =
+      Number.isFinite(weightOutNumeric) && weightOutNumeric > 0
+        ? Number(weightOutNumeric.toFixed(1))
+        : null;
+    const autoSyncOut =
+      row.auto_sync === null || row.auto_sync === undefined ? true : Boolean(row.auto_sync);
+    const keepScreenPreferredOut = row.keep_screen_preferred === true;
+    const updatedAtOut =
+      row.updated_at instanceof Date ? row.updated_at.getTime() : now.getTime();
+
+    res.json({
+      privacyLevel: privacyLevelOut,
+      weight: weightOut,
+      autoSync: autoSyncOut,
+      keepScreenPreferred: keepScreenPreferredOut,
+      updatedAt: updatedAtOut,
+    });
+  } catch (error) {
+    console.error('POST /api/user/settings failed', {
+      userId: req.userId,
+      message: error?.message,
+      stack: error?.stack,
+    });
+    res.status(500).json({ error: 'Failed to update user settings' });
   }
 });
 
