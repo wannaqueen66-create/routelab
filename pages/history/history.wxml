@@ -33,7 +33,13 @@
           bindlongpress="handleRouteLongPress"
         >
           <view class="route-card__header">
-            <text class="route-card__title">{{item.title}}</text>
+            <view class="route-card__title-group">
+              <text class="route-card__title">{{item.title}}</text>
+              <view class="route-card__status" wx:if="{{item.syncPending}}">
+                <text class="route-card__status-icon">🔄</text>
+                <text class="route-card__status-text">{{item.syncStatusLabel}}</text>
+              </view>
+            </view>
             <text class="route-card__privacy">{{item.privacyLabel}}</text>
           </view>
           <view class="route-card__meta">

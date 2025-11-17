@@ -24,6 +24,7 @@ function normalizeRoute(route) {
   const photos = Array.isArray(route.photos) ? route.photos : [];
   const startLabel = route.meta?.startLabel || route.campusZone || '起点未识别';
   const endLabel = route.meta?.endLabel || startLabel;
+  const synced = route.synced === true;
   return {
     id: route.id,
     title: route.title,
@@ -39,6 +40,9 @@ function normalizeRoute(route) {
     activityLabel: activityMeta.label,
     activityType,
     photosCount: photos.length,
+    synced,
+    syncPending: !synced,
+    syncStatusLabel: synced ? '已同步' : '待同步',
   };
 }
 

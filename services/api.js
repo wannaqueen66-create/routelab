@@ -203,10 +203,29 @@ function upsertRoute(route) {
   });
 }
 
+function createRoute(route = {}) {
+  if (!route || typeof route !== 'object') {
+    return Promise.reject(new Error('Route payload is required'));
+  }
+  return request({
+    path: '/routes',
+    method: 'POST',
+    data: route,
+  });
+}
+
 function listRoutes(query = {}) {
   return request({
     path: `/routes${buildQueryString(query)}`,
     method: 'GET',
+  });
+}
+
+function syncRoutes(payload = {}) {
+  return request({
+    path: '/routes/sync',
+    method: 'POST',
+    data: payload,
   });
 }
 
@@ -479,6 +498,31 @@ function updateUserProfile({ nickname, avatarUrl, code, gender, ageRange, identi
   });
 }
 
+function getUserAchievements() {
+  return request({
+    path: '/user/achievements',
+    method: 'GET',
+  });
+}
+
+function saveUserAchievements(stats = {}) {
+  const payload = {};
+  if (Number.isFinite(Number(stats.totalPoints))) {
+    payload.totalPoints = Number(stats.totalPoints);
+  }
+  if (typeof stats.currentBadge === 'string') {
+    payload.currentBadge = stats.currentBadge.trim();
+  }
+  if (stats.routeHistory && typeof stats.routeHistory === 'object') {
+    payload.routeHistory = stats.routeHistory;
+  }
+  return request({
+    path: '/user/achievements',
+    method: 'POST',
+    data: payload,
+  });
+}
+
 // Safe reverse geocoding with local fallbacks and normalization
 function reverseGeocodeSafe({ latitude, longitude } = {}) {
   if (latitude === undefined || longitude === undefined) {
@@ -523,7 +567,9 @@ module.exports = {
   getBaseUrl: auth.getBaseUrl,
   buildUrl: auth.buildUrl,
   upsertRoute,
+  createRoute,
   listRoutes,
+  syncRoutes,
   patchRoute,
   removeRoute,
   likeRoute,
@@ -543,4 +589,6 @@ module.exports = {
   reverseGeocodeSafe,
   getRouteById,
   updateUserProfile,
+  getUserAchievements,
+  saveUserAchievements,
 };

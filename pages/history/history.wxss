@@ -88,21 +88,43 @@
     gap: 16rpx;
   }
   
-  .route-card__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  
-  .route-card__title {
-    font-size: 32rpx;
-    font-weight: 600;
-  }
-  
-  .route-card__privacy {
-    font-size: 24rpx;
-    color: var(--color-text-secondary);
-  }
+.route-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.route-card__title {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.route-card__title-group {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.route-card__status {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-left: 16rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.route-card__status-icon {
+  font-size: 26rpx;
+}
+
+.route-card__privacy {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+}
   
   .route-card__meta,
   .route-card__footer,

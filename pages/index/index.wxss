@@ -341,6 +341,27 @@
   font-weight: 600;
 }
 
+.history-route__title-group {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.history-route__status {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  background: rgba(249, 115, 22, 0.15);
+  color: #f97316;
+}
+
+.history-route__status-icon {
+  font-size: 24rpx;
+}
+
 .history-route__privacy {
   font-size: 24rpx;
   padding: 6rpx 18rpx;
@@ -456,6 +477,10 @@
   gap: 18rpx;
 }
 
+.profile-section--sync {
+  gap: 18rpx;
+}
+
 .profile-section__cta {
   margin-top: 8rpx;
 }
@@ -490,6 +515,38 @@
 
 .profile-section--settings {
   gap: 12rpx;
+}
+
+.sync-summary {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 8rpx;
+}
+
+.sync-summary__item {
+  flex: 1;
+  border-radius: 20rpx;
+  padding: 18rpx;
+  background: rgba(226, 232, 240, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.sync-summary__value {
+  font-size: 38rpx;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.sync-summary__label {
+  font-size: 24rpx;
+  color: #475569;
+}
+
+.sync-meta {
+  font-size: 24rpx;
+  color: #64748b;
 }
 
 .settings-row {

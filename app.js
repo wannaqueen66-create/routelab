@@ -8,7 +8,7 @@
     syncRoutesToCloud,
   } = require('./services/route-store');
 const auth = require('./services/auth');
-const { getRecentSettings, getUserProfile, getUserAccount } = require('./utils/storage');
+const { getRecentSettings, getUserProfile, getUserAccount, saveAchievementStats } = require('./utils/storage');
 const { ensureSeedRoutes } = require('./services/sample-data');
 const {
   checkLocationAuthorization,
@@ -17,6 +17,7 @@ const {
   } = require('./utils/permissions');
   const logger = require('./utils/logger');
   const tracker = require('./services/tracker');
+  const api = require('./services/api');
   
   function clonePoint(point) {
     if (!point) {
@@ -155,9 +156,19 @@ App({
       };
   
       this.ensurePrerequisites()
-        .then(() => {
-          runInitialSync();
-        })
+        .then(() =>
+          api
+            .getUserAchievements()
+            .then((payload) => {
+              if (payload && typeof payload === 'object') {
+                saveAchievementStats(payload);
+              }
+            })
+            .catch(() => {})
+            .then(() => {
+              runInitialSync();
+            })
+        )
         .catch((error) => {
           logger.warn('Prerequisite check incomplete', error?.errMsg || error?.message || error);
         });

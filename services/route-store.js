@@ -1,9 +1,7 @@
 const {
-  saveRoute,
-  getRoutes,
-  setRoutes,
-  updateRoute,
-  removeRoute,
+  saveRoute: storageSaveRoute,
+  getRoutes: storageGetRoutes,
+  setRoutes: storageSetRoutes,
   enqueueOfflineFragment,
   clearOfflineQueue,
   getOfflineQueue,
@@ -21,6 +19,122 @@ const api = require('./api');
 const logger = require('../utils/logger');
 
 const subscribers = new Set();
+
+function normalizeRouteMetadata(route = {}, overrides = {}) {
+  if (!route || typeof route !== 'object' || !route.id) {
+    return null;
+  }
+  const base = { ...route, ...overrides };
+  const deleted = base.deleted === true;
+  const synced =
+    deleted
+      ? false
+      : overrides.synced !== undefined
+      ? !!overrides.synced
+      : base.synced === true || base.pendingUpload === false;
+  const remoteIdCandidate =
+    typeof base.remoteId === 'string' && base.remoteId.trim() ? base.remoteId.trim() : null;
+  const resolvedRemoteId = synced ? remoteIdCandidate || base.id : remoteIdCandidate;
+  const pendingUpload =
+    deleted
+      ? false
+      : overrides.pendingUpload !== undefined
+      ? !!overrides.pendingUpload
+      : !synced;
+  const uploadError =
+    overrides.uploadError !== undefined ? overrides.uploadError : base.uploadError || null;
+  return {
+    ...base,
+    remoteId: resolvedRemoteId || null,
+    synced,
+    pendingUpload: synced ? false : pendingUpload,
+    uploadError,
+    deleted,
+    deletedAt: deleted ? base.deletedAt || Date.now() : base.deletedAt || null,
+    lastSyncedAt: synced ? base.lastSyncedAt || Date.now() : null,
+  };
+}
+
+function saveRoute(route, overrides = {}) {
+  const normalized = normalizeRouteMetadata(route, overrides);
+  if (!normalized) {
+    return null;
+  }
+  storageSaveRoute(normalized);
+  return normalized;
+}
+
+function setRoutes(routes = []) {
+  const normalized = (Array.isArray(routes) ? routes : [])
+    .map((route) => normalizeRouteMetadata(route))
+    .filter(Boolean);
+  storageSetRoutes(normalized);
+  return normalized;
+}
+
+function getRoutes(options = {}) {
+  const includeDeleted = options && options.includeDeleted === true;
+  const list = storageGetRoutes();
+  if (!Array.isArray(list) || !list.length) {
+    return [];
+  }
+  const normalized = list.map((route) => normalizeRouteMetadata(route)).filter(Boolean);
+  if (includeDeleted) {
+    return normalized;
+  }
+  return normalized.filter((route) => !route.deleted);
+}
+
+function updateRoute(id, patch = {}) {
+  if (!id) {
+    return null;
+  }
+  const list = storageGetRoutes();
+  const index = list.findIndex((item) => item && item.id === id);
+  if (index < 0) {
+    return null;
+  }
+  const updated = normalizeRouteMetadata({ ...list[index], ...patch });
+  if (!updated) {
+    return null;
+  }
+  list.splice(index, 1, updated);
+  storageSetRoutes(list);
+  return updated;
+}
+
+function removeRoute(id) {
+  if (!id) {
+    return [];
+  }
+  const filtered = storageGetRoutes().filter((route) => route && route.id !== id);
+  storageSetRoutes(filtered);
+  return filtered;
+}
+
+function createDeletedStub(route, reason = 'remote_delete') {
+  if (!route || !route.id) {
+    return null;
+  }
+  return normalizeRouteMetadata(
+    {
+      id: route.id,
+      remoteId: route.remoteId || route.id || null,
+      title: route.title || '已删除记录',
+      startTime: route.startTime || route.endTime || Date.now(),
+      endTime: route.endTime || route.startTime || Date.now(),
+      meta: {
+        ...(route.meta || {}),
+        deletedReason: reason,
+      },
+      stats: {},
+      points: [],
+      deleted: true,
+      deletedAt: Date.now(),
+    },
+    { deleted: true, pendingUpload: false, synced: false }
+  );
+}
 
 function notify() {
   const routes = getRoutes();
@@ -65,6 +179,7 @@ function markRouteSyncFailed(id, error) {
   const message = error?.errMsg || error?.message || String(error);
   const patched = updateRoute(id, {
     pendingUpload: true,
+    synced: false,
     uploadError: {
       message,
       statusCode: error?.statusCode || null,
@@ -540,15 +655,20 @@ function syncRouteToCloud(route) {
   if (!route?.id) {
     return Promise.resolve();
   }
-  const payload = sanitizeRouteForUpload(route);
+  const remoteId = route.remoteId || route.id;
+  const payload = sanitizeRouteForUpload({
+    ...route,
+    id: remoteId,
+    clientId: route.id,
+  });
   if (!payload) {
     logger.warn('Route sync skipped (invalid payload)', {
       id: route?.id,
     });
     return Promise.resolve();
   }
-  return api
-    .upsertRoute(payload)
+  const request = route.remoteId ? api.upsertRoute(payload) : api.createRoute(payload);
+  return request
     .then((response) => {
       if (response && typeof response === 'object') {
         const syncAt = Number(response.lastSyncAt);
@@ -560,7 +680,7 @@ function syncRouteToCloud(route) {
       if (response && typeof response === 'object' && response.route) {
         return { ...response.route };
       }
-      return { ...route };
+      return { ...route, remoteId };
     })
     .catch((err) => {
       logger.warn('Route sync failed', {
@@ -578,7 +698,9 @@ function syncRoutesToCloud() {
   if (!routes.length) {
     return Promise.resolve([]);
   }
-  const pending = routes.filter((route) => route && route.pendingUpload !== false && !route.deletedAt);
+  const pending = routes.filter(
+    (route) => route && route.pendingUpload !== false && route.deleted !== true && !route.deletedAt
+  );
   if (!pending.length) {
     return Promise.resolve(routes);
   }
@@ -595,6 +717,9 @@ function syncRoutesToCloud() {
           if (!removed) {
             const patched = updateRoute(route.id, {
               pendingUpload: false,
+              synced: true,
+              remoteId: cloudRoute?.remoteId || cloudRoute?.id || route.remoteId || route.id,
+              deleted: false,
               uploadError: null,
               lastSyncedAt: Date.now(),
               updatedAt: cloudRoute?.updatedAt || route.updatedAt,
@@ -664,9 +789,21 @@ function syncRoutesToCloud() {
 }
 
 function mergeRoutes(remoteRoutes = [], options = {}) {
-  const { deletedIds = [] } = options || {};
-  const local = getRoutes();
-  const deletionSet = new Set((Array.isArray(deletedIds) ? deletedIds : []).filter(Boolean));
+  const { deletedIds = [], missingRemoteIds = [] } = options || {};
+  const localAll = getRoutes({ includeDeleted: true });
+  const activeLocal = localAll.filter((route) => route && !route.deleted);
+  const tombstoneMap = new Map();
+  localAll.forEach((route) => {
+    if (route && route.deleted) {
+      tombstoneMap.set(route.id, route);
+    }
+  });
+  const deletionSet = new Set(
+    [
+      ...(Array.isArray(deletedIds) ? deletedIds : []),
+      ...(Array.isArray(missingRemoteIds) ? missingRemoteIds : []),
+    ].filter(Boolean)
+  );
   const remoteMap = new Map();
   const merged = [];
 
@@ -674,39 +811,66 @@ function mergeRoutes(remoteRoutes = [], options = {}) {
     if (!route || !route.id) {
       return;
     }
-    if (route.deletedAt) {
+    if (route.deletedAt || route.deleted) {
       deletionSet.add(route.id);
       return;
     }
-    remoteMap.set(route.id, {
-      ...route,
-      pendingUpload: false,
-      uploadError: null,
-    });
+    remoteMap.set(
+      route.id,
+      normalizeRouteMetadata(route, {
+        synced: true,
+        pendingUpload: false,
+        remoteId: route.remoteId || route.id,
+        deleted: false,
+      })
+    );
   });
 
-  local.forEach((route) => {
+  activeLocal.forEach((route) => {
     if (!route || !route.id) {
       return;
     }
     if (deletionSet.has(route.id)) {
       logger.info('Route removed locally due to remote deletion', { id: route.id });
+      const stub = createDeletedStub(route);
+      if (stub) {
+        tombstoneMap.set(route.id, stub);
+      } else {
+        tombstoneMap.delete(route.id);
+      }
       return;
     }
     if (remoteMap.has(route.id)) {
-      merged.push(remoteMap.get(route.id));
+      const remoteRecord = remoteMap.get(route.id);
+      merged.push(
+        normalizeRouteMetadata(remoteRecord, {
+          synced: true,
+          pendingUpload: false,
+          remoteId: remoteRecord.remoteId || remoteRecord.id,
+          deleted: false,
+        })
+      );
       remoteMap.delete(route.id);
+      tombstoneMap.delete(route.id);
       return;
     }
-    merged.push(route);
+    merged.push(normalizeRouteMetadata(route));
   });
 
-  remoteMap.forEach((route) => {
-    merged.push(route);
+  remoteMap.forEach((route, id) => {
+    merged.push(
+      normalizeRouteMetadata(route, {
+        synced: true,
+        pendingUpload: false,
+        remoteId: route.remoteId || id,
+        deleted: false,
+      })
+    );
   });
 
   const sorted = merged.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
-  setRoutes(sorted);
+  const tombstones = Array.from(tombstoneMap.values());
+  setRoutes([...sorted, ...tombstones]);
   notify();
   return sorted;
 }
@@ -715,41 +879,41 @@ function syncRoutesFromCloud(options = {}) {
   const { forceFull = false, updatedAfter, includeDeleted = true, ...rest } = options || {};
   const lastSync = forceFull ? 0 : getLastSyncTimestamp();
   const effectiveUpdatedAfter = forceFull ? null : updatedAfter || lastSync;
-  const query = { ...rest };
-  if (effectiveUpdatedAfter) {
-    query.updatedAfter = effectiveUpdatedAfter;
-  }
-  if (includeDeleted) {
-    query.includeDeleted = true;
+  const knownRemoteIds = getRoutes({ includeDeleted: true })
+    .filter((route) => route && route.synced && route.remoteId)
+    .map((route) => route.remoteId);
+  const payload = {
+    lastSyncAt: effectiveUpdatedAfter || 0,
+    includeDeleted: includeDeleted !== false,
+    limit: rest.limit || 200,
+    knownRemoteIds,
+  };
+  if (rest.cursor) {
+    payload.cursor = rest.cursor;
   }
   return api
-    .listRoutes(query)
+    .syncRoutes(payload)
     .then((result) => {
       const list = Array.isArray(result?.items)
         ? result.items
         : Array.isArray(result)
         ? result
         : [];
-      const meta = (result && typeof result === 'object' && !Array.isArray(result) ? result.meta : {}) || {};
       const remote = list.filter((item) => item && item.id);
-      const deletedIds = new Set();
-      if (Array.isArray(meta.deletedIds)) {
-        meta.deletedIds.filter(Boolean).forEach((id) => deletedIds.add(id));
-      }
-      if (Array.isArray(meta.removedIds)) {
-        meta.removedIds.filter(Boolean).forEach((id) => deletedIds.add(id));
-      }
-      remote.forEach((item) => {
-        if (item?.id && item.deletedAt) {
-          deletedIds.add(item.id);
-        }
-      });
-      const merged = mergeRoutes(remote, { deletedIds: Array.from(deletedIds.values()) });
-      const nonDeletedRemote = remote.filter((item) => item && !item.deletedAt);
+      const deletedIds = Array.isArray(result?.deletedIds) ? result.deletedIds : [];
+      const missingRemoteIds = Array.isArray(result?.missingRemoteIds) ? result.missingRemoteIds : [];
+      const merged = mergeRoutes(remote, { deletedIds, missingRemoteIds });
+      const nonDeletedRemote = remote.filter((item) => item && !item.deletedAt && !item.deleted);
       const remoteMax = getMaxUpdatedAt(nonDeletedRemote);
       const metaMax =
-        Number(meta.maxUpdatedAt || meta.latestUpdatedAt || meta.updatedAt || meta.cursorUpdatedAt) || 0;
-      const hasChanges = nonDeletedRemote.length > 0 || deletedIds.size > 0 || forceFull;
+        Number(
+          result?.latestSyncAt ||
+            result?.lastSyncAt ||
+            result?.maxUpdatedAt ||
+            result?.cursorUpdatedAt
+        ) || 0;
+      const hasChanges =
+        nonDeletedRemote.length > 0 || deletedIds.length > 0 || missingRemoteIds.length > 0 || forceFull;
       const nextSyncPoint = hasChanges
         ? Math.max(remoteMax, metaMax, Date.now())
         : Math.max(lastSync, metaMax);
@@ -766,6 +930,9 @@ function storeRoute(route) {
   const pendingRoute = {
     ...route,
     pendingUpload: true,
+    synced: false,
+    remoteId: route.remoteId || null,
+    deleted: false,
     uploadError: null,
     lastSyncAttemptAt: Date.now(),
   };
@@ -782,6 +949,9 @@ function storeRoute(route) {
       if (!removed) {
         const patched = updateRoute(saved.id, {
           pendingUpload: false,
+          synced: true,
+          remoteId: cloudRoute?.remoteId || cloudRoute?.id || saved.remoteId || saved.id,
+          deleted: false,
           uploadError: null,
           lastSyncedAt: Date.now(),
           updatedAt: cloudRoute?.updatedAt || saved.updatedAt,
@@ -915,6 +1085,20 @@ function flushOfflineFragments() {
   return fragments;
 }
 
+function getSyncStatus() {
+  const allRoutes = getRoutes({ includeDeleted: true });
+  const pending = allRoutes.filter((route) => route && route.pendingUpload && !route.deleted).length;
+  const synced = allRoutes.filter((route) => route && route.synced && !route.deleted).length;
+  const deleted = allRoutes.filter((route) => route && route.deleted).length;
+  return {
+    pending,
+    synced,
+    deleted,
+    total: allRoutes.filter((route) => route && !route.deleted).length,
+    lastSyncAt: getLastSyncTimestamp(),
+  };
+}
+
 module.exports = {
   subscribe,
   storeRoute,
@@ -927,6 +1111,12 @@ module.exports = {
   syncRoutesToCloud,
   syncRoutesFromCloud,
   syncRouteToCloud,
+  getSyncStatus,
 };
+
+
+
+
+
 
 

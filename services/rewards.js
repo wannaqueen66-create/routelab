@@ -8,6 +8,7 @@ const {
   getBadgeProgress,
   countUnlockedBadges,
 } = require('../constants/achievements');
+const api = require('./api');
 
 const MIN_DURATION_SECONDS = 90;
 const MIN_DISTANCE_METERS = 200;
@@ -118,18 +119,28 @@ function awardPointsForRoute(route) {
       totalPoints,
       badgeKey: badge.key,
     });
-    saveAchievementStats({
+    const saved = saveAchievementStats({
       totalPoints,
       currentBadge: badge.key,
       routeHistory: {
         [historyKey]: historyEntry,
       },
     });
+    api
+      .saveUserAchievements(saved)
+      .catch((error) =>
+        console.warn('RouteLab: sync achievements to cloud failed', error?.errMsg || error?.message || error)
+      );
   } else if (!historyKey) {
-    saveAchievementStats({
+    const saved = saveAchievementStats({
       totalPoints,
       currentBadge: badge.key,
     });
+    api
+      .saveUserAchievements(saved)
+      .catch((error) =>
+        console.warn('RouteLab: sync achievements to cloud failed', error?.errMsg || error?.message || error)
+      );
   }
 
   return {

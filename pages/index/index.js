@@ -9,8 +9,10 @@ const {
   subscribe,
   getRoutes,
   syncRoutesFromCloud,
+  syncRoutesToCloud,
   updateRoutePrivacy,
   deleteRoute,
+  getSyncStatus,
 } = require('../../services/route-store');
 const { summarizeRoutes } = require('../../services/analytics');
 const { formatDuration, formatDate, formatClock, getWeekday } = require('../../utils/time');
@@ -229,6 +231,7 @@ function formatHistoryRoute(route) {
   }
   const activityType = route.meta?.activityType || route.activityType || DEFAULT_ACTIVITY_TYPE;
   const activityMeta = ACTIVITY_TYPE_MAP[activityType] || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
+  const synced = route.synced === true;
   return {
     id: route.id,
     title: route.title || '未命名路线',
@@ -245,6 +248,9 @@ function formatHistoryRoute(route) {
     activityType,
     timeRange: `${formatClock(route.startTime)} - ${formatClock(route.endTime)}`,
     photosCount: Array.isArray(route.photos) ? route.photos.length : 0,
+    synced,
+    syncPending: !synced,
+    syncStatusLabel: synced ? '已同步' : '待同步',
   };
 }
 
@@ -271,6 +277,18 @@ function filterHistoryRoutes(routes = [], filterKey = 'all') {
     return list.filter((route) => route.privacyLevel === 'private');
   }
   return list;
+}
+
+function formatSyncInfo(status = {}) {
+  const timestamp = Number(status.lastSyncAt);
+  const hasTimestamp = Number.isFinite(timestamp) && timestamp > 0;
+  return {
+    pending: status.pending || 0,
+    synced: status.synced || 0,
+    deleted: status.deleted || 0,
+    total: status.total || 0,
+    lastSyncText: hasTimestamp ? `${formatDate(timestamp)} ${formatClock(timestamp)}` : '尚未同步',
+  };
 }
 
 function formatGenderLabel(value) {
@@ -405,6 +423,8 @@ Page({
     userCard: DEFAULT_USER_CARD,
     privacyLevel: 'private',
     showLocationPrompt: false,
+    syncInfo: formatSyncInfo({}),
+    syncBusy: false,
   },
 
   onLoad() {
@@ -517,6 +537,7 @@ Page({
       userCard,
     });
     this.refreshHistoryRoutes();
+    this.refreshSyncInfo();
   },
 
   ensureWeather(force = false) {
@@ -617,6 +638,15 @@ Page({
       historyEmpty: formatted.length === 0,
     });
     this.resolveHistoryRoutePlaces(formatted);
+  },
+
+  refreshSyncInfo() {
+    try {
+      const status = typeof getSyncStatus === 'function' ? getSyncStatus() : {};
+      this.setData({ syncInfo: formatSyncInfo(status) });
+    } catch (err) {
+      this.setData({ syncInfo: formatSyncInfo({}) });
+    }
   },
 
   resolveHistoryRoutePlaces(list = []) {
@@ -768,6 +798,28 @@ Page({
 
   handleRefreshWeather() {
     return this.ensureWeather(true);
+  },
+
+  handleManualSync() {
+    if (this.data.syncBusy) {
+      return;
+    }
+    this.setData({ syncBusy: true });
+    syncRoutesToCloud()
+      .catch((error) => {
+        throw error;
+      })
+      .then(() => syncRoutesFromCloud({ forceFull: false }))
+      .then(() => {
+        this.refreshSyncInfo();
+        wx.showToast({ title: '同步完成', icon: 'success' });
+      })
+      .catch(() => {
+        wx.showToast({ title: '同步失败', icon: 'none' });
+      })
+      .finally(() => {
+        this.setData({ syncBusy: false });
+      });
   },
 
   handleRequestLocationAuthorize() {

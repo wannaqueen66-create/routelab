@@ -140,7 +140,13 @@
               bindlongpress="handleHistoryRouteLongPress"
             >
               <view class="history-route__header">
-                <text class="history-route__title">{{item.title}}</text>
+                <view class="history-route__title-group">
+                  <text class="history-route__title">{{item.title}}</text>
+                  <view class="history-route__status" wx:if="{{item.syncPending}}">
+                    <text class="history-route__status-icon">🔄</text>
+                    <text class="history-route__status-text">{{item.syncStatusLabel}}</text>
+                  </view>
+                </view>
                 <text class="history-route__privacy">{{item.privacyLabel}}</text>
               </view>
               <view class="history-route__meta">
@@ -206,6 +212,33 @@
           </view>
           <button class="btn btn--primary profile-section__cta" bindtap="handleCompleteProfile">
             完善个人信息
+          </button>
+        </view>
+
+        <view class="profile-section profile-section--sync">
+          <view class="section-header">
+            <text class="section-title">同步状态</text>
+            <text class="section-subtitle">手动同步可立即上传未同步数据</text>
+          </view>
+          <view class="sync-summary">
+            <view class="sync-summary__item">
+              <text class="sync-summary__value">{{syncInfo.pending}}</text>
+              <text class="sync-summary__label">待同步</text>
+            </view>
+            <view class="sync-summary__item">
+              <text class="sync-summary__value">{{syncInfo.synced}}</text>
+              <text class="sync-summary__label">已同步</text>
+            </view>
+            <view class="sync-summary__item">
+              <text class="sync-summary__value">{{syncInfo.deleted}}</text>
+              <text class="sync-summary__label">已屏蔽</text>
+            </view>
+          </view>
+          <view class="sync-meta">
+            <text>上次同步：{{syncInfo.lastSyncText}}</text>
+          </view>
+          <button class="btn btn--ghost" loading="{{syncBusy}}" bindtap="handleManualSync">
+            {{syncBusy ? '同步中...' : '手动同步'}}
           </button>
         </view>
 
