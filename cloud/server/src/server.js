@@ -118,6 +118,7 @@ const PURPOSE_TYPE_VALUES = new Set(Object.keys(PURPOSE_TYPE_DEFINITIONS));
 const USER_GENDER_VALUES = new Set(['male', 'female']);
 const USER_AGE_RANGE_VALUES = new Set(['under18', '18_24', '25_34', '35_44', '45_54', '55_plus']);
 const USER_IDENTITY_VALUES = new Set(['minor', 'undergrad', 'postgrad', 'staff', 'resident', 'other']);
+const ANNOUNCEMENT_STATUS_VALUES = new Set(['draft', 'published']);
 
 function sanitizeEnumValue(value, allowedValues) {
   if (typeof value !== 'string') {
@@ -1439,6 +1440,19 @@ function mapUserOverviewRow(row) {
     lastActiveAt: row.last_active instanceof Date ? row.last_active.getTime() : null,
     lastRouteUpdatedAt:
       row.last_route_updated instanceof Date ? row.last_route_updated.getTime() : null,
+  };
+}
+
+function mapAnnouncementRow(row) {
+  const id = Number(row.id);
+  return {
+    id: Number.isFinite(id) ? id : null,
+    title: typeof row.title === 'string' ? row.title : '',
+    body: typeof row.body === 'string' ? row.body : '',
+    status: typeof row.status === 'string' ? row.status : 'draft',
+    publishAt: row.publish_at instanceof Date ? row.publish_at.getTime() : null,
+    createdAt: row.created_at instanceof Date ? row.created_at.getTime() : null,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.getTime() : null,
   };
 }
 
@@ -5894,6 +5908,218 @@ app.get('/api/admin/analytics/quality', ensureAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/announcements', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const pagination = normalizePagination(req.query.page, req.query.pageSize);
+  const rawStatus = typeof req.query.status === 'string' ? req.query.status.trim().toLowerCase() : '';
+  const params = [];
+  let whereClause = '';
+  if (rawStatus && ANNOUNCEMENT_STATUS_VALUES.has(rawStatus)) {
+    params.push(rawStatus);
+    whereClause = 'WHERE status = $1';
+  }
+
+  const listQuery = `
+    SELECT *
+    FROM announcements
+    ${whereClause}
+    ORDER BY publish_at DESC NULLS LAST, created_at DESC
+    LIMIT $${params.length + 1}
+    OFFSET $${params.length + 2}
+  `;
+
+  const countQuery = `
+    SELECT COUNT(*) AS total
+    FROM announcements
+    ${whereClause}
+  `;
+
+  try {
+    const [listResult, countResult] = await Promise.all([
+      pool.query(listQuery, [...params, pagination.limit, pagination.offset]),
+      pool.query(countQuery, params),
+    ]);
+    res.json({
+      items: listResult.rows.map(mapAnnouncementRow),
+      pagination: {
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        total: Number(countResult.rows?.[0]?.total || 0),
+      },
+    });
+  } catch (error) {
+    console.error('GET /api/admin/announcements failed', error);
+    res.status(500).json({ error: 'Failed to fetch announcements' });
+  }
+});
+
+app.post('/api/admin/announcements', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const body = req.body || {};
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const content = typeof body.body === 'string' ? body.body.trim() : '';
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Title and body are required' });
+  }
+
+  let status =
+    typeof body.status === 'string' && body.status.trim()
+      ? body.status.trim().toLowerCase()
+      : 'draft';
+  if (!ANNOUNCEMENT_STATUS_VALUES.has(status)) {
+    status = 'draft';
+  }
+
+  let publishAt = null;
+  if (body.publishAt) {
+    const candidate = Number(body.publishAt);
+    let date = null;
+    if (Number.isFinite(candidate) && candidate > 0) {
+      date = new Date(candidate);
+    } else if (typeof body.publishAt === 'string') {
+      const parsed = new Date(body.publishAt);
+      if (!Number.isNaN(parsed.getTime())) {
+        date = parsed;
+      }
+    }
+    if (date && !Number.isNaN(date.getTime())) {
+      publishAt = date;
+    }
+  }
+  if (status === 'published' && !publishAt) {
+    publishAt = new Date();
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        INSERT INTO announcements (title, body, status, publish_at)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      `,
+      [title, content, status, publishAt]
+    );
+    res.status(201).json(mapAnnouncementRow(result.rows[0]));
+  } catch (error) {
+    console.error('POST /api/admin/announcements failed', error);
+    res.status(500).json({ error: 'Failed to create announcement' });
+  }
+});
+
+app.patch('/api/admin/announcements/:id', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid announcement id' });
+  }
+  const body = req.body || {};
+  const fields = [];
+  const params = [];
+
+  if (Object.prototype.hasOwnProperty.call(body, 'title')) {
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+    params.push(title);
+    fields.push(`title = $${params.length}`);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'body')) {
+    const content = typeof body.body === 'string' ? body.body.trim() : '';
+    if (!content) {
+      return res.status(400).json({ error: 'Body is required' });
+    }
+    params.push(content);
+    fields.push(`body = $${params.length}`);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'status')) {
+    let status =
+      typeof body.status === 'string' && body.status.trim()
+        ? body.status.trim().toLowerCase()
+        : '';
+    if (status && !ANNOUNCEMENT_STATUS_VALUES.has(status)) {
+      return res.status(400).json({ error: 'Invalid status value' });
+    }
+    if (status) {
+      params.push(status);
+      fields.push(`status = $${params.length}`);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'publishAt')) {
+    let publishAt = null;
+    if (body.publishAt) {
+      const candidate = Number(body.publishAt);
+      let date = null;
+      if (Number.isFinite(candidate) && candidate > 0) {
+        date = new Date(candidate);
+      } else if (typeof body.publishAt === 'string') {
+        const parsed = new Date(body.publishAt);
+        if (!Number.isNaN(parsed.getTime())) {
+          date = parsed;
+        }
+      }
+      if (date && !Number.isNaN(date.getTime())) {
+        publishAt = date;
+      }
+    }
+    params.push(publishAt);
+    fields.push(`publish_at = $${params.length}`);
+  }
+
+  if (!fields.length) {
+    return res.status(400).json({ error: 'No updatable fields provided' });
+  }
+
+  fields.push('updated_at = NOW()');
+
+  const query = `
+    UPDATE announcements
+    SET ${fields.join(', ')}
+    WHERE id = $${params.length + 1}
+    RETURNING *
+  `;
+
+  try {
+    const result = await pool.query(query, [...params, id]);
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+    res.json(mapAnnouncementRow(result.rows[0]));
+  } catch (error) {
+    console.error('PATCH /api/admin/announcements/:id failed', error);
+    res.status(500).json({ error: 'Failed to update announcement' });
+  }
+});
+
+app.delete('/api/admin/announcements/:id', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid announcement id' });
+  }
+  try {
+    const result = await pool.query('DELETE FROM announcements WHERE id = $1', [id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Announcement not found' });
+    }
+    res.status(204).end();
+  } catch (error) {
+    console.error('DELETE /api/admin/announcements/:id failed', error);
+    res.status(500).json({ error: 'Failed to delete announcement' });
+  }
+});
+
 app.get('/api/admin/maintenance/backups', ensureAuth, async (req, res) => {
   if (!ensureAdminRequest(req, res)) {
     return;
@@ -6163,6 +6389,28 @@ app.get('/api/admin/geocode/metrics', ensureAuth, async (req, res) => {
   } catch (error) {
     console.error('GET /api/admin/geocode/metrics failed', error);
     res.status(500).json({ error: 'Failed to read geocode metrics' });
+  }
+});
+
+app.get('/api/announcements/latest', ensureAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT *
+        FROM announcements
+        WHERE status = 'published'
+          AND (publish_at IS NULL OR publish_at <= NOW())
+        ORDER BY publish_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      `
+    );
+    if (!result.rows.length) {
+      return res.status(204).end();
+    }
+    res.json(mapAnnouncementRow(result.rows[0]));
+  } catch (error) {
+    console.error('GET /api/announcements/latest failed', error);
+    res.status(500).json({ error: 'Failed to fetch latest announcement' });
   }
 });
 

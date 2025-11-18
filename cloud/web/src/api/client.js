@@ -223,6 +223,33 @@ export async function fetchAdminQualityMetrics(params = {}) {
   return response.data;
 }
 
+export async function fetchAdminAnnouncements(params = {}) {
+  const response = await client.get('/admin/announcements', { params });
+  return response.data;
+}
+
+export async function createAdminAnnouncement(payload = {}) {
+  const response = await client.post('/admin/announcements', payload);
+  return response.data;
+}
+
+export async function updateAdminAnnouncement(id, payload = {}) {
+  if (!id) throw new Error('Announcement id is required');
+  const response = await client.patch(`/admin/announcements/${id}`, payload);
+  return response.data;
+}
+
+export async function deleteAdminAnnouncement(id) {
+  if (!id) throw new Error('Announcement id is required');
+  const response = await client.delete(`/admin/announcements/${id}`);
+  return response.data;
+}
+
+export async function fetchLatestAnnouncement() {
+  const response = await client.get('/announcements/latest');
+  return response.data;
+}
+
 export async function listBackups() {
   const response = await client.get('/admin/maintenance/backups');
   return response.data;

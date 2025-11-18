@@ -634,6 +634,75 @@
   color: #1d4ed8;
 }
 
+.announcement-mask {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(4rpx);
+  z-index: 40;
+}
+
+.announcement-dialog {
+  width: 640rpx;
+  max-height: 70vh;
+  padding: 40rpx;
+  border-radius: 28rpx;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.announcement-dialog__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.announcement-dialog__title {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.announcement-dialog__time {
+  font-size: 24rpx;
+  color: #9ca3af;
+}
+
+.announcement-dialog__body {
+  margin-top: 8rpx;
+  max-height: 360rpx;
+}
+
+.announcement-dialog__content {
+  font-size: 28rpx;
+  color: #374151;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.announcement-dialog__actions {
+  margin-top: 20rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.announcement-dialog__btn {
+  border: none;
+  border-radius: 999rpx;
+  padding: 18rpx 40rpx;
+  font-size: 28rpx;
+  text-align: center;
+}
+
+.announcement-dialog__btn--primary {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #ffffff;
+}
+
 .permission-mask {
   position: fixed;
   inset: 0;

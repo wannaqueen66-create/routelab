@@ -70,6 +70,8 @@ export default function Sidebar({ collapsed, onCollapse, role, onSignOut }) {
 
       <nav className="sidebar-nav">
         {navItems.map((item) => {
+          // 管理员视图下隐藏普通用户入口（如个人中心）
+          if (isAdmin && item.path === '/profile') return null;
           if (item.adminOnly && !isAdmin) return null;
           const Icon = item.icon;
           const isActive = location.pathname.startsWith(item.path);

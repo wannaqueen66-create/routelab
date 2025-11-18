@@ -283,6 +283,35 @@
     </view>
   </scroll-view>
 
+  <view class="announcement-mask" wx:if="{{announcementModalVisible}}">
+    <view class="announcement-dialog">
+      <view class="announcement-dialog__header">
+        <text class="announcement-dialog__title">
+          {{announcementModal.title || '系统公告'}}
+        </text>
+        <text
+          wx:if="{{announcementModal.publishAtText}}"
+          class="announcement-dialog__time"
+        >
+          {{announcementModal.publishAtText}}
+        </text>
+      </view>
+      <scroll-view scroll-y class="announcement-dialog__body">
+        <text class="announcement-dialog__content">
+          {{announcementModal.body}}
+        </text>
+      </scroll-view>
+      <view class="announcement-dialog__actions">
+        <button
+          class="announcement-dialog__btn announcement-dialog__btn--primary"
+          bindtap="handleConfirmAnnouncement"
+        >
+          我已知晓
+        </button>
+      </view>
+    </view>
+  </view>
+
   <view class="permission-mask" wx:if="{{showLocationPrompt}}">
     <view class="permission-dialog">
       <text class="permission-dialog__title">需要开启定位权限</text>

@@ -172,3 +172,18 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS height_cm INTEGER;
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS weight_kg NUMERIC;
+
+-- System announcements for in-app notices
+CREATE TABLE IF NOT EXISTS announcements (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'draft',
+  publish_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT chk_announcements_status CHECK (status IN ('draft', 'published'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_announcements_status_publish_at
+  ON announcements(status, publish_at DESC);

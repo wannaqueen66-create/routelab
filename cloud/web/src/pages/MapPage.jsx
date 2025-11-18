@@ -83,6 +83,21 @@ function MapController({ routes, selectedRoute, autoFit }) {
   return null;
 }
 
+// Ensure Leaflet map correctly fills its container after layout/size changes
+function MapResizeHandler({ dependencies = [] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    // Defer to next tick so flex/layout animations have applied
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 0);
+  }, [map, ...dependencies]);
+
+  return null;
+}
+
 // Route polyline with speed gradient
 function SpeedGradientPolyline({ points }) {
   if (!points || points.length < 2) return null;
@@ -661,6 +676,14 @@ export default function MapPage() {
               style={{ width: '100%', height: '100%' }}
               ref={mapRef}
             >
+              <MapResizeHandler
+                dependencies={[
+                  routes.length,
+                  showRouteList,
+                  showFilterPanel,
+                  mapType,
+                ]}
+              />
               <TileLayer
                 url={tileUrl}
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

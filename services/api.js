@@ -471,6 +471,13 @@ function getRouteById(id) {
   });
 }
 
+function getLatestAnnouncement() {
+  return request({
+    path: '/announcements/latest',
+    method: 'GET',
+  });
+}
+
 function updateUserProfile({
   nickname,
   avatarUrl,
@@ -644,6 +651,7 @@ module.exports = {
   geocodeAround,
   reverseGeocodeSafe,
   getRouteById,
+  getLatestAnnouncement,
   updateUserProfile,
   getUserSettings,
   saveUserSettings,

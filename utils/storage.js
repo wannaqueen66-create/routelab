@@ -269,6 +269,42 @@ function clearLastSyncTimestamp() {
   safeSet(STORAGE_KEYS.LAST_SYNC_AT, 0);
 }
 
+function getLatestSeenAnnouncement() {
+  const stored = safeGet(STORAGE_KEYS.LATEST_ANNOUNCEMENT, null);
+  if (!stored || typeof stored !== 'object') {
+    return null;
+  }
+  const id = Number(stored.id);
+  const seenAt = Number(stored.seenAt);
+  if (!Number.isFinite(id) || id <= 0) {
+    return null;
+  }
+  return {
+    id,
+    seenAt: Number.isFinite(seenAt) && seenAt > 0 ? seenAt : 0,
+  };
+}
+
+function setLatestSeenAnnouncement(payload = null) {
+  if (!payload || typeof payload !== 'object') {
+    safeSet(STORAGE_KEYS.LATEST_ANNOUNCEMENT, null);
+    return null;
+  }
+  const id = Number(payload.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    safeSet(STORAGE_KEYS.LATEST_ANNOUNCEMENT, null);
+    return null;
+  }
+  const seenAtCandidate = Number(payload.seenAt);
+  const seenAt =
+    Number.isFinite(seenAtCandidate) && seenAtCandidate > 0
+      ? seenAtCandidate
+      : Date.now();
+  const value = { id, seenAt };
+  safeSet(STORAGE_KEYS.LATEST_ANNOUNCEMENT, value);
+  return value;
+}
+
 const ACHIEVEMENT_DEFAULTS = {
   totalPoints: 0,
   currentBadge: 'rookie',
@@ -352,4 +388,6 @@ module.exports = {
   clearLastSyncTimestamp,
   getAchievementStats,
   saveAchievementStats,
+  getLatestSeenAnnouncement,
+  setLatestSeenAnnouncement,
 };

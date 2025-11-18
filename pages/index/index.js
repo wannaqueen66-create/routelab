@@ -27,6 +27,8 @@ const {
   getUserProfile,
   saveRecentSettings,
   getUserAccount,
+  getLatestSeenAnnouncement,
+  setLatestSeenAnnouncement,
 } = require('../../utils/storage');
 const { STORAGE_KEYS } = require('../../constants/storage');
 const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
@@ -428,6 +430,8 @@ Page({
     showLocationPrompt: false,
     syncInfo: formatSyncInfo({}),
     syncBusy: false,
+    announcementModalVisible: false,
+    announcementModal: null,
   },
 
   onLoad() {
@@ -483,6 +487,7 @@ Page({
     if (!weather.ready || (weather.fetchedAt && Date.now() - weather.fetchedAt > 30 * 60 * 1000)) {
       this.ensureWeather();
     }
+    this.ensureAnnouncement();
   },
 
   onUnload() {
@@ -582,6 +587,45 @@ Page({
       })
       .finally(() => {
         this.fetchingWeather = false;
+      });
+  },
+
+  ensureAnnouncement() {
+    const lastSeen = getLatestSeenAnnouncement();
+    return api
+      .getLatestAnnouncement()
+      .then((announcement) => {
+        if (!announcement || !announcement.id) {
+          this.setData({
+            announcementModalVisible: false,
+            announcementModal: null,
+          });
+          return;
+        }
+        const latestId = Number(announcement.id);
+        const lastSeenId = lastSeen && Number(lastSeen.id);
+        if (Number.isFinite(lastSeenId) && latestId <= lastSeenId) {
+          return;
+        }
+        const publishAt =
+          typeof announcement.publishAt === 'number' && Number.isFinite(announcement.publishAt)
+            ? announcement.publishAt
+            : null;
+        const modalPayload = {
+          id: latestId,
+          title: announcement.title || '系统公告',
+          body: announcement.body || '',
+          publishAt,
+          publishAtText: publishAt ? new Date(publishAt).toLocaleString('zh-CN') : '',
+        };
+        this.latestAnnouncement = modalPayload;
+        this.setData({
+          announcementModalVisible: true,
+          announcementModal: modalPayload,
+        });
+      })
+      .catch(() => {
+        // 静默忽略公告拉取错误，避免影响正常使用
       });
   },
 
@@ -803,6 +847,21 @@ Page({
     return this.ensureWeather(true);
   },
 
+  handleConfirmAnnouncement() {
+    const modal = this.data.announcementModal;
+    if (modal && modal.id) {
+      try {
+        setLatestSeenAnnouncement({ id: modal.id, seenAt: Date.now() });
+      } catch (e) {
+        // ignore storage errors
+      }
+    }
+    this.setData({
+      announcementModalVisible: false,
+      announcementModal: null,
+    });
+  },
+
   handleManualSync() {
     if (this.data.syncBusy) {
       return;
@@ -926,6 +985,3 @@ Page({
     });
   },
 });
-
-
-

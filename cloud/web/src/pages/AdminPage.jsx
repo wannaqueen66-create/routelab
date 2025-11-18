@@ -4,6 +4,7 @@ import {
   Users,
   Database,
   BarChart3,
+  Megaphone,
   Shield,
   Search,
   Download,
@@ -29,6 +30,10 @@ import {
   downloadBackup,
   fetchAdminAnalyticsSummary,
   fetchAdminQualityMetrics,
+  fetchAdminAnnouncements,
+  createAdminAnnouncement,
+  updateAdminAnnouncement,
+  deleteAdminAnnouncement,
 } from '../api/client';
 
 // User Management Component
@@ -38,6 +43,7 @@ function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const pageSize = 10;
 
   useEffect(() => {
@@ -49,10 +55,11 @@ function UserManagement() {
       setLoading(true);
       const data = await fetchAdminUsers({
         page: currentPage,
-        limit: pageSize,
+        pageSize,
         search: searchTerm,
       });
-      setUsers(data.users || []);
+      setUsers(Array.isArray(data.items) ? data.items : []);
+      setTotalUsers(Number(data.pagination?.total ?? 0));
     } catch (err) {
       console.error('Failed to load users:', err);
     } finally {
@@ -154,15 +161,15 @@ function UserManagement() {
                     <span className="font-medium">{user.id}</span>
                   </td>
                   <td>
-                    {user.created_at
-                      ? new Date(user.created_at).toLocaleDateString('zh-CN')
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleDateString('zh-CN')
                       : '-'}
                   </td>
-                  <td>{user.routes_count || 0}</td>
-                  <td>{((user.total_distance || 0) / 1000).toFixed(1)} km</td>
+                  <td>{user.routesCount || 0}</td>
+                  <td>{((user.totalDistance || 0) / 1000).toFixed(1)} km</td>
                   <td>
-                    {user.last_active
-                      ? new Date(user.last_active).toLocaleDateString('zh-CN')
+                    {user.lastActiveAt
+                      ? new Date(user.lastActiveAt).toLocaleDateString('zh-CN')
                       : '-'}
                   </td>
                   <td>
@@ -191,7 +198,7 @@ function UserManagement() {
           <button
             className="pagination-btn"
             onClick={() => setCurrentPage((p) => p + 1)}
-            disabled={users.length < pageSize}
+            disabled={currentPage * pageSize >= totalUsers}
           >
             <ChevronRight size={16} />
           </button>
@@ -215,7 +222,7 @@ function DataAnalysis() {
     try {
       setLoading(true);
       const [summaryData, qualityData] = await Promise.all([
-        fetchAdminAnalyticsSummary({ days: 30 }),
+        fetchAdminAnalyticsSummary({ rangeDays: 30 }),
         fetchAdminQualityMetrics(),
       ]);
       setSummary(summaryData);
@@ -242,37 +249,374 @@ function DataAnalysis() {
       <div className="analytics-grid">
         <div className="analytics-card">
           <div className="analytics-label">总路线数</div>
-          <div className="analytics-value">{summary?.total_routes || 0}</div>
+            <div className="analytics-value">{summary?.totalRoutes || 0}</div>
         </div>
         <div className="analytics-card">
           <div className="analytics-label">活跃用户</div>
-          <div className="analytics-value">{summary?.active_users || 0}</div>
+            <div className="analytics-value">{summary?.activeUsers || 0}</div>
         </div>
         <div className="analytics-card">
           <div className="analytics-label">总采样点</div>
-          <div className="analytics-value">
-            {(quality?.total_points || 0).toLocaleString()}
-          </div>
+            <div className="analytics-value">
+              {(quality?.totalPoints || 0).toLocaleString()}
+            </div>
         </div>
         <div className="analytics-card">
           <div className="analytics-label">后台采集率</div>
-          <div className="analytics-value">
-            {((quality?.background_ratio || 0) * 100).toFixed(1)}%
-          </div>
+            <div className="analytics-value">
+              {((quality?.backgroundRatio || 0) * 100).toFixed(1)}%
+            </div>
         </div>
         <div className="analytics-card">
           <div className="analytics-label">弱信号率</div>
-          <div className="analytics-value">
-            {((quality?.weak_signal_ratio || 0) * 100).toFixed(1)}%
-          </div>
+            <div className="analytics-value">
+              {((quality?.weakSignalRatio || 0) * 100).toFixed(1)}%
+            </div>
         </div>
         <div className="analytics-card">
           <div className="analytics-label">插值点率</div>
-          <div className="analytics-value">
-            {((quality?.interpolated_ratio || 0) * 100).toFixed(1)}%
-          </div>
+            <div className="analytics-value">
+              {((quality?.interpRatio || 0) * 100).toFixed(1)}%
+            </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function formatAnnouncementDateTime(timestamp) {
+  if (!timestamp) return '';
+  const date =
+    timestamp instanceof Date ? timestamp : new Date(typeof timestamp === 'number' ? timestamp : Number(timestamp));
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  return date.toLocaleString('zh-CN');
+}
+
+function formatDateTimeLocalInput(timestamp) {
+  if (!timestamp) return '';
+  const date =
+    timestamp instanceof Date ? timestamp : new Date(typeof timestamp === 'number' ? timestamp : Number(timestamp));
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const pad = (value) => String(value).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+// Announcements Management Component
+function AnnouncementsManagement() {
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({
+    title: '',
+    body: '',
+    status: 'draft',
+    publishAt: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadAnnouncements();
+  }, []);
+
+  const loadAnnouncements = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchAdminAnnouncements({
+        page: 1,
+        pageSize: 50,
+      });
+      setAnnouncements(Array.isArray(data.items) ? data.items : []);
+    } catch (error) {
+      console.error('Failed to load announcements:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startCreate = () => {
+    setEditing({ id: null });
+    setForm({
+      title: '',
+      body: '',
+      status: 'draft',
+      publishAt: '',
+    });
+  };
+
+  const startEdit = (item) => {
+    setEditing(item);
+    setForm({
+      title: item.title || '',
+      body: item.body || '',
+      status: item.status || 'draft',
+      publishAt: item.publishAt ? formatDateTimeLocalInput(item.publishAt) : '',
+    });
+  };
+
+  const handleFieldChange = (field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleSave = async () => {
+    const title = (form.title || '').trim();
+    const body = (form.body || '').trim();
+    if (!title || !body) {
+      if (typeof window !== 'undefined' && window.alert) {
+        window.alert('公告标题和正文不能为空');
+      }
+      return;
+    }
+    const payload = {
+      title,
+      body,
+      status: form.status || 'draft',
+    };
+    if (form.publishAt) {
+      const date = new Date(form.publishAt);
+      if (!Number.isNaN(date.getTime())) {
+        payload.publishAt = date.toISOString();
+      }
+    }
+
+    try {
+      setSaving(true);
+      if (editing && editing.id) {
+        await updateAdminAnnouncement(editing.id, payload);
+      } else {
+        await createAdminAnnouncement(payload);
+      }
+      await loadAnnouncements();
+      setEditing(null);
+    } catch (error) {
+      console.error('Failed to save announcement:', error);
+      if (typeof window !== 'undefined' && window.alert) {
+        const message =
+          error?.response?.data?.error || error.message || '保存公告失败，请稍后重试';
+        window.alert(message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!id) return;
+    if (typeof window !== 'undefined' && window.confirm) {
+      const ok = window.confirm('确定要删除该公告吗？此操作不可恢复');
+      if (!ok) return;
+    }
+    try {
+      await deleteAdminAnnouncement(id);
+      await loadAnnouncements();
+      if (editing && editing.id === id) {
+        setEditing(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete announcement:', error);
+    }
+  };
+
+  const handleQuickStatusChange = async (item, nextStatus) => {
+    if (!item?.id) return;
+    const payload = { status: nextStatus };
+    if (nextStatus === 'published' && !item.publishAt) {
+      payload.publishAt = new Date().toISOString();
+    }
+    try {
+      await updateAdminAnnouncement(item.id, payload);
+      await loadAnnouncements();
+    } catch (error) {
+      console.error('Failed to update announcement status:', error);
+    }
+  };
+
+  return (
+    <div className="data-table">
+      <div className="table-toolbar">
+        <div className="table-title">
+          <Megaphone size={18} />
+          <span>系统公告</span>
+        </div>
+        <div className="table-actions">
+          <button className="btn btn-sm btn-outline" onClick={loadAnnouncements}>
+            <RefreshCw size={16} />
+            刷新
+          </button>
+          <button className="btn btn-sm btn-primary" onClick={startCreate}>
+            <FilePlus size={16} />
+            新建公告
+          </button>
+        </div>
+      </div>
+
+      <div className="table-container">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>标题</th>
+              <th>状态</th>
+              <th>发布时间</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              Array.from({ length: 3 }).map((_, index) => (
+                <tr key={index}>
+                  <td colSpan={5}>
+                    <div className="skeleton skeleton-text" />
+                  </td>
+                </tr>
+              ))
+            ) : announcements.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center p-8 text-gray-500">
+                  暂无公告，可点击“新建公告”发布系统通知
+                </td>
+              </tr>
+            ) : (
+              announcements.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <div className="font-medium">{item.title}</div>
+                  </td>
+                  <td>
+                    <span
+                      className={`badge ${
+                        item.status === 'published' ? 'badge-success' : 'badge-secondary'
+                      }`}
+                    >
+                      {item.status === 'published' ? '已发布' : '草稿'}
+                    </span>
+                  </td>
+                  <td>{formatAnnouncementDateTime(item.publishAt) || '未设置'}</td>
+                  <td>{formatAnnouncementDateTime(item.createdAt) || '-'}</td>
+                  <td className="flex gap-2">
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      type="button"
+                      onClick={() => startEdit(item)}
+                    >
+                      编辑
+                    </button>
+                    {item.status === 'published' ? (
+                      <button
+                        className="btn btn-sm btn-outline"
+                        type="button"
+                        onClick={() => handleQuickStatusChange(item, 'draft')}
+                      >
+                        撤回
+                      </button>
+                    ) : (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        type="button"
+                        onClick={() => handleQuickStatusChange(item, 'published')}
+                      >
+                        发布
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-sm btn-danger"
+                      type="button"
+                      onClick={() => handleDelete(item.id)}
+                    >
+                      删除
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {editing && (
+        <div className="announcement-editor">
+          <div className="announcement-editor-row">
+            <label className="announcement-editor-label" htmlFor="announcement-title">
+              标题
+            </label>
+            <input
+              id="announcement-title"
+              className="announcement-editor-input"
+              type="text"
+              placeholder="请输入公告标题"
+              value={form.title}
+              onChange={(e) => handleFieldChange('title', e.target.value)}
+            />
+          </div>
+          <div className="announcement-editor-row">
+            <label className="announcement-editor-label" htmlFor="announcement-body">
+              正文
+            </label>
+            <textarea
+              id="announcement-body"
+              className="announcement-editor-textarea"
+              placeholder="输入要展示给用户的公告内容"
+              value={form.body}
+              onChange={(e) => handleFieldChange('body', e.target.value)}
+            />
+          </div>
+          <div className="announcement-editor-row">
+            <label className="announcement-editor-label" htmlFor="announcement-status">
+              状态
+            </label>
+            <select
+              id="announcement-status"
+              className="announcement-editor-select"
+              value={form.status}
+              onChange={(e) => handleFieldChange('status', e.target.value)}
+            >
+              <option value="draft">草稿（未发布）</option>
+              <option value="published">已发布</option>
+            </select>
+          </div>
+          <div className="announcement-editor-row">
+            <label className="announcement-editor-label" htmlFor="announcement-publish-at">
+              发布时间（可选）
+            </label>
+            <input
+              id="announcement-publish-at"
+              className="announcement-editor-input"
+              type="datetime-local"
+              value={form.publishAt}
+              onChange={(e) => handleFieldChange('publishAt', e.target.value)}
+            />
+          </div>
+          <div className="announcement-editor-actions">
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => setEditing(null)}
+              disabled={saving}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? '保存中...' : '保存公告'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -518,6 +862,7 @@ export default function AdminPage() {
   const tabs = [
     { id: 'users', label: '用户管理', icon: Users },
     { id: 'analytics', label: '数据分析', icon: BarChart3 },
+    { id: 'announcements', label: '系统公告', icon: Megaphone },
     { id: 'backup', label: '备份管理', icon: Database },
   ];
 
@@ -571,6 +916,7 @@ export default function AdminPage() {
         <div className="admin-tab-content">
           {activeTab === 'users' && <UserManagement />}
           {activeTab === 'analytics' && <DataAnalysis />}
+          {activeTab === 'announcements' && <AnnouncementsManagement />}
           {activeTab === 'backup' && <BackupManagement />}
         </div>
       </motion.div>
