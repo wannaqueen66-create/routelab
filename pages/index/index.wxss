@@ -412,12 +412,18 @@
 
 .profile-card {
   display: flex;
-  gap: 20rpx;
-  align-items: center;
+  flex-direction: column;
+  gap: 16rpx;
   background: #ffffff;
   border-radius: 24rpx;
   padding: 24rpx;
   box-shadow: 0 16rpx 30rpx rgba(15, 23, 42, 0.08);
+}
+
+.profile-card__header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
 }
 
 .profile-card__avatar {
@@ -442,7 +448,15 @@
   color: #475569;
 }
 
-.profile-card__meta {
+.profile-card__info {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+}
+
+.profile-card__identity {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
@@ -461,6 +475,34 @@
 .profile-card__id {
   font-size: 22rpx;
   color: #94a3b8;
+}
+
+.profile-card__points {
+  min-width: 170rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 20rpx;
+  background: rgba(37, 99, 235, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4rpx;
+  color: #1d4ed8;
+  flex-shrink: 0;
+}
+
+.profile-card__points-label {
+  font-size: 24rpx;
+}
+
+.profile-card__points-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.profile-card__points-sub {
+  font-size: 24rpx;
+  color: #64748b;
 }
 
 .profile-section {

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const {
   checkLocationAuthorization,
@@ -35,38 +35,41 @@ const app = typeof getApp === 'function' ? getApp() : null;
 
 const TAB_META = [
   { key: 'home', label: '首页', description: '记录运动', icon: '🏃' },
-  { key: 'history', label: '历史', description: '回顾轨迹', icon: '🕘' },
+  { key: 'history', label: '历史', description: '回顾轨迹', icon: '🕒' },
   { key: 'profile', label: '我的', description: '个人中心', icon: '👤' },
 ];
 
+
 const HISTORY_FILTERS = [
   { key: 'all', label: '全部' },
-  { key: 'recent', label: '最近七天' },
+  { key: 'recent', label: '最近一周' },
   { key: 'walk', label: '步行' },
   { key: 'ride', label: '骑行' },
   { key: 'public', label: '公开' },
   { key: 'private', label: '仅自己' },
 ];
 
+
 const WEATHER_TEXT_MAP = {
-  sunny: '晴朗',
-  clear: '晴朗',
+  sunny: '晴',
+  clear: '晴',
   cloudy: '多云',
-  overcast: '阴天',
-  rain: '有雨',
-  rainy: '有雨',
+  overcast: '阴',
+  rain: '雨',
+  rainy: '雨',
   shower: '阵雨',
-  snow: '有雪',
+  snow: '雪',
   windy: '有风',
-  fog: '有雾',
+  fog: '雾',
 };
 
 const WEATHER_SUGGESTION_MAP = {
-  'weather looks good. maintain your planned outdoor training.': '天气不错，可以放心进行户外训练。',
-  'take a rest day or choose indoor workouts due to harsh weather.': '天气较差，建议休息或改为室内训练。',
-  'light rain. consider waterproof gear if you head outside.': '有小雨，如需外出请准备防水装备。',
-  'hot and humid. stay hydrated and avoid noon training.': '闷热潮湿，注意补水并避开正午训练。',
+  'weather looks good. maintain your planned outdoor training.': '天气不错，可以按计划进行户外训练。',
+  'take a rest day or choose indoor workouts due to harsh weather.': '天气较差，建议休息一天或选择室内运动。',
+  'light rain. consider waterproof gear if you head outside.': '有小雨，外出运动请注意雨具和防水装备。',
+  'hot and humid. stay hydrated and avoid noon training.': '天气炎热潮湿，注意补水，避免在中午时段训练。',
 };
+
 
 const HISTORY_RECENT_DAYS = 7;
 const ACTIVITY_GOALS = {
@@ -923,3 +926,6 @@ Page({
     });
   },
 });
+
+
+

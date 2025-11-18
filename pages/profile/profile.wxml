@@ -21,23 +21,22 @@
             <text class="profile-card__id">{{userIdLabel}}</text>
           </view>
           <view class="profile-card__points" bindtap="handleOpenBadgeWall">
+            <text class="profile-card__points-label">当前积分</text>
             <text class="profile-card__points-value">{{totalPoints}}</text>
-            <text class="profile-card__points-label">⭐ 积分</text>
+            <text class="profile-card__points-sub">{{badgeLabel}}</text>
           </view>
         </view>
       </view>
-      <view class="profile-card__achievements" bindtap="handleOpenBadgeWall">
-        <view class="profile-card__badge">
-          <text class="profile-card__badge-icon">{{badgeIcon}}</text>
-          <view class="profile-card__badge-info">
-            <text class="profile-card__badge-label">{{badgeLabel}}</text>
-            <text class="profile-card__badge-sub">{{badgeUnlockedText}}</text>
-          </view>
+      <view class="profile-card__badge" bindtap="handleOpenBadgeWall">
+        <text class="profile-card__badge-icon">{{badgeIcon}}</text>
+        <view class="profile-card__badge-info">
+          <text class="profile-card__badge-label">{{badgeLabel}}</text>
+          <text class="profile-card__badge-sub">{{badgeUnlockedText}}</text>
         </view>
-        <view class="profile-card__hint-row">
-          <text class="profile-card__badge-hint">{{badgeNextHint}}</text>
-          <text class="profile-card__badge-cta">查看勋章墙 →</text>
-        </view>
+      </view>
+      <view class="profile-card__hint-row" bindtap="handleOpenBadgeWall">
+        <text class="profile-card__badge-hint">{{badgeNextHint}}</text>
+        <text class="profile-card__badge-cta">查看勋章墙</text>
       </view>
     </view>
 
@@ -78,3 +77,4 @@
     </view>
   </scroll-view>
 </view>
+
