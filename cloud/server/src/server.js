@@ -55,6 +55,22 @@ const AMAP_TIMEOUT_MS = Math.max(Number(process.env.AMAP_TIMEOUT_MS) || 6500, 20
 const GEOCODE_CACHE_TTL_MS = Math.max(Number(process.env.GEOCODE_CACHE_TTL_MS) || 10 * 60 * 1000, 1000);
 const GEOCODE_CACHE_GRID_SIZE =
   Math.max(Number(process.env.GEOCODE_CACHE_GRID_SIZE) || 0.001, 0.0001);
+const QWEATHER_API_KEY = process.env.QWEATHER_API_KEY || '';
+const QWEATHER_BASE_URL =
+  (process.env.QWEATHER_BASE_URL || 'https://devapi.qweather.com/v7').replace(/\/$/, '');
+const OPEN_METEO_WEATHER_BASE =
+  (process.env.OPEN_METEO_WEATHER_BASE || 'https://api.open-meteo.com/v1/forecast').replace(
+    /\/$/,
+    ''
+  );
+const OPEN_METEO_AIR_BASE =
+  (process.env.OPEN_METEO_AIR_BASE || 'https://air-quality-api.open-meteo.com/v1/air-quality').replace(
+    /\/$/,
+    ''
+  );
+const GEOCODE_OSM_BASE_URL =
+  (process.env.GEOCODE_OSM_BASE_URL || 'https://nominatim.openstreetmap.org').replace(/\/$/, '');
+const GEOCODE_OSM_USER_AGENT = process.env.GEOCODE_OSM_USER_AGENT || WEATHER_USER_AGENT;
 
 const geocodeCache = new Map();
 const geocodeMetrics = {
@@ -4019,9 +4035,133 @@ async function fetchAmapAround({
   return executeAmapRequest(url);
 }
 
-async function fetchWeatherSnapshot(latitude, longitude) {
-  const base = 'https://api.open-meteo.com/v1/forecast';
+async function fetchQWeatherSnapshot(latitude, longitude) {
+  if (!QWEATHER_API_KEY) {
+    const error = new Error('QWeather key is not configured');
+    error.statusCode = 500;
+    throw error;
+  }
+  const base = `${QWEATHER_BASE_URL}/weather/now`;
   const url = new URL(base);
+  url.searchParams.set('location', `${longitude},${latitude}`);
+  url.searchParams.set('key', QWEATHER_API_KEY);
+  url.searchParams.set('lang', 'zh-Hans');
+  url.searchParams.set('unit', 'm');
+
+  const response = await fetch(url.toString(), {
+    headers: { 'User-Agent': WEATHER_USER_AGENT, Accept: 'application/json' },
+  });
+  if (!response.ok) {
+    const error = new Error('QWeather request failed');
+    error.statusCode = response.status;
+    throw error;
+  }
+  const payload = await response.json();
+  const statusCode = String(payload.code || payload.status || '');
+  if (statusCode && statusCode !== '200') {
+    const error = new Error(`QWeather responded with code ${statusCode}`);
+    error.statusCode = 502;
+    throw error;
+  }
+  const now = payload.now || {};
+  const temperature =
+    now.temp !== undefined && now.temp !== null && now.temp !== ''
+      ? Number(now.temp)
+      : null;
+  const apparentTemperature =
+    now.feelsLike !== undefined && now.feelsLike !== null && now.feelsLike !== ''
+      ? Number(now.feelsLike)
+      : null;
+  const humidity =
+    now.humidity !== undefined && now.humidity !== null && now.humidity !== ''
+      ? Number(now.humidity)
+      : null;
+  const windSpeed =
+    now.windSpeed !== undefined && now.windSpeed !== null && now.windSpeed !== ''
+      ? Number(now.windSpeed)
+      : null;
+  const fetchedAt = payload.updateTime
+    ? new Date(payload.updateTime).getTime()
+    : Date.now();
+
+  return {
+    temperature: Number.isFinite(temperature) ? temperature : null,
+    apparentTemperature: Number.isFinite(apparentTemperature) ? apparentTemperature : null,
+    weatherCode: null,
+    weatherText: typeof now.text === 'string' ? now.text : null,
+    humidity: Number.isFinite(humidity) ? humidity : null,
+    windSpeed: Number.isFinite(windSpeed) ? windSpeed : null,
+    windDirection: now.windDir || null,
+    fetchedAt,
+    source: 'qweather',
+  };
+}
+
+async function fetchAmapWeatherSnapshot(latitude, longitude) {
+  if (!AMAP_WEB_KEY) {
+    const error = new Error('Amap key is not configured');
+    error.statusCode = 500;
+    throw error;
+  }
+  const regeoPayload = await fetchAmapRegeo({
+    latitude,
+    longitude,
+    radius: 60,
+    extensions: 'base',
+  });
+  const addressComponent = regeoPayload?.regeocode?.addressComponent || {};
+  const adcode = addressComponent.adcode || addressComponent.citycode;
+  if (!adcode) {
+    const error = new Error('Amap adcode is not available for weather');
+    error.statusCode = 502;
+    throw error;
+  }
+
+  const url = buildAmapRequestUrl('https://restapi.amap.com/v3/weather/weatherInfo', {
+    city: adcode,
+    extensions: 'base',
+    output: 'JSON',
+  });
+  const payload = await executeAmapRequest(url);
+  if (!Array.isArray(payload.lives) || !payload.lives.length) {
+    const error = new Error('Amap weather payload is invalid');
+    error.statusCode = 502;
+    throw error;
+  }
+  const live = payload.lives[0] || {};
+  const temperature =
+    live.temperature !== undefined && live.temperature !== null && live.temperature !== ''
+      ? Number(live.temperature)
+      : null;
+  const humidity =
+    live.humidity !== undefined && live.humidity !== null && live.humidity !== ''
+      ? Number(live.humidity)
+      : null;
+  const fetchedAt = live.reporttime ? new Date(live.reporttime).getTime() : Date.now();
+
+  let windSpeed = null;
+  if (live.windpower !== undefined && live.windpower !== null && live.windpower !== '') {
+    const numericWind = Number(live.windpower);
+    if (Number.isFinite(numericWind)) {
+      windSpeed = numericWind;
+    }
+  }
+
+  return {
+    temperature: Number.isFinite(temperature) ? temperature : null,
+    apparentTemperature: Number.isFinite(temperature) ? temperature : null,
+    weatherCode: null,
+    weatherText: typeof live.weather === 'string' ? live.weather : null,
+    humidity: Number.isFinite(humidity) ? humidity : null,
+    windSpeed: Number.isFinite(windSpeed) ? windSpeed : null,
+    windDirection: live.winddirection || null,
+    fetchedAt,
+    source: 'amap',
+  };
+}
+
+async function fetchOpenMeteoWeatherSnapshot(latitude, longitude) {
+  const url = new URL(OPEN_METEO_WEATHER_BASE);
   url.searchParams.set('latitude', latitude);
   url.searchParams.set('longitude', longitude);
   url.searchParams.set(
@@ -4048,12 +4188,49 @@ async function fetchWeatherSnapshot(latitude, longitude) {
     windSpeed: current.wind_speed_10m ?? null,
     windDirection: current.wind_direction_10m ?? null,
     fetchedAt: current.time ? new Date(current.time).getTime() : Date.now(),
+    source: 'open_meteo',
   };
 }
 
+async function fetchWeatherSnapshot(latitude, longitude) {
+  const errors = [];
+
+  if (QWEATHER_API_KEY) {
+    try {
+      return await fetchQWeatherSnapshot(latitude, longitude);
+    } catch (error) {
+      error.provider = 'qweather';
+      errors.push(error);
+    }
+  }
+
+  if (AMAP_WEB_KEY) {
+    try {
+      return await fetchAmapWeatherSnapshot(latitude, longitude);
+    } catch (error) {
+      error.provider = 'amap';
+      errors.push(error);
+    }
+  }
+
+  try {
+    return await fetchOpenMeteoWeatherSnapshot(latitude, longitude);
+  } catch (error) {
+    error.provider = 'open_meteo';
+    errors.push(error);
+    const aggregate = new Error('All weather providers failed');
+    aggregate.statusCode = error.statusCode || 502;
+    aggregate.details = errors.map((item) => ({
+      provider: item.provider || 'unknown',
+      statusCode: item.statusCode,
+      message: item.message,
+    }));
+    throw aggregate;
+  }
+}
+
 async function fetchAirQualitySnapshot(latitude, longitude) {
-  const base = 'https://air-quality-api.open-meteo.com/v1/air-quality';
-  const url = new URL(base);
+  const url = new URL(OPEN_METEO_AIR_BASE);
   url.searchParams.set('latitude', latitude);
   url.searchParams.set('longitude', longitude);
   url.searchParams.set('hourly', 'us_aqi,pm2_5,pm10');
@@ -4086,7 +4263,8 @@ async function fetchAirQualitySnapshot(latitude, longitude) {
 }
 
 async function reverseGeocode(latitude, longitude) {
-  const url = new URL('https://nominatim.openstreetmap.org/reverse');
+  const base = `${GEOCODE_OSM_BASE_URL}/reverse`;
+  const url = new URL(base);
   url.searchParams.set('format', 'jsonv2');
   url.searchParams.set('lat', latitude);
   url.searchParams.set('lon', longitude);
@@ -4094,7 +4272,7 @@ async function reverseGeocode(latitude, longitude) {
   url.searchParams.set('addressdetails', '1');
 
   const response = await fetch(url.toString(), {
-    headers: { 'User-Agent': WEATHER_USER_AGENT, Accept: 'application/json' },
+    headers: { 'User-Agent': GEOCODE_OSM_USER_AGENT, Accept: 'application/json' },
   });
   if (!response.ok) {
     const error = new Error('Reverse geocode failed');
@@ -6430,6 +6608,20 @@ app.get('/api/weather', ensureAuth, async (req, res) => {
       })),
     ]);
     const aqiMeta = describeAqi(air.aqi);
+    const weatherText =
+      typeof weather.weatherText === 'string' && weather.weatherText.trim()
+        ? weather.weatherText.trim()
+        : describeWeather(weather.weatherCode);
+    const suggestionText =
+      typeof weather.suggestion === 'string' && weather.suggestion.trim()
+        ? weather.suggestion.trim()
+        : buildExerciseSuggestion({
+            temperature: weather.temperature,
+            aqi: air.aqi,
+            weatherCode: weather.weatherCode,
+            windSpeed: weather.windSpeed,
+            humidity: weather.humidity,
+          });
     res.json({
       temperature: Number.isFinite(weather.temperature) ? Number(weather.temperature) : null,
       apparentTemperature: Number.isFinite(weather.apparentTemperature)
@@ -6441,7 +6633,7 @@ app.get('/api/weather', ensureAuth, async (req, res) => {
         ? Number(weather.windDirection)
         : null,
       weatherCode: weather.weatherCode,
-      weatherText: describeWeather(weather.weatherCode),
+      weatherText,
       airQuality: {
         aqi: air.aqi !== null && air.aqi !== undefined ? Number(air.aqi) : null,
         level: aqiMeta.level,
@@ -6450,13 +6642,7 @@ app.get('/api/weather', ensureAuth, async (req, res) => {
         pm10: air.pm10 !== null && air.pm10 !== undefined ? Number(air.pm10) : null,
       },
       fetchedAt: weather.fetchedAt,
-      suggestion: buildExerciseSuggestion({
-        temperature: weather.temperature,
-        aqi: air.aqi,
-        weatherCode: weather.weatherCode,
-        windSpeed: weather.windSpeed,
-        humidity: weather.humidity,
-      }),
+      suggestion: suggestionText,
     });
   } catch (error) {
     console.error('GET /api/weather failed', error);
