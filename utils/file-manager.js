@@ -1,8 +1,13 @@
 function getFileSystemManager() {
   if (typeof wx === 'undefined' || typeof wx.getFileSystemManager !== 'function') {
-    throw new Error('RouteLab: file system manager not available');
+    return null;
   }
-  return wx.getFileSystemManager();
+  try {
+    return wx.getFileSystemManager();
+  } catch (err) {
+    console.warn('RouteLab: getFileSystemManager failed', err);
+    return null;
+  }
 }
 
 function ensureDir(dirPath) {
@@ -11,15 +16,13 @@ function ensureDir(dirPath) {
   }
   const trimmedPath = dirPath.endsWith('/') ? dirPath.slice(0, -1) : dirPath;
   const fsm = getFileSystemManager();
+  if (!fsm) {
+    return;
+  }
   try {
-    fsm.accessSync(trimmedPath);
-  } catch (err) {
-    try {
-      fsm.mkdirSync(trimmedPath, true);
-    } catch (mkdirError) {
-      console.warn('RouteLab: mkdir failed', trimmedPath, mkdirError);
-      throw mkdirError;
-    }
+    fsm.mkdirSync(trimmedPath, true);
+  } catch (mkdirError) {
+    console.warn('RouteLab: mkdir failed', trimmedPath, mkdirError);
   }
 }
 
@@ -28,6 +31,9 @@ function readFile(path, encoding = 'utf8') {
     return null;
   }
   const fsm = getFileSystemManager();
+  if (!fsm) {
+    return null;
+  }
   try {
     return fsm.readFileSync(path, encoding);
   } catch (err) {
@@ -88,6 +94,9 @@ function writeFile(path, data, options = { encoding: 'utf8' }) {
   }
   ensureParentDir(path);
   const fsm = getFileSystemManager();
+  if (!fsm) {
+    return;
+  }
   const encoding = resolveEncoding(options);
   const payload = toWritableData(data);
   try {
@@ -103,6 +112,9 @@ function appendFile(path, data, options = { encoding: 'utf8' }) {
   }
   ensureParentDir(path);
   const fsm = getFileSystemManager();
+  if (!fsm) {
+    return;
+  }
   const encoding = resolveEncoding(options);
   const payload = toWritableData(data);
   try {

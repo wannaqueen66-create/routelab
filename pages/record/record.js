@@ -753,6 +753,26 @@ Page({
     if (!this.data.tracking) {
       return;
     }
+
+    // 打开完成面板前刷新一次隐私偏好，默认值与个人主页设置保持一致
+    try {
+      const settings = typeof getRecentSettings === 'function' ? getRecentSettings() || {} : {};
+      const storedPrivacyKey = settings.privacyLevel;
+      if (storedPrivacyKey && Array.isArray(this.data.privacyOptions)) {
+        const index = this.data.privacyOptions.findIndex(
+          (item) => item && item.key === storedPrivacyKey
+        );
+        if (index >= 0 && index !== this.data.privacyIndex) {
+          this.setData({ privacyIndex: index });
+        }
+      }
+    } catch (error) {
+      logger.warn(
+        'refresh privacy from settings before finish failed',
+        error?.errMsg || error?.message || error
+      );
+    }
+
     const autoPaused = !this.data.paused;
     if (autoPaused) {
       tracker.pauseTracking();

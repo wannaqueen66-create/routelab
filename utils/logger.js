@@ -65,21 +65,26 @@ function serializeDetail(detail) {
 }
 
 function append(level, message, detail) {
-  const fsm = getFileSystemManager();
-  if (!fsm || !ensureLogFile(fsm)) {
-    return;
+  try {
+    const fsm = getFileSystemManager();
+    if (!fsm || !ensureLogFile(fsm)) {
+      return;
+    }
+
+    const levelText = typeof level === 'string' ? level.toUpperCase() : String(level);
+    const messageText = typeof message === 'string' ? message : serializeDetail(message);
+    const detailText = serializeDetail(detail);
+    const timestamp = new Date().toISOString();
+    const line = detailText
+      ? `[${timestamp}] [${levelText}] ${messageText} ${detailText}\n`
+      : `[${timestamp}] [${levelText}] ${messageText}\n`;
+
+    fileManager.appendFile(LOG_FILE, typeof line === 'string' ? line : String(line), {
+      encoding: 'utf8',
+    });
+  } catch (err) {
+    console.warn('RouteLab: append log failed', err);
   }
-
-  const levelText = typeof level === 'string' ? level.toUpperCase() : String(level);
-  const messageText = typeof message === 'string' ? message : serializeDetail(message);
-  const detailText = serializeDetail(detail);
-  const timestamp = new Date().toISOString();
-  const line = detailText
-    ? `[${timestamp}] [${levelText}] ${messageText} ${detailText}\n`
-    : `[${timestamp}] [${levelText}] ${messageText}\n`;
-
-  // Guarantee the append payload is a string to avoid encoding issues
-  fileManager.appendFile(LOG_FILE, typeof line === 'string' ? line : String(line), { encoding: 'utf8' });
 }
 
 function info(message, detail) {
@@ -106,4 +111,3 @@ module.exports = {
   error,
   logPromiseRejection,
 };
-
