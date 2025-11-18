@@ -786,6 +786,18 @@ function sanitizeJsonObject(value, fallback = {}) {
   return fallback;
 }
 
+function ensureJsonValue(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  try {
+    const text = JSON.stringify(value);
+    // 确保传入数据库的一定是标准 JSON，可被 pg 驱动安全序列化
+    return JSON.parse(text);
+  } catch (error) {
+    return fallback;
+  }
+}
 function sanitizeJsonArray(value, fallback = []) {
   if (value === null || value === undefined) {
     return fallback;
@@ -2877,47 +2889,31 @@ async function persistRouteWithPoints(
     const baseStats =
       rawStats && typeof rawStats === 'object' && !Array.isArray(rawStats) ? { ...rawStats } : {};
 
-  const rawMeta = hasMetaField
-    ? sanitizeJsonObject(route.meta, existingRow?.meta || {})
-    : existingRow?.meta || {};
-  const baseMeta =
-    rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta) ? { ...rawMeta } : {};
+    const rawMeta = hasMetaField
+      ? sanitizeJsonObject(route.meta, existingRow?.meta || {})
+      : existingRow?.meta || {};
+    const baseMeta =
+      rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta) ? { ...rawMeta } : {};
     const requestedPurpose = sanitizeEnumValue(route.purposeType, PURPOSE_TYPE_VALUES);
     const metaPurpose = sanitizeEnumValue(baseMeta.purposeType, PURPOSE_TYPE_VALUES);
     const nextPurposeType = requestedPurpose || metaPurpose;
     route.purposeType = nextPurposeType || null;
 
-  const weightCandidate =
-    route.weight !== undefined && route.weight !== null ? Number(route.weight) : Number(baseMeta.weight);
-    const analytics = deriveRouteAnalytics({
-      points: sanitizedPoints,
-      startTime: nextStartTime,
-      endTime: nextEndTime,
-      existingStats: baseStats,
-      existingMeta: baseMeta,
-      weightKg: Number.isFinite(weightCandidate) && weightCandidate > 0 ? weightCandidate : null,
-    });
-
-    const nextStats = analytics.stats;
-    const nextMeta = analytics.meta;
-    if (nextPurposeType) {
-      nextMeta.purposeType = nextPurposeType;
-    } else if (hasOwn(nextMeta, 'purposeType')) {
-      delete nextMeta.purposeType;
-    }
-
-    const nextPhotos = hasPhotosField
+    const rawPhotos = hasPhotosField
       ? sanitizeRoutePhotos(route.photos)
       : Array.isArray(existingRow?.photos)
       ? existingRow.photos
       : [];
+    const nextPhotos = ensureJsonValue(rawPhotos, []);
 
-    const nextStartCampus = hasStartCampusField
+    const rawStartCampus = hasStartCampusField
       ? sanitizeJsonObject(startCampusSource, null)
       : existingRow?.start_campus || null;
-    const nextEndCampus = hasEndCampusField
+    const rawEndCampus = hasEndCampusField
       ? sanitizeJsonObject(endCampusSource, null)
       : existingRow?.end_campus || null;
+    const nextStartCampus = rawStartCampus === null ? null : ensureJsonValue(rawStartCampus, null);
+    const nextEndCampus = rawEndCampus === null ? null : ensureJsonValue(rawEndCampus, null);
 
     const firstPointTimestamp = sanitizedPoints.length ? sanitizedPoints[0].timestamp : null;
     const lastPointTimestamp = sanitizedPoints.length
@@ -2972,6 +2968,27 @@ async function persistRouteWithPoints(
       if (nextEndTime.getTime() < nextStartTime.getTime()) {
         nextEndTime = nextStartTime;
       }
+    }
+
+    const weightCandidate =
+      route.weight !== undefined && route.weight !== null
+        ? Number(route.weight)
+        : Number(baseMeta.weight);
+    const analytics = deriveRouteAnalytics({
+      points: sanitizedPoints,
+      startTime: nextStartTime,
+      endTime: nextEndTime,
+      existingStats: baseStats,
+      existingMeta: baseMeta,
+      weightKg: Number.isFinite(weightCandidate) && weightCandidate > 0 ? weightCandidate : null,
+    });
+
+    const nextStats = ensureJsonValue(analytics.stats, {});
+    const nextMeta = ensureJsonValue(analytics.meta, {});
+    if (nextPurposeType) {
+      nextMeta.purposeType = nextPurposeType;
+    } else if (hasOwn(nextMeta, 'purposeType')) {
+      delete nextMeta.purposeType;
     }
 
     let nextCreatedAt =
@@ -6269,5 +6286,3 @@ async function startServer() {
 }
 
 startServer();
-
-

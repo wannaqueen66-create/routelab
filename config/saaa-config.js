@@ -2,8 +2,11 @@ module.exports = {
   apiBaseUrl: 'https://routelab.qzz.io/api',
   api: {
     baseUrl: 'https://routelab.qzz.io/api',
-    timeout: 15000,
-    retries: 1,
+    // 适当放宽超时时间，提升弱网环境下的稳定性
+    timeout: 20000,
+    // 云端请求失败时的额外重试次数（总尝试次数 = retries + 1）
+    // 这里设置为 2，可在暂时性网络波动/5xx 时自动多试几次
+    retries: 2,
     token: '',
     uploadEndpoint: '/photos',
     staticBase: 'https://routelab.qzz.io/static/uploads',

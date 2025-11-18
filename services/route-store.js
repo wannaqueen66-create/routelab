@@ -1031,6 +1031,14 @@ function deleteRoute(id) {
     logContext,
     reason: 'user_delete_request',
   });
+
+  // 对于尚未成功同步到云端的记录（synced: false），
+  // 直接视为本地软删除：仅从小程序端移除，不再调用云端 DELETE。
+  // 这样可以避免云端返回 404 时重新恢复本地记录，导致“删不掉”的体验。
+  if (!target || target.synced !== true) {
+    return Promise.resolve(null);
+  }
+
   return api
     .removeRoute(id)
     .then((response) => {
@@ -1057,17 +1065,8 @@ function deleteRoute(id) {
         error: err?.errMsg || err?.message || err,
         statusCode: err?.statusCode,
       });
-      if (target) {
-        restoreRouteToLocalCache(target, {
-          logContext,
-          reason: 'delete_sync_failed',
-          overrides: {
-            pendingUpload: target.pendingUpload ?? false,
-            uploadError: target.uploadError ?? null,
-            lastSyncedAt: target.lastSyncedAt ?? target.updatedAt ?? Date.now(),
-          },
-        });
-      }
+      // 云端删除失败时不再恢复本地记录，保持“用户视角已删除”的软删除语义。
+      // 管理员仍然可以在云端后台看到这条记录（若云端数据存在）。
       return null;
     });
 }

@@ -354,7 +354,6 @@ Page({
       levelStandards: ACTIVITY_LEVEL_LIST,
       ownRoute,
     });
-    this.loadComments();
     // Ensure start/end labels show place names via local fallback if needed
     const isWeak = (name = '') => {
       if (!name || typeof name !== 'string') return true;

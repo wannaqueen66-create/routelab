@@ -135,7 +135,7 @@
       </view>
     </view>
 
-    <view class="section section--comments">
+    <view class="section section--comments" wx:if="{{false}}">
       <view class="section__head">
         <text class="section__title">评论</text>
         <button class="pill-button" size="mini" bindtap="handleAddComment">写评论</button>

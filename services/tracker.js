@@ -1987,6 +1987,24 @@ function stopTracking(meta = {}) {
     });
 }
 
+function cancelTracking() {
+  if (!trackerState.active && !trackerState.paused) {
+    return Promise.resolve(null);
+  }
+  clearSuspensionMonitor();
+  applyKeepScreenState({ force: true }).catch(() => {});
+  stopDurationTicker();
+  detachLocationListener();
+  stopLocationStream().catch(() => {});
+  flushPendingBatch({ force: true });
+  // 丢弃离线片段，不生成轨迹记录
+  flushOfflineFragments();
+  resetState();
+  notifyTracker();
+  logger.info('Tracker session cancelled without saving route');
+  return Promise.resolve(null);
+}
+
 function getTrackerState() {
   return {
     ...trackerState,
@@ -2029,6 +2047,7 @@ module.exports = {
   resumeTracking,
   handleAppHide,
   handleAppShow,
+  cancelTracking,
   stopTracking,
   getTrackerState,
   setKeepScreenPreference,

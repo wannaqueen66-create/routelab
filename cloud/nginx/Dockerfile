@@ -27,6 +27,9 @@ RUN npm run build
 # 2) Nginx serves static files + proxies API
 FROM nginx:1.25-alpine
 
+# Install wget for health check
+RUN apk add --no-cache wget
+
 # Site configuration
 COPY ./nginx/site.conf /etc/nginx/conf.d/default.conf
 

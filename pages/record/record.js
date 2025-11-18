@@ -155,6 +155,10 @@ Page({
     this.unsubscribe = tracker.subscribe((state) => this.updateState(state));
     this.applySettings();
     this.checkLocationPermission(true);
+    // 记录当前页面栈深度，后续用于识别系统返回导致的离开
+    if (typeof getCurrentPages === 'function') {
+      this.__routeStackDepth = (getCurrentPages() || []).length;
+    }
   },
 
   onShow() {
@@ -163,10 +167,46 @@ Page({
         this.refreshCurrentLocation();
       }
     });
+    // 每次页面展示时刷新栈深度
+    if (typeof getCurrentPages === 'function') {
+      this.__routeStackDepth = (getCurrentPages() || []).length;
+    }
   },
 
   onReady() {
     this.mapContext = wx.createMapContext('routeMap', this);
+  },
+
+  onHide() {
+    // 显式通过本页返回按钮离开时，不重复弹窗
+    if (this.__leavingExplicitly) {
+      this.__leavingExplicitly = false;
+      return;
+    }
+    // 系统返回 / 导航导致页面隐藏时，如果仍在记录中，则给出二次确认
+    if (this.data.tracking || this.data.paused) {
+      wx.showModal({
+        title: '提示',
+        content: '记录尚未结束，确定要退出吗？退出后本次记录将不会保存。',
+        confirmText: '退出',
+        cancelText: '继续记录',
+        success: (res) => {
+          if (res.confirm) {
+            try {
+              // 取消当前记录但不生成轨迹
+              tracker.cancelTracking && tracker.cancelTracking().catch(() => {});
+            } catch (error) {
+              logger.warn('cancelTracking onHide failed', error?.errMsg || error);
+            }
+          } else {
+            // 用户选择继续记录时，重新回到记录页
+            wx.navigateTo({
+              url: '/pages/record/record',
+            });
+          }
+        },
+      });
+    }
   },
 
   onUnload() {
@@ -605,6 +645,38 @@ Page({
     setTimeout(() => {
       this.setData({ locateAnimationActive: false });
     }, 300);
+  },
+
+  // 专供自定义导航栏返回按钮使用的安全返回逻辑
+  handleNavigateBackConfirm() {
+    if (this.data.tracking || this.data.paused) {
+      wx.showModal({
+        title: '提示',
+        content: '记录尚未结束，确定要退出吗？退出后本次记录将不会保存。',
+        confirmText: '退出',
+        cancelText: '继续记录',
+        success: (res) => {
+          if (res.confirm) {
+            // 标记为主动离开，避免 onHide 再次弹窗
+            this.__leavingExplicitly = true;
+            try {
+              // 主动取消当前记录，不保存为轨迹
+              tracker.cancelTracking && tracker.cancelTracking().catch(() => {});
+            } catch (error) {
+              logger.warn(
+                'cancelTracking on navigateBackConfirm failed',
+                error?.errMsg || error
+              );
+            }
+            wx.navigateBack({
+              fail: () => wx.switchTab({ url: '/pages/index/index' }),
+            });
+          }
+        },
+      });
+      return;
+    }
+    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
   },
 
   handleNavigateBack() {
