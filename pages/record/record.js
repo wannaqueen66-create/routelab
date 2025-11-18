@@ -32,6 +32,8 @@ const DEFAULT_CENTER = {
   longitude: 120.15515,
 };
 
+const MAP_AUTO_CENTER_INTERVAL_MS = 10000;
+
 const MAX_PHOTOS = 9;
 
 const MARKER_ICONS = {
@@ -152,6 +154,8 @@ Page({
   },
 
   onLoad() {
+    this._lastAutoCenterAt = 0;
+    this._lastUserMapInteractionAt = 0;
     this.unsubscribe = tracker.subscribe((state) => this.updateState(state));
     this.applySettings();
     this.checkLocationPermission(true);
@@ -362,7 +366,15 @@ Page({
     const caloriesText = formatCalories(caloriesValue);
     const stepsText = activityMeta.key === 'ride' ? '--' : `${Math.round(distance / 0.75)}`;
     const hasRoutePoints = routePoints.length > 0;
-    const latestPoint = hasRoutePoints ? routePoints[routePoints.length - 1] : DEFAULT_CENTER;
+    const fallbackCenter = {
+      latitude: Number.isFinite(this.data.userLatitude)
+        ? this.data.userLatitude
+        : DEFAULT_CENTER.latitude,
+      longitude: Number.isFinite(this.data.userLongitude)
+        ? this.data.userLongitude
+        : DEFAULT_CENTER.longitude,
+    };
+    const latestPoint = hasRoutePoints ? routePoints[routePoints.length - 1] : fallbackCenter;
     const userLatitude = hasRoutePoints ? latestPoint.latitude : this.data.userLatitude;
     const userLongitude = hasRoutePoints ? latestPoint.longitude : this.data.userLongitude;
 
@@ -374,13 +386,33 @@ Page({
       }
     }
 
-    if (
+    const now = Date.now();
+    const previousCenterLatitude = this.data.centerLatitude;
+    const previousCenterLongitude = this.data.centerLongitude;
+    let centerLatitude = previousCenterLatitude;
+    let centerLongitude = previousCenterLongitude;
+    const centerMissing =
+      !Number.isFinite(previousCenterLatitude) || !Number.isFinite(previousCenterLongitude);
+
+    const timeSinceLastAutoCenter = this._lastAutoCenterAt
+      ? now - this._lastAutoCenterAt
+      : Infinity;
+    const timeSinceLastUserInteraction = this._lastUserMapInteractionAt
+      ? now - this._lastUserMapInteractionAt
+      : Infinity;
+
+    const shouldAutoCenter =
       this.mapContext &&
       hasRoutePoints &&
       isTracking &&
       !isPaused &&
-      (latestPoint.latitude !== this.data.centerLatitude || latestPoint.longitude !== this.data.centerLongitude)
-    ) {
+      (centerMissing ||
+        (timeSinceLastAutoCenter >= MAP_AUTO_CENTER_INTERVAL_MS &&
+          timeSinceLastUserInteraction >= MAP_AUTO_CENTER_INTERVAL_MS));
+
+    if (shouldAutoCenter) {
+      centerLatitude = latestPoint.latitude;
+      centerLongitude = latestPoint.longitude;
       try {
         this.mapContext.moveToLocation({
           latitude: latestPoint.latitude,
@@ -389,7 +421,10 @@ Page({
       } catch (error) {
         logger.warn('moveToLocation failed', error?.errMsg || error);
       }
+      this._lastAutoCenterAt = now;
     }
+
+    const shouldAutoFitRoute = (isPaused || !isTracking) && hasRoutePoints;
 
     const polyline = routePoints.length >= 2
       ? [
@@ -447,7 +482,7 @@ Page({
       : [];
 
     const markers = [...startMarker, ...pauseMarkers, ...liveMarker];
-    const includePoints = routePoints.length
+    const includePoints = shouldAutoFitRoute
       ? routePoints.map((point) => ({ ...point }))
       : [];
 
@@ -468,8 +503,8 @@ Page({
       manualActivityKey: hasManualActivity ? manualActivityKey : '',
       activityManual: hasManualActivity,
       hasRoutePoints: hasRoutePoints,
-      centerLatitude: latestPoint.latitude,
-      centerLongitude: latestPoint.longitude,
+      centerLatitude: Number.isFinite(centerLatitude) ? centerLatitude : latestPoint.latitude,
+      centerLongitude: Number.isFinite(centerLongitude) ? centerLongitude : latestPoint.longitude,
       userLatitude,
       userLongitude,
     });
@@ -485,6 +520,15 @@ Page({
         latitude: this.data.centerLatitude,
         longitude: this.data.centerLongitude,
       });
+    }
+  },
+
+  handleMapRegionChange(event) {
+    const detail = (event && event.detail) || {};
+    const eventType = event?.type || detail.type;
+    const causedBy = event?.causedBy || detail.causedBy || '';
+    if (eventType === 'end' && (causedBy === 'drag' || causedBy === 'scale')) {
+      this._lastUserMapInteractionAt = Date.now();
     }
   },
 

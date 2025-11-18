@@ -21,6 +21,7 @@
     polyline="{{polyline}}"
     include-points="{{includePoints}}"
     bindtap="handleMapTap"
+    bindregionchange="handleMapRegionChange"
     ></map>
 
     <view class="map-tip" wx:if="{{!tracking && !hasRoutePoints}}">
