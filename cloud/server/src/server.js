@@ -135,6 +135,8 @@ const USER_GENDER_VALUES = new Set(['male', 'female']);
 const USER_AGE_RANGE_VALUES = new Set(['under18', '18_24', '25_34', '35_44', '45_54', '55_plus']);
 const USER_IDENTITY_VALUES = new Set(['minor', 'undergrad', 'postgrad', 'staff', 'resident', 'other']);
 const ANNOUNCEMENT_STATUS_VALUES = new Set(['draft', 'published']);
+const ANNOUNCEMENT_DELIVERY_MODE_VALUES = new Set(['single', 'persistent']);
+const ANNOUNCEMENT_TARGET_AUDIENCE_VALUES = new Set(['all', 'new_users']);
 
 function sanitizeEnumValue(value, allowedValues) {
   if (typeof value !== 'string') {
@@ -1466,6 +1468,16 @@ function mapAnnouncementRow(row) {
     title: typeof row.title === 'string' ? row.title : '',
     body: typeof row.body === 'string' ? row.body : '',
     status: typeof row.status === 'string' ? row.status : 'draft',
+    targetAudience:
+      typeof row.target_audience === 'string' && row.target_audience.trim()
+        ? row.target_audience.trim()
+        : 'all',
+    deliveryMode:
+      typeof row.delivery_mode === 'string' && ANNOUNCEMENT_DELIVERY_MODE_VALUES.has(row.delivery_mode)
+        ? row.delivery_mode
+        : 'single',
+    forceRead: row.force_read === true,
+    linkUrl: typeof row.link_url === 'string' ? row.link_url : null,
     publishAt: row.publish_at instanceof Date ? row.publish_at.getTime() : null,
     createdAt: row.created_at instanceof Date ? row.created_at.getTime() : null,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.getTime() : null,
@@ -6172,14 +6184,37 @@ app.post('/api/admin/announcements', ensureAuth, async (req, res) => {
     publishAt = new Date();
   }
 
+  let deliveryMode =
+    typeof body.deliveryMode === 'string' && body.deliveryMode.trim()
+      ? body.deliveryMode.trim().toLowerCase()
+      : 'single';
+  if (!ANNOUNCEMENT_DELIVERY_MODE_VALUES.has(deliveryMode)) {
+    deliveryMode = 'single';
+  }
+
+  let targetAudience =
+    typeof body.targetAudience === 'string' && body.targetAudience.trim()
+      ? body.targetAudience.trim().toLowerCase()
+      : 'all';
+  if (!ANNOUNCEMENT_TARGET_AUDIENCE_VALUES.has(targetAudience)) {
+    targetAudience = 'all';
+  }
+
+  const forceRead = body.forceRead === true;
+
+  let linkUrl = '';
+  if (typeof body.linkUrl === 'string') {
+    linkUrl = body.linkUrl.trim();
+  }
+
   try {
     const result = await pool.query(
       `
-        INSERT INTO announcements (title, body, status, publish_at)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO announcements (title, body, status, publish_at, delivery_mode, target_audience, force_read, link_url)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
       `,
-      [title, content, status, publishAt]
+      [title, content, status, publishAt, deliveryMode, targetAudience, forceRead, linkUrl || null]
     );
     res.status(201).json(mapAnnouncementRow(result.rows[0]));
   } catch (error) {
@@ -6251,6 +6286,50 @@ app.patch('/api/admin/announcements/:id', ensureAuth, async (req, res) => {
     }
     params.push(publishAt);
     fields.push(`publish_at = $${params.length}`);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'targetAudience')) {
+    let targetAudience =
+      typeof body.targetAudience === 'string' && body.targetAudience.trim()
+        ? body.targetAudience.trim().toLowerCase()
+        : '';
+    if (targetAudience && !ANNOUNCEMENT_TARGET_AUDIENCE_VALUES.has(targetAudience)) {
+      return res.status(400).json({ error: 'Invalid targetAudience value' });
+    }
+    if (targetAudience) {
+      params.push(targetAudience);
+      fields.push(`target_audience = $${params.length}`);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'deliveryMode')) {
+    let deliveryMode =
+      typeof body.deliveryMode === 'string' && body.deliveryMode.trim()
+        ? body.deliveryMode.trim().toLowerCase()
+        : '';
+    if (deliveryMode && !ANNOUNCEMENT_DELIVERY_MODE_VALUES.has(deliveryMode)) {
+      return res.status(400).json({ error: 'Invalid deliveryMode value' });
+    }
+    if (deliveryMode) {
+      params.push(deliveryMode);
+      fields.push(`delivery_mode = $${params.length}`);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'forceRead')) {
+    const forceRead = body.forceRead === true;
+    params.push(forceRead);
+    fields.push(`force_read = $${params.length}`);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'linkUrl')) {
+    let linkUrl = null;
+    if (typeof body.linkUrl === 'string') {
+      const trimmed = body.linkUrl.trim();
+      linkUrl = trimmed || null;
+    }
+    params.push(linkUrl);
+    fields.push(`link_url = $${params.length}`);
   }
 
   if (!fields.length) {
@@ -6589,6 +6668,30 @@ app.get('/api/announcements/latest', ensureAuth, async (req, res) => {
   } catch (error) {
     console.error('GET /api/announcements/latest failed', error);
     res.status(500).json({ error: 'Failed to fetch latest announcement' });
+  }
+});
+
+app.get('/api/announcements/active', ensureAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `
+        SELECT *
+        FROM announcements
+        WHERE status = 'published'
+          AND (publish_at IS NULL OR publish_at <= NOW())
+        ORDER BY
+          CASE WHEN delivery_mode = 'single' THEN 0 ELSE 1 END,
+          publish_at DESC NULLS LAST,
+          created_at DESC
+        LIMIT 20
+      `
+    );
+    res.json({
+      items: result.rows.map(mapAnnouncementRow),
+    });
+  } catch (error) {
+    console.error('GET /api/announcements/active failed', error);
+    res.status(500).json({ error: 'Failed to fetch active announcements' });
   }
 });
 

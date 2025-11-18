@@ -187,3 +187,8 @@ CREATE TABLE IF NOT EXISTS announcements (
 
 CREATE INDEX IF NOT EXISTS idx_announcements_status_publish_at
   ON announcements(status, publish_at DESC);
+
+ALTER TABLE announcements
+  ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'single',
+  ADD COLUMN IF NOT EXISTS force_read BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS link_url TEXT;

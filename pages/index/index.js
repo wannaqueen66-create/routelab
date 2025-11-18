@@ -592,31 +592,74 @@ Page({
 
   ensureAnnouncement() {
     const lastSeen = getLatestSeenAnnouncement();
+    const lastSeenId = lastSeen && Number(lastSeen.id);
+    const isNewUser = !Array.isArray(this.routes) || this.routes.length === 0;
+
     return api
-      .getLatestAnnouncement()
-      .then((announcement) => {
-        if (!announcement || !announcement.id) {
+      .getActiveAnnouncements()
+      .then((res) => {
+        const list = Array.isArray(res?.items) ? res.items : [];
+        if (!list.length) {
           this.setData({
             announcementModalVisible: false,
             announcementModal: null,
           });
           return;
         }
-        const latestId = Number(announcement.id);
-        const lastSeenId = lastSeen && Number(lastSeen.id);
-        if (Number.isFinite(lastSeenId) && latestId <= lastSeenId) {
+
+        const eligible = list.filter((item) => {
+          const audience = (item.targetAudience || 'all').toLowerCase();
+          if (audience === 'new_users' && !isNewUser) {
+            return false;
+          }
+          return true;
+        });
+
+        if (!eligible.length) {
           return;
         }
+
+        let candidate = null;
+
+        // 1) 一次性公告优先，且只弹未读的
+        const singles = eligible.filter((item) => item.deliveryMode !== 'persistent');
+        if (singles.length) {
+          candidate =
+            singles.find((item) => {
+              const id = Number(item.id);
+              if (!Number.isFinite(id)) return false;
+              if (Number.isFinite(lastSeenId) && id <= lastSeenId) {
+                return false;
+              }
+              return true;
+            }) || null;
+        }
+
+        // 2) 如果没有可弹的一次性公告，再看常驻公告
+        if (!candidate) {
+          const persistents = eligible.filter((item) => item.deliveryMode === 'persistent');
+          if (persistents.length) {
+            candidate = persistents[0];
+          }
+        }
+
+        if (!candidate || !candidate.id) {
+          return;
+        }
+
         const publishAt =
-          typeof announcement.publishAt === 'number' && Number.isFinite(announcement.publishAt)
-            ? announcement.publishAt
+          typeof candidate.publishAt === 'number' && Number.isFinite(candidate.publishAt)
+            ? candidate.publishAt
             : null;
         const modalPayload = {
-          id: latestId,
-          title: announcement.title || '系统公告',
-          body: announcement.body || '',
+          id: Number(candidate.id),
+          title: candidate.title || '系统公告',
+          body: candidate.body || '',
           publishAt,
           publishAtText: publishAt ? new Date(publishAt).toLocaleString('zh-CN') : '',
+          deliveryMode: candidate.deliveryMode || 'single',
+          forceRead: !!candidate.forceRead,
+          linkUrl: candidate.linkUrl || '',
         };
         this.latestAnnouncement = modalPayload;
         this.setData({
@@ -860,6 +903,30 @@ Page({
       announcementModalVisible: false,
       announcementModal: null,
     });
+  },
+
+  handleSkipAnnouncement() {
+    this.setData({
+      announcementModalVisible: false,
+      announcementModal: null,
+    });
+  },
+
+  handleAnnouncementLinkTap() {
+    const modal = this.data.announcementModal || {};
+    const url = modal.linkUrl;
+    if (!url || typeof url !== 'string') {
+      return;
+    }
+    if (url.charAt(0) === '/') {
+      try {
+        wx.navigateTo({ url });
+      } catch (e) {
+        wx.showToast({ title: '无法打开链接', icon: 'none' });
+      }
+    } else {
+      wx.showToast({ title: '暂不支持外部链接', icon: 'none' });
+    }
   },
 
   handleManualSync() {

@@ -486,9 +486,13 @@ Page({
       ? routePoints.map((point) => ({ ...point }))
       : [];
 
+    // �� "������¼" �� �׶Σ�ҳ�治�ٱ����ڼ�¼״̬����������뿪ʱ����ʾδ����¼�Ի���
+    const trackingFlag = this.data.finishSheetVisible ? false : isTracking;
+    const pausedFlag = this.data.finishSheetVisible ? false : isPaused;
+
     this.setData({
-      tracking: isTracking,
-      paused: isPaused,
+      tracking: trackingFlag,
+      paused: pausedFlag,
       durationText,
       distanceText,
       speedText,
@@ -784,7 +788,8 @@ Page({
   },
 
   handleFinishCancel() {
-    const shouldResume = this.data.finishAutoPaused && this.data.tracking;
+    // ������¼������ѡ��ȡ��ʱ������Ƿ��Զ�����¼ʱ��Ҫ�ָ�
+    const shouldResume = this.data.finishAutoPaused;
     this.setData({
       finishSheetVisible: false,
       finishAutoPaused: false,
@@ -976,6 +981,21 @@ Page({
       wx.showToast({ title: TOAST.maxPhotos, icon: 'none' });
       return;
     }
+    // ��ͼǰ����ǰ��¼״̬����ʱ�ر� tracking ���Դ� onHide �ж�
+    const trackingBeforePhoto = this.data.tracking;
+    const pausedBeforePhoto = this.data.paused;
+    if (trackingBeforePhoto || pausedBeforePhoto) {
+      this.__hidePromptStateBackup = {
+        tracking: trackingBeforePhoto,
+        paused: pausedBeforePhoto,
+      };
+      this.setData({
+        tracking: false,
+        paused: false,
+      });
+    } else {
+      this.__hidePromptStateBackup = null;
+    }
     wx.chooseMedia({
       count: MAX_PHOTOS - this.data.photos.length,
       mediaType: ['image'],
@@ -985,6 +1005,16 @@ Page({
         const newPhotos = res.tempFiles.map((file) => ({ path: file.tempFilePath, note: '' }));
         const normalized = normalizePhotos([...this.data.photos, ...newPhotos]);
         this.setData({ photos: normalized });
+      },
+      complete: () => {
+        const backup = this.__hidePromptStateBackup;
+        this.__hidePromptStateBackup = null;
+        if (backup && (backup.tracking || backup.paused)) {
+          this.setData({
+            tracking: backup.tracking,
+            paused: backup.paused,
+          });
+        }
       },
     });
   },
@@ -1001,9 +1031,33 @@ Page({
     if (!photos.length) {
       return;
     }
+    const trackingBeforePreview = this.data.tracking;
+    const pausedBeforePreview = this.data.paused;
+    if (trackingBeforePreview || pausedBeforePreview) {
+      this.__hidePromptStateBackup = {
+        tracking: trackingBeforePreview,
+        paused: pausedBeforePreview,
+      };
+      this.setData({
+        tracking: false,
+        paused: false,
+      });
+    } else {
+      this.__hidePromptStateBackup = null;
+    }
     wx.previewImage({
       current: photos[Number(index)]?.path,
       urls: photos.map((item) => item.path),
+      complete: () => {
+        const backup = this.__hidePromptStateBackup;
+        this.__hidePromptStateBackup = null;
+        if (backup && (backup.tracking || backup.paused)) {
+          this.setData({
+            tracking: backup.tracking,
+            paused: backup.paused,
+          });
+        }
+      },
     });
   },
 
@@ -1012,10 +1066,31 @@ Page({
       return;
     }
     this.setData({ locationPromptPending: true });
-    this.requestLocationAccess()
-      .finally(() => {
-        this.setData({ locationPromptPending: false });
+    const trackingBefore = this.data.tracking;
+    const pausedBefore = this.data.paused;
+    if (trackingBefore || pausedBefore) {
+      this.__hidePromptStateBackup = {
+        tracking: trackingBefore,
+        paused: pausedBefore,
+      };
+      this.setData({
+        tracking: false,
+        paused: false,
       });
+    } else {
+      this.__hidePromptStateBackup = null;
+    }
+    this.requestLocationAccess().finally(() => {
+      this.setData({ locationPromptPending: false });
+      const backup = this.__hidePromptStateBackup;
+      this.__hidePromptStateBackup = null;
+      if (backup && (backup.tracking || backup.paused)) {
+        this.setData({
+          tracking: backup.tracking,
+          paused: backup.paused,
+        });
+      }
+    });
   },
 
   handleLocationPermissionOpenSettings() {
@@ -1023,6 +1098,20 @@ Page({
       return;
     }
     this.setData({ locationPromptPending: true });
+    const trackingBefore = this.data.tracking;
+    const pausedBefore = this.data.paused;
+    if (trackingBefore || pausedBefore) {
+      this.__hidePromptStateBackup = {
+        tracking: trackingBefore,
+        paused: pausedBefore,
+      };
+      this.setData({
+        tracking: false,
+        paused: false,
+      });
+    } else {
+      this.__hidePromptStateBackup = null;
+    }
     openLocationSetting()
       .then(() => this.checkLocationPermission(false))
       .catch((error) => {
@@ -1031,6 +1120,14 @@ Page({
       })
       .finally(() => {
         this.setData({ locationPromptPending: false });
+        const backup = this.__hidePromptStateBackup;
+        this.__hidePromptStateBackup = null;
+        if (backup && (backup.tracking || backup.paused)) {
+          this.setData({
+            tracking: backup.tracking,
+            paused: backup.paused,
+          });
+        }
       });
   },
 });

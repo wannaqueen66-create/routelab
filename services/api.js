@@ -586,6 +586,13 @@ function saveUserAchievements(stats = {}) {
   });
 }
 
+function getActiveAnnouncements() {
+  return request({
+    path: '/announcements/active',
+    method: 'GET',
+  });
+}
+
 // Safe reverse geocoding with local fallbacks and normalization
 function reverseGeocodeSafe({ latitude, longitude } = {}) {
   if (latitude === undefined || longitude === undefined) {
@@ -652,6 +659,7 @@ module.exports = {
   reverseGeocodeSafe,
   getRouteById,
   getLatestAnnouncement,
+  getActiveAnnouncements,
   updateUserProfile,
   getUserSettings,
   saveUserSettings,

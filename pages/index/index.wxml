@@ -303,6 +303,20 @@
       </scroll-view>
       <view class="announcement-dialog__actions">
         <button
+          wx:if="{{!announcementModal.forceRead}}"
+          class="announcement-dialog__btn"
+          bindtap="handleSkipAnnouncement"
+        >
+          稍后再看
+        </button>
+        <button
+          wx:if="{{announcementModal.linkUrl}}"
+          class="announcement-dialog__btn"
+          bindtap="handleAnnouncementLinkTap"
+        >
+          查看详情
+        </button>
+        <button
           class="announcement-dialog__btn announcement-dialog__btn--primary"
           bindtap="handleConfirmAnnouncement"
         >

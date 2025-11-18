@@ -319,6 +319,9 @@ function AnnouncementsManagement() {
     title: '',
     body: '',
     status: 'draft',
+    deliveryMode: 'single',
+    forceRead: false,
+    linkUrl: '',
     publishAt: '',
   });
   const [saving, setSaving] = useState(false);
@@ -348,6 +351,9 @@ function AnnouncementsManagement() {
       title: '',
       body: '',
       status: 'draft',
+      deliveryMode: 'single',
+      forceRead: false,
+      linkUrl: '',
       publishAt: '',
     });
   };
@@ -358,6 +364,9 @@ function AnnouncementsManagement() {
       title: item.title || '',
       body: item.body || '',
       status: item.status || 'draft',
+      deliveryMode: item.deliveryMode || 'single',
+      forceRead: Boolean(item.forceRead),
+      linkUrl: item.linkUrl || '',
       publishAt: item.publishAt ? formatDateTimeLocalInput(item.publishAt) : '',
     });
   };
@@ -382,6 +391,9 @@ function AnnouncementsManagement() {
       title,
       body,
       status: form.status || 'draft',
+      deliveryMode: form.deliveryMode || 'single',
+      forceRead: Boolean(form.forceRead),
+      linkUrl: (form.linkUrl || '').trim(),
     };
     if (form.publishAt) {
       const date = new Date(form.publishAt);
