@@ -1,4 +1,6 @@
 {
-  "navigationBarTitleText": "问题反馈"
+  "navigationBarTitleText": "问题反馈",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
 }
-

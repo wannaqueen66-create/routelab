@@ -6,6 +6,8 @@
 .feedback-scroll {
   padding: 24rpx 32rpx 40rpx;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .feedback-card {
@@ -63,4 +65,3 @@
 .feedback-submit-btn::after {
   border: none;
 }
-
