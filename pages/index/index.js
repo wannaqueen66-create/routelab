@@ -32,6 +32,7 @@ const {
 } = require('../../utils/storage');
 const { STORAGE_KEYS } = require('../../constants/storage');
 const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
+const rewards = require('../../services/rewards');
 
 const app = typeof getApp === 'function' ? getApp() : null;
 
@@ -394,6 +395,23 @@ function createProfileCard({ settings, profile, account }) {
     defaultPublic,
   };
 }
+
+function buildUserCard({ settings, profile, account, overview }) {
+  const base = createProfileCard({ settings, profile, account, overview });
+  const achievementSnapshot = rewards.getAchievementSnapshot();
+  const unlockedText = `已获勋章：${achievementSnapshot.unlockedCount}/${achievementSnapshot.badgeCount}`;
+  const nextHint = achievementSnapshot.nextBadge
+    ? `${achievementSnapshot.nextBadge.icon} ${achievementSnapshot.nextBadge.label} 还差 ${achievementSnapshot.remainingToNext} 分`
+    : '已解锁全部勋章';
+  return {
+    ...base,
+    totalPoints: achievementSnapshot.totalPoints,
+    badgeIcon: achievementSnapshot.badgeIcon,
+    badgeLabel: achievementSnapshot.badgeLabel,
+    badgeUnlockedText: unlockedText,
+    badgeNextHint: nextHint,
+  };
+}
 function shouldFixPlaceName(name = '') {
   if (!name || typeof name !== 'string') return true;
   const value = name.trim();
@@ -405,10 +423,11 @@ function shouldFixPlaceName(name = '') {
 const EMPTY_OVERVIEW = createOverview([]);
 const EMPTY_PROGRESS = buildProgressFromOverview(EMPTY_OVERVIEW);
 const DEFAULT_WEATHER = createWeatherState({ loading: true });
-const DEFAULT_USER_CARD = createProfileCard({
+const DEFAULT_USER_CARD = buildUserCard({
   settings: {},
   profile: null,
   account: null,
+  overview: EMPTY_OVERVIEW,
 });
 
 Page({
@@ -475,7 +494,7 @@ Page({
     if (latestAccount && latestAccount.id !== this.account?.id) {
       this.account = latestAccount;
       this.setData({
-        userCard: createProfileCard({
+        userCard: buildUserCard({
           overview: this.currentOverview,
           settings: this.settings,
           profile: this.profile,
@@ -533,7 +552,7 @@ Page({
     const overview = createOverview(this.routes);
     this.currentOverview = overview;
     const progress = buildProgressFromOverview(overview);
-    const userCard = createProfileCard({
+    const userCard = buildUserCard({
       overview,
       settings: this.settings,
       profile: this.profile,
@@ -1017,6 +1036,12 @@ Page({
   handleOpenFeedback() {
     wx.navigateTo({
       url: '/pages/feedback/feedback',
+    });
+  },
+
+  handleOpenBadgeWall() {
+    wx.navigateTo({
+      url: '/pages/badges/badges',
     });
   },
 

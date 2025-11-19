@@ -1,3 +1,7 @@
 {
-  "navigationBarTitleText": "勋章墙"
+  "navigationBarTitleText": "勋章墙",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
 }
+
