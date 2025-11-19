@@ -41,17 +41,6 @@
         />
       </view>
 
-      <view class="feedback-field">
-        <text class="feedback-label">联系方式（选填）</text>
-        <input
-          class="feedback-input"
-          placeholder="微信号 / 邮箱 / 手机号，便于我们与你联系"
-          value="{{contact}}"
-          bindinput="handleContactInput"
-          maxlength="80"
-        />
-      </view>
-
       <button
         class="feedback-submit-btn"
         bindtap="handleSubmit"
@@ -63,3 +52,4 @@
     </view>
   </scroll-view>
 </view>
+

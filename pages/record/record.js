@@ -188,7 +188,7 @@ Page({
       return;
     }
     // 系统返回 / 导航导致页面隐藏时，如果仍在记录中，则给出二次确认
-    if (this.data.tracking || this.data.paused) {
+    if (false && (this.data.tracking || this.data.paused)) {
       wx.showModal({
         title: '提示',
         content: '记录尚未结束，确定要退出吗？退出后本次记录将不会保存。',

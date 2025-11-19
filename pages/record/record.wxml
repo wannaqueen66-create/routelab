@@ -5,6 +5,7 @@
         background="transparent"
         color="#1F2329"
         home-button="{{false}}"
+        custom-back="{{true}}"
         bindback="handleNavigateBackConfirm"
       ></rlab-nav>
     </view>

@@ -13,7 +13,6 @@ Page({
     categoryIndex: 0,
     title: '',
     content: '',
-    contact: '',
     submitting: false,
   },
 
@@ -30,10 +29,6 @@ Page({
     this.setData({ content: event.detail.value || '' });
   },
 
-  handleContactInput(event) {
-    this.setData({ contact: event.detail.value || '' });
-  },
-
   handleSubmit() {
     if (this.data.submitting) return;
     const title = (this.data.title || '').trim();
@@ -47,7 +42,6 @@ Page({
       return;
     }
     const category = this.data.categoryOptions[this.data.categoryIndex]?.key || 'other';
-    const contact = (this.data.contact || '').trim();
 
     this.setData({ submitting: true });
     api
@@ -55,7 +49,6 @@ Page({
         category,
         title,
         content,
-        contact,
       })
       .then(() => {
         wx.showToast({ title: '反馈已提交', icon: 'success' });
