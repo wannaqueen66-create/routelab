@@ -156,19 +156,22 @@ export default function AdminDashboard({ role: roleProp } = {}) {
       setSummary(null);
       setTimeseries(null);
       setDistribution(null);
+      setQualityMetrics(null);
       setLoadingAnalytics(false);
       return;
     }
     setLoadingAnalytics(true);
     try {
-      const [summaryData, timeseriesData, distributionData] = await Promise.all([
+      const [summaryData, timeseriesData, distributionData, qualityData] = await Promise.all([
         fetchAdminAnalyticsSummary(),
         fetchAdminAnalyticsTimeseries(),
         fetchAdminCollectionDistribution(),
+        fetchAdminQualityMetrics(),
       ]);
       setSummary(summaryData);
       setTimeseries(timeseriesData);
       setDistribution(distributionData);
+      setQualityMetrics(qualityData);
     } catch (error) {
       showBanner(error?.response?.data?.error || error.message || '加载统计数据失败', 'error');
     } finally {
@@ -674,7 +677,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
     </div>
   );
 }
-
 
 
 

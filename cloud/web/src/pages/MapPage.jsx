@@ -406,15 +406,30 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
 
 // Statistics Summary Component
 function StatsSummary({ routes, loading }) {
-  const totalDistance = routes.reduce(
-    (sum, r) => sum + (r.stats?.distance_meters || 0),
-    0
-  );
-  const totalDuration = routes.reduce(
-    (sum, r) => sum + (r.stats?.duration_seconds || 0),
-    0
-  );
-  const uniqueUsers = new Set(routes.map((r) => r.user_id)).size;
+  const totalDistance = routes.reduce((sum, route) => {
+    const distanceMeters = Number(
+      route.statSummary?.distance ??
+        route.stats?.distance ??
+        route.stats?.distance_m ??
+        route.stats?.distance_meters ??
+        0
+    );
+    return sum + (Number.isFinite(distanceMeters) ? distanceMeters : 0);
+  }, 0);
+
+  const totalDuration = routes.reduce((sum, route) => {
+    const durationSeconds = Number(
+      route.statSummary?.durationSeconds ??
+        route.statSummary?.duration ??
+        route.stats?.duration_seconds ??
+        (route.stats?.duration ? route.stats.duration / 1000 : 0)
+    );
+    return sum + (Number.isFinite(durationSeconds) ? durationSeconds : 0);
+  }, 0);
+
+  const uniqueUsers = new Set(
+    routes.map((r) => r.ownerId ?? r.user_id ?? r.userId)
+  ).size;
 
   return (
     <div className="stats-summary">
@@ -447,7 +462,7 @@ export default function MapPage() {
   const [selectedRoute, setSelectedRoute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showRouteList, setShowRouteList] = useState(false);
-  const [showFilterPanel, setShowFilterPanel] = useState(true);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [mapType, setMapType] = useState('standard');
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [heatmapIntensity, setHeatmapIntensity] = useState('medium');
@@ -504,18 +519,8 @@ export default function MapPage() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
-      // Load both routes and users for filtering
-      const [routesData, usersData] = await Promise.all([
-        fetchAdminRoutes({
-          pageSize: 100,
-          includePoints: true,
-          sort: 'startTime',
-          order: 'desc',
-        }),
-        fetchAdminUsers({ pageSize: 100 }),
-      ]);
-
-      setRoutes(routesData.items || routesData.routes || []);
+      // 仅加载用户列表用于筛选，轨迹数据由 loadRoutes 统一管理
+      const usersData = await fetchAdminUsers({ pageSize: 100 });
       setUsers(usersData.items || usersData.users || []);
     } catch (err) {
       console.error('Failed to load initial data:', err);
@@ -565,6 +570,11 @@ export default function MapPage() {
       setLoading(false);
     }
   }, [filters]);
+
+  // 首次加载以及筛选条件变更时刷新轨迹列表和地图
+  useEffect(() => {
+    loadRoutes();
+  }, [loadRoutes]);
 
   const handleRouteSelect = async (route, options = {}) => {
     const { openDetailModal = false } = options;
@@ -638,7 +648,6 @@ export default function MapPage() {
           <MapPin size={24} />
           <h1>全局轨迹地图</h1>
         </div>
-        <StatsSummary routes={routes} loading={loading} />
       </div>
 
       <div className="map-toolbar">
@@ -826,6 +835,11 @@ export default function MapPage() {
               )}
             </MapContainer>
 
+            {/* Floating stats summary */}
+            <div className="map-stats-overlay">
+              <StatsSummary routes={routes} loading={loading} />
+            </div>
+
             {/* Loading Overlay */}
             {loading && (
               <div className="map-loading-overlay">
@@ -896,10 +910,31 @@ export default function MapPage() {
                         </div>
                         <div className="route-item-stats">
                           <div className="route-stat">
-                            <span>{formatDistance(route.stats?.distance_meters || route.distance || 0)}</span>
+                            <span>
+                              {formatDistance(
+                                Number(
+                                  route.statSummary?.distance ??
+                                    route.stats?.distance ??
+                                    route.stats?.distance_m ??
+                                    route.stats?.distance_meters ??
+                                    0
+                                ) || 0
+                              )}
+                            </span>
                           </div>
                           <div className="route-stat">
-                            <span>{formatDuration(route.stats?.duration_seconds || route.duration || 0)}</span>
+                            <span>
+                              {formatDuration(
+                                Number(
+                                  route.statSummary?.durationSeconds ??
+                                    route.statSummary?.duration ??
+                                    route.stats?.duration_seconds ??
+                                    (route.stats?.duration
+                                      ? route.stats.duration / 1000
+                                      : 0)
+                                ) || 0
+                              )}
+                            </span>
                           </div>
                           {(() => {
                             const purposeKey = route.purposeType || route.purpose || route.trip_purpose;

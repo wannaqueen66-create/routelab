@@ -207,6 +207,12 @@ export async function updateAdminUser(id, payload = {}) {
   return response.data;
 }
 
+export async function updateAdminUserAchievements(id, payload = {}) {
+  if (!id) throw new Error('User id is required');
+  const response = await client.patch(`/admin/users/${id}/achievements`, payload);
+  return response.data;
+}
+
 export async function fetchAdminAnalyticsSummary(params = {}) {
   const response = await client.get('/admin/analytics/summary', { params });
   return response.data;
@@ -226,6 +232,13 @@ export async function fetchAdminCollectionDistribution(params = {}) {
 
 export async function fetchAdminQualityMetrics(params = {}) {
   const response = await client.get('/admin/analytics/quality', { params });
+  return response.data;
+}
+
+export async function fetchAdminPurposeDistribution(params = {}) {
+  const response = await client.get('/admin/analytics/purpose-distribution', {
+    params,
+  });
   return response.data;
 }
 

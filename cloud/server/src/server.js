@@ -1809,6 +1809,38 @@ async function fetchAdminUserDetail(userId, { includeRoutes = true, routeLimit =
     profile: baseProfile,
   };
 
+  // Attach achievements snapshot if available
+  try {
+    const achievementsResult = await pool.query(
+      'SELECT payload, updated_at FROM user_achievements WHERE user_id = $1',
+      [numericUserId]
+    );
+    if (achievementsResult.rows.length) {
+      const aRow = achievementsResult.rows[0];
+      const payload =
+        aRow.payload && typeof aRow.payload === 'object' ? { ...aRow.payload } : {};
+      const totalPoints = Number(payload.totalPoints);
+      const currentBadgeRaw =
+        typeof payload.currentBadge === 'string' ? payload.currentBadge : 'rookie';
+      const updatedAtMs =
+        aRow.updated_at instanceof Date
+          ? aRow.updated_at.getTime()
+          : Number(payload.updatedAt) || Date.now();
+      result.achievements = {
+        totalPoints: Number.isFinite(totalPoints) && totalPoints >= 0
+          ? Math.floor(totalPoints)
+          : 0,
+        currentBadge: currentBadgeRaw.trim() || 'rookie',
+        updatedAt: updatedAtMs,
+      };
+    }
+  } catch (error) {
+    console.error('fetchAdminUserDetail: load achievements failed', {
+      userId: numericUserId,
+      message: error?.message,
+    });
+  }
+
   if (includeRoutes) {
     const { items } = await fetchAdminRoutes({
       filters: { userId: numericUserId, sort: 'startTime', order: 'DESC' },
@@ -1988,10 +2020,62 @@ async function computeCollectionDistribution(rangeDays = 30) {
 
   return {
     rangeDays: numericRange,
-    buckets: result.rows.map((row) => ({
-      bucket: row.bucket,
-      samples: Number(row.samples || 0),
-    })),
+      buckets: result.rows.map((row) => ({
+        bucket: row.bucket,
+        samples: Number(row.samples || 0),
+      })),
+  };
+}
+
+async function computePurposeDistribution(rangeDays = 30) {
+  const numericRange = Math.min(Math.max(Number(rangeDays) || 30, 1), 365);
+  const since = new Date(Date.now() - numericRange * 24 * 60 * 60 * 1000);
+
+  const result = await pool.query(
+    `
+      SELECT
+        COALESCE(NULLIF(meta->>'purposeType', ''), 'unknown') AS purpose_key,
+        COUNT(*) AS routes_count
+      FROM routes
+      WHERE deleted_at IS NULL
+        AND start_time IS NOT NULL
+        AND start_time >= $1
+      GROUP BY purpose_key
+    `,
+    [since]
+  );
+
+  const rows = Array.isArray(result.rows) ? result.rows : [];
+  const totalRoutes = rows.reduce(
+    (sum, row) => sum + Number(row.routes_count || 0),
+    0
+  );
+
+  const buckets = rows
+    .map((row) => {
+      const key = row.purpose_key || 'unknown';
+      const count = Number(row.routes_count || 0);
+      const definition = PURPOSE_TYPE_DEFINITIONS[key];
+      const label =
+        (definition && definition.label) ||
+        (key === 'unknown' ? '未设置' : key);
+      const percentage =
+        totalRoutes > 0
+          ? Number(((count / totalRoutes) * 100).toFixed(1))
+          : 0;
+      return {
+        key,
+        label,
+        count,
+        percentage,
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  return {
+    rangeDays: numericRange,
+    totalRoutes,
+    buckets,
   };
 }
 
@@ -2059,6 +2143,7 @@ function buildRoutesCsv(items = []) {
     'duration',
     'calories',
     'pointCount',
+    'points',
     'purposeType',
     'privacyLevel',
     'createdAt',
@@ -2068,6 +2153,20 @@ function buildRoutesCsv(items = []) {
   const lines = [headers.join(',')];
   items.forEach((route) => {
     const statSummary = route.statSummary || {};
+    let pointsCell = '';
+    if (Array.isArray(route.points) && route.points.length) {
+      pointsCell = route.points
+        .map((point) => {
+          const lat = Number(point.latitude);
+          const lon = Number(point.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return null;
+          }
+          return `${lon},${lat}`;
+        })
+        .filter(Boolean)
+        .join(' ; ');
+    }
     const line = [
       route.id,
       route.ownerId ?? route.userId ?? null,
@@ -2078,6 +2177,7 @@ function buildRoutesCsv(items = []) {
       statSummary.duration ?? route.stats?.duration ?? null,
       statSummary.calories ?? route.stats?.calories ?? null,
       route.pointCount ?? (Array.isArray(route.points) ? route.points.length : null),
+      pointsCell,
       sanitizeEnumValue(route.purposeType ?? route.meta?.purposeType, PURPOSE_TYPE_VALUES),
       route.privacyLevel,
       route.createdAt ? new Date(route.createdAt).toISOString() : '',
@@ -5965,7 +6065,8 @@ app.post('/api/admin/routes/export', ensureAuth, async (req, res) => {
         'Content-Disposition',
         `attachment; filename="routes-export-${label}.csv"`
       );
-      res.send(csv);
+      // Add UTF-8 BOM to help Excel正确识别中文编码
+      res.send(`\uFEFF${csv}`);
       return;
     }
     if (format === 'excel' || format === 'xlsx') {
@@ -6193,6 +6294,93 @@ app.patch('/api/admin/users/:id', ensureAuth, async (req, res) => {
   }
 });
 
+app.patch('/api/admin/users/:id/achievements', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const userIdRaw = req.params.id;
+  const userId = Number(userIdRaw);
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(400).json({ error: 'Invalid user id' });
+  }
+
+  const body = req.body || {};
+  const totalPointsCandidate = Number(body.totalPoints);
+  const totalPoints =
+    Number.isFinite(totalPointsCandidate) && totalPointsCandidate >= 0
+      ? Math.floor(totalPointsCandidate)
+      : null;
+  const currentBadgeRaw = typeof body.currentBadge === 'string' ? body.currentBadge : '';
+  const currentBadge = currentBadgeRaw.trim();
+
+  if (totalPoints === null && !currentBadge) {
+    return res.status(400).json({ error: 'No achievement fields to update' });
+  }
+
+  try {
+    const existing = await pool.query(
+      'SELECT payload FROM user_achievements WHERE user_id = $1',
+      [userId]
+    );
+    const basePayload =
+      existing.rows[0]?.payload && typeof existing.rows[0].payload === 'object'
+        ? { ...existing.rows[0].payload }
+        : { totalPoints: 0, currentBadge: 'rookie', routeHistory: {} };
+
+    const nextPayload = {
+      ...basePayload,
+      totalPoints:
+        totalPoints !== null
+          ? totalPoints
+          : Number.isFinite(Number(basePayload.totalPoints))
+          ? Math.floor(Number(basePayload.totalPoints))
+          : 0,
+      currentBadge: currentBadge || basePayload.currentBadge || 'rookie',
+    };
+    const now = new Date();
+    nextPayload.updatedAt = now.getTime();
+
+    const result = await pool.query(
+      `INSERT INTO user_achievements (user_id, payload, updated_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) DO UPDATE
+         SET payload = EXCLUDED.payload,
+             updated_at = EXCLUDED.updated_at
+       RETURNING payload, updated_at`,
+      [userId, nextPayload, now]
+    );
+
+    const row = result.rows[0];
+    const persistedPayload =
+      row.payload && typeof row.payload === 'object' ? row.payload : nextPayload;
+    const persistedTotalPoints = Number(persistedPayload.totalPoints);
+    const persistedBadgeRaw =
+      typeof persistedPayload.currentBadge === 'string'
+        ? persistedPayload.currentBadge
+        : nextPayload.currentBadge;
+    const updatedAtMs =
+      row.updated_at instanceof Date
+        ? row.updated_at.getTime()
+        : Number(persistedPayload.updatedAt) || now.getTime();
+
+    res.json({
+      totalPoints:
+        Number.isFinite(persistedTotalPoints) && persistedTotalPoints >= 0
+          ? Math.floor(persistedTotalPoints)
+          : 0,
+      currentBadge: persistedBadgeRaw.trim() || 'rookie',
+      updatedAt: updatedAtMs,
+    });
+  } catch (error) {
+    console.error('PATCH /api/admin/users/:id/achievements failed', {
+      userId,
+      message: error?.message,
+      stack: error?.stack,
+    });
+    res.status(500).json({ error: 'Failed to update user achievements' });
+  }
+});
+
 app.get('/api/admin/analytics/summary', ensureAuth, async (req, res) => {
   if (!ensureAdminRequest(req, res)) {
     return;
@@ -6232,6 +6420,20 @@ app.get('/api/admin/analytics/collection-distribution', ensureAuth, async (req, 
   } catch (error) {
     console.error('GET /api/admin/analytics/collection-distribution failed', error);
     res.status(500).json({ error: 'Failed to compute collection distribution' });
+  }
+});
+
+app.get('/api/admin/analytics/purpose-distribution', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const rangeDays = Number(req.query.rangeDays || req.query.range || 30);
+  try {
+    const distribution = await computePurposeDistribution(rangeDays);
+    res.json(distribution);
+  } catch (error) {
+    console.error('GET /api/admin/analytics/purpose-distribution failed', error);
+    res.status(500).json({ error: 'Failed to compute purpose distribution' });
   }
 });
 

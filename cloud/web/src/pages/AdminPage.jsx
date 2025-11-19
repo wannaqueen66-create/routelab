@@ -82,6 +82,21 @@ const PURPOSE_OPTIONS = [
   { value: 'other', label: '其他' },
 ];
 
+const EXPORT_FORMAT_STORAGE_KEY = 'routelab.admin.exportFormat';
+
+function readInitialExportFormat() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return 'json';
+  }
+  try {
+    const stored = window.localStorage.getItem(EXPORT_FORMAT_STORAGE_KEY);
+    return stored === 'csv' ? 'csv' : 'json';
+  } catch (error) {
+    console.warn('Failed to read export format from storage', error);
+    return 'json';
+  }
+}
+
 function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState({
@@ -92,6 +107,7 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
     birthday: '',
     height: '',
     weight: '',
+    points: '',
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -112,6 +128,7 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
         if (cancelled) return;
         setDetail(data);
         const profile = data?.profile || {};
+        const achievements = data?.achievements || {};
         setForm({
           nickname: profile.nickname || '',
           gender: profile.gender || '',
@@ -125,6 +142,10 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
           weight:
             profile.weightKg !== null && profile.weightKg !== undefined
               ? String(profile.weightKg)
+              : '',
+          points:
+            achievements.totalPoints !== undefined && achievements.totalPoints !== null
+              ? String(achievements.totalPoints)
               : '',
         });
       } catch (err) {
@@ -165,10 +186,23 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
         height: form.height ? Number(form.height) : null,
         weight: form.weight ? Number(form.weight) : null,
       };
-      await updateAdminUser(userId, payload);
+
+      const requests = [updateAdminUser(userId, payload)];
+      const pointsTrimmed = (form.points || '').trim();
+      if (pointsTrimmed !== '' && !Number.isNaN(Number(pointsTrimmed))) {
+        requests.push(
+          updateAdminUserAchievements(userId, {
+            totalPoints: Number(pointsTrimmed),
+          })
+        );
+      }
+
+      await Promise.all(requests);
+
       const updated = await fetchAdminUserDetail(userId);
       setDetail(updated);
       const profile = updated?.profile || {};
+      const achievements = updated?.achievements || {};
       setForm({
         nickname: profile.nickname || '',
         gender: profile.gender || '',
@@ -182,6 +216,10 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
         weight:
           profile.weightKg !== null && profile.weightKg !== undefined
             ? String(profile.weightKg)
+            : '',
+        points:
+          achievements.totalPoints !== undefined && achievements.totalPoints !== null
+            ? String(achievements.totalPoints)
             : '',
       });
       if (onUpdated) {
@@ -199,6 +237,8 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
   if (!isOpen) return null;
 
   const profile = detail?.profile || {};
+  const routes = Array.isArray(detail?.routes) ? detail.routes : [];
+  const achievements = detail?.achievements || {};
 
   return (
     <AnimatePresence>
@@ -348,8 +388,93 @@ function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
                       />
                     </div>
                   </div>
+                  <div className="form-row">
+                    <label className="form-label">积分总数</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={form.points}
+                      onChange={handleInputChange('points')}
+                      min="0"
+                      step="1"
+                    />
+                  </div>
                 </div>
                 {error && <div className="alert alert-error mt-2 text-sm">{error}</div>}
+
+                {Array.isArray(detail?.routes) && detail.routes.length > 0 && (
+                  <div className="user-routes-table">
+                    <div className="table-title mb-2">路线记录（前 {detail.routes.length} 条）</div>
+                    <div className="table-container">
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th>日期</th>
+                            <th>标题</th>
+                            <th>距离</th>
+                            <th>时长</th>
+                            <th>操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.routes.map((route) => {
+                            const distanceMeters =
+                              route.statSummary?.distance ??
+                              route.stats?.distance ??
+                              route.stats?.distance_m ??
+                              route.stats?.distance_meters ??
+                              0;
+                            const durationSeconds =
+                              route.statSummary?.durationSeconds ??
+                              route.statSummary?.duration ??
+                              route.stats?.duration_seconds ??
+                              (route.stats?.duration ? route.stats.duration / 1000 : 0);
+                            return (
+                              <tr key={route.id}>
+                                <td>
+                                  {route.startTime
+                                    ? new Date(route.startTime).toLocaleString('zh-CN')
+                                    : '-'}
+                                </td>
+                                <td>{route.title || '未命名路线'}</td>
+                                <td>{formatDistance(distanceMeters)}</td>
+                                <td>{formatDuration(durationSeconds)}</td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="btn btn-xs btn-danger"
+                                    onClick={async () => {
+                                      if (
+                                        typeof window !== 'undefined' &&
+                                        window.confirm &&
+                                        !window.confirm('确定删除该路线吗？此操作不可恢复')
+                                      ) {
+                                        return;
+                                      }
+                                      try {
+                                        await bulkDeleteRoutes({ ids: [route.id], hardDelete: true });
+                                        const next = await fetchAdminUserDetail(userId);
+                                        setDetail(next);
+                                      } catch (err) {
+                                        // eslint-disable-next-line no-console
+                                        console.error('Failed to delete route from user detail:', err);
+                                        if (typeof window !== 'undefined' && window.alert) {
+                                          window.alert('删除路线失败，请稍后重试');
+                                        }
+                                      }
+                                    }}
+                                  >
+                                    删除
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -829,6 +954,7 @@ function formatDateTimeLocalInput(timestamp) {
           <thead>
             <tr>
               <th>标题</th>
+              <th>类型</th>
               <th>状态</th>
               <th>发布时间</th>
               <th>创建时间</th>
@@ -839,14 +965,14 @@ function formatDateTimeLocalInput(timestamp) {
             {loading ? (
               Array.from({ length: 3 }).map((_, index) => (
                 <tr key={index}>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="skeleton skeleton-text" />
                   </td>
                 </tr>
               ))
             ) : announcements.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center p-8 text-gray-500">
+                <td colSpan={6} className="text-center p-8 text-gray-500">
                   暂无公告，可点击“新建公告”发布系统通知
                 </td>
               </tr>
@@ -856,6 +982,7 @@ function formatDateTimeLocalInput(timestamp) {
                   <td>
                     <div className="font-medium">{item.title}</div>
                   </td>
+                  <td>{item.deliveryMode === 'persistent' ? '常驻公告' : '一次性公告'}</td>
                   <td>
                     <span
                       className={`badge ${
@@ -933,6 +1060,23 @@ function formatDateTimeLocalInput(timestamp) {
               value={form.body}
               onChange={(e) => handleFieldChange('body', e.target.value)}
             />
+          </div>
+          <div className="announcement-editor-row">
+            <label
+              className="announcement-editor-label"
+              htmlFor="announcement-delivery-mode"
+            >
+              类型
+            </label>
+            <select
+              id="announcement-delivery-mode"
+              className="announcement-editor-select"
+              value={form.deliveryMode}
+              onChange={(e) => handleFieldChange('deliveryMode', e.target.value)}
+            >
+              <option value="single">一次性公告（每位用户只弹一次）</option>
+              <option value="persistent">常驻公告（每次打开首页都会显示）</option>
+            </select>
           </div>
           <div className="announcement-editor-row">
             <label className="announcement-editor-label" htmlFor="announcement-status">
@@ -1331,7 +1475,7 @@ function BackupManagement() {
 
 // Export Modal Component
 function ExportModal({ isOpen, onClose }) {
-  const [format, setFormat] = useState('json');
+  const [format, setFormat] = useState(() => readInitialExportFormat());
   const [exporting, setExporting] = useState(false);
   const [filters, setFilters] = useState({
     userId: '',
@@ -1341,6 +1485,29 @@ function ExportModal({ isOpen, onClose }) {
     minDistance: '',
     maxDistance: '',
   });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setFilters({
+      userId: '',
+      startDate: '',
+      endDate: '',
+      purpose: '',
+      minDistance: '',
+      maxDistance: '',
+    });
+  }, [isOpen]);
+
+  const handleFormatChange = (nextFormat) => {
+    setFormat(nextFormat);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(EXPORT_FORMAT_STORAGE_KEY, nextFormat);
+      } catch (error) {
+        console.warn('Failed to persist export format', error);
+      }
+    }
+  };
 
   const handleFilterChange = (field) => (event) => {
     setFilters((prev) => ({
@@ -1378,6 +1545,7 @@ function ExportModal({ isOpen, onClose }) {
       const { blob, filename } = await exportAdminRoutes({
         format,
         filters: payloadFilters,
+        includePoints: true,
       });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -1421,7 +1589,7 @@ function ExportModal({ isOpen, onClose }) {
             <div className="export-options">
               <div
                 className={`export-option ${format === 'json' ? 'selected' : ''}`}
-                onClick={() => setFormat('json')}
+                onClick={() => handleFormatChange('json')}
               >
                 <div className="export-option-icon">
                   <FileJson size={24} />
@@ -1436,7 +1604,7 @@ function ExportModal({ isOpen, onClose }) {
               </div>
               <div
                 className={`export-option ${format === 'csv' ? 'selected' : ''}`}
-                onClick={() => setFormat('csv')}
+                onClick={() => handleFormatChange('csv')}
               >
                 <div className="export-option-icon">
                   <FileSpreadsheet size={24} />
