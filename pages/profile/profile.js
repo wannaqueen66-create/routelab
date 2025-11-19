@@ -143,6 +143,12 @@ Page({
     this.setData({ defaultPublic, shareStatus: defaultPublic ? '公开分享' : '私密记录' });
   },
 
+  handleOpenFeedback() {
+    wx.navigateTo({
+      url: '/pages/feedback/feedback',
+    });
+  },
+
   handleOpenBadgeWall() {
     wx.navigateTo({
       url: '/pages/badges/badges',

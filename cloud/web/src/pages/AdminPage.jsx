@@ -34,7 +34,345 @@ import {
   createAdminAnnouncement,
   updateAdminAnnouncement,
   deleteAdminAnnouncement,
+  fetchAdminFeedback,
+  updateAdminFeedback,
+  fetchAdminUserDetail,
+  updateAdminUser,
 } from '../api/client';
+
+const GENDER_OPTIONS = [
+  { value: '', label: '未设置' },
+  { value: 'male', label: '男' },
+  { value: 'female', label: '女' },
+];
+
+const AGE_RANGE_OPTIONS = [
+  { value: '', label: '未设置' },
+  { value: 'under18', label: '18岁以下' },
+  { value: '18_24', label: '18-24岁' },
+  { value: '25_34', label: '25-34岁' },
+  { value: '35_44', label: '35-44岁' },
+  { value: '45_54', label: '45-54岁' },
+  { value: '55_plus', label: '55岁及以上' },
+];
+
+const IDENTITY_OPTIONS = [
+  { value: '', label: '未设置' },
+  { value: 'minor', label: '未成年' },
+  { value: 'undergrad', label: '本科生' },
+  { value: 'postgrad', label: '研究生' },
+  { value: 'staff', label: '教职工' },
+  { value: 'resident', label: '校内居民' },
+  { value: 'other', label: '其他' },
+];
+
+const PURPOSE_OPTIONS = [
+  { value: '', label: '不限' },
+  { value: 'walk', label: '散步' },
+  { value: 'run', label: '跑步' },
+  { value: 'ride', label: '骑行' },
+  { value: 'gym', label: '健身' },
+  { value: 'basketball', label: '篮球' },
+  { value: 'football', label: '足球' },
+  { value: 'badminton', label: '羽毛球' },
+  { value: 'tableTennis', label: '乒乓球' },
+  { value: 'tennis', label: '网球' },
+  { value: 'volleyball', label: '排球' },
+  { value: 'hiking', label: '爬山' },
+  { value: 'other', label: '其他' },
+];
+
+function UserDetailModal({ userId, isOpen, onClose, onUpdated }) {
+  const [detail, setDetail] = useState(null);
+  const [form, setForm] = useState({
+    nickname: '',
+    gender: '',
+    ageRange: '',
+    identity: '',
+    birthday: '',
+    height: '',
+    weight: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || !userId) {
+      setDetail(null);
+      setError('');
+      return;
+    }
+    let cancelled = false;
+    const loadDetail = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const data = await fetchAdminUserDetail(userId);
+        if (cancelled) return;
+        setDetail(data);
+        const profile = data?.profile || {};
+        setForm({
+          nickname: profile.nickname || '',
+          gender: profile.gender || '',
+          ageRange: profile.ageRange || '',
+          identity: profile.identity || '',
+          birthday: profile.birthday || '',
+          height:
+            profile.heightCm !== null && profile.heightCm !== undefined
+              ? String(profile.heightCm)
+              : '',
+          weight:
+            profile.weightKg !== null && profile.weightKg !== undefined
+              ? String(profile.weightKg)
+              : '',
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load user detail:', err);
+          setError('加载用户详情失败，请稍后重试');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+    loadDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, userId]);
+
+  const handleInputChange = (field) => (event) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: event.target.value,
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!userId) return;
+    try {
+      setSaving(true);
+      setError('');
+      const payload = {
+        nickname: form.nickname || '',
+        gender: form.gender || null,
+        ageRange: form.ageRange || null,
+        identity: form.identity || null,
+        birthday: form.birthday || '',
+        height: form.height ? Number(form.height) : null,
+        weight: form.weight ? Number(form.weight) : null,
+      };
+      await updateAdminUser(userId, payload);
+      const updated = await fetchAdminUserDetail(userId);
+      setDetail(updated);
+      const profile = updated?.profile || {};
+      setForm({
+        nickname: profile.nickname || '',
+        gender: profile.gender || '',
+        ageRange: profile.ageRange || '',
+        identity: profile.identity || '',
+        birthday: profile.birthday || '',
+        height:
+          profile.heightCm !== null && profile.heightCm !== undefined
+            ? String(profile.heightCm)
+            : '',
+        weight:
+          profile.weightKg !== null && profile.weightKg !== undefined
+            ? String(profile.weightKg)
+            : '',
+      });
+      if (onUpdated) {
+        onUpdated();
+      }
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      const message = err?.response?.data?.error || '保存失败，请检查填写内容';
+      setError(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const profile = detail?.profile || {};
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="modal-backdrop"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="modal user-detail-modal"
+          initial={{ x: 40, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 40, opacity: 0 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="modal-header">
+            <h3 className="modal-title">用户详情</h3>
+            <button className="btn btn-ghost btn-icon" onClick={onClose}>
+              <X size={20} />
+            </button>
+          </div>
+          <div className="modal-body">
+            {loading ? (
+              <div className="space-y-4">
+                <div className="skeleton skeleton-text" />
+                <div className="skeleton skeleton-text" />
+                <div className="skeleton skeleton-text" />
+              </div>
+            ) : (
+              <>
+                <div className="user-summary-grid">
+                  <div>
+                    <div className="text-sm text-gray-500">用户 ID</div>
+                    <div className="text-lg font-semibold">
+                      {profile.id != null ? `#${profile.id}` : '-'}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">累计里程</div>
+                    <div className="text-lg font-semibold">
+                      {((profile.totalDistance || 0) / 1000).toFixed(1)} km
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">累计轨迹</div>
+                    <div className="text-lg font-semibold">
+                      {profile.routesCount || 0}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">最后活跃</div>
+                    <div className="text-lg font-semibold">
+                      {profile.lastActiveAt
+                        ? new Date(profile.lastActiveAt).toLocaleString('zh-CN')
+                        : '-'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="user-detail-form">
+                  <div className="form-row">
+                    <label className="form-label">昵称</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={form.nickname}
+                      onChange={handleInputChange('nickname')}
+                    />
+                  </div>
+                  <div className="form-row-grid">
+                    <div className="form-row">
+                      <label className="form-label">性别</label>
+                      <select
+                        className="form-input"
+                        value={form.gender}
+                        onChange={handleInputChange('gender')}
+                      >
+                        {GENDER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-row">
+                      <label className="form-label">年龄段</label>
+                      <select
+                        className="form-input"
+                        value={form.ageRange}
+                        onChange={handleInputChange('ageRange')}
+                      >
+                        {AGE_RANGE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-row">
+                      <label className="form-label">身份</label>
+                      <select
+                        className="form-input"
+                        value={form.identity}
+                        onChange={handleInputChange('identity')}
+                      >
+                        {IDENTITY_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-row-grid">
+                    <div className="form-row">
+                      <label className="form-label">生日</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={form.birthday || ''}
+                        onChange={handleInputChange('birthday')}
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label className="form-label">身高 (cm)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={form.height}
+                        onChange={handleInputChange('height')}
+                        min="0"
+                        max="300"
+                      />
+                    </div>
+                    <div className="form-row">
+                      <label className="form-label">体重 (kg)</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={form.weight}
+                        onChange={handleInputChange('weight')}
+                        min="0"
+                        max="400"
+                        step="0.1"
+                      />
+                    </div>
+                  </div>
+                </div>
+                {error && <div className="alert alert-error mt-2 text-sm">{error}</div>}
+              </>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button className="btn btn-outline" onClick={onClose}>
+              关闭
+            </button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving || loading}>
+              {saving ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                '保存修改'
+              )}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 
 // User Management Component
 function UserManagement() {
@@ -44,6 +382,7 @@ function UserManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
+  const [detailUserId, setDetailUserId] = useState(null);
   const pageSize = 10;
 
   useEffect(() => {
@@ -173,7 +512,12 @@ function UserManagement() {
                       : '-'}
                   </td>
                   <td>
-                    <button className="btn btn-sm btn-ghost">查看详情</button>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => setDetailUserId(user.id)}
+                    >
+                      查看详情
+                    </button>
                   </td>
                 </motion.tr>
               ))
@@ -204,6 +548,13 @@ function UserManagement() {
           </button>
         </div>
       </div>
+
+      <UserDetailModal
+        userId={detailUserId}
+        isOpen={detailUserId != null}
+        onClose={() => setDetailUserId(null)}
+        onUpdated={loadUsers}
+      />
     </div>
   );
 }
@@ -311,7 +662,7 @@ function formatDateTimeLocalInput(timestamp) {
 }
 
 // Announcements Management Component
-function AnnouncementsManagement() {
+  function AnnouncementsManagement() {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
@@ -629,9 +980,229 @@ function AnnouncementsManagement() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
+      </div>
+    );
+  }
+
+  function FeedbackManagement() {
+    const [tickets, setTickets] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState('open');
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const pageSize = 20;
+
+    const loadTickets = async (pageOverride) => {
+      const nextPage = pageOverride || page;
+      try {
+        setLoading(true);
+        const data = await fetchAdminFeedback({
+          page: nextPage,
+          pageSize,
+          status: statusFilter === 'all' ? undefined : statusFilter,
+        });
+        setTickets(Array.isArray(data.items) ? data.items : []);
+        setTotal(Number(data.pagination?.total ?? 0));
+      } catch (error) {
+        console.error('Failed to load feedback tickets:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      loadTickets(1);
+      setPage(1);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [statusFilter]);
+
+    const handleStatusChange = async (ticket, nextStatus) => {
+      try {
+        await updateAdminFeedback(ticket.id, { status: nextStatus });
+        loadTickets();
+      } catch (error) {
+        console.error('Failed to update feedback status:', error);
+      }
+    };
+
+    const handleReplyChange = (id, value) => {
+      setTickets((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                adminReplyDraft: value,
+              }
+            : item
+        )
+      );
+    };
+
+    const handleSaveReply = async (ticket) => {
+      const reply = (ticket.adminReplyDraft ?? ticket.adminReply ?? '').trim();
+      try {
+        await updateAdminFeedback(ticket.id, { adminReply: reply });
+        loadTickets();
+      } catch (error) {
+        console.error('Failed to save feedback reply:', error);
+      }
+    };
+
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    return (
+      <div className="data-table">
+        <div className="table-toolbar">
+          <div className="table-title">
+            <AlertTriangle size={18} />
+            <span>用户反馈工单</span>
+          </div>
+          <div className="table-actions">
+            <select
+              className="announcement-editor-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="open">仅未处理</option>
+              <option value="in_progress">处理中</option>
+              <option value="resolved">已解决</option>
+              <option value="closed">已关闭</option>
+              <option value="all">全部状态</option>
+            </select>
+            <button className="btn btn-sm btn-outline" onClick={() => loadTickets(1)}>
+              <RefreshCw size={16} />
+              刷新
+            </button>
+          </div>
+        </div>
+
+        <div className="table-container">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>用户ID</th>
+                <th>分类</th>
+                <th>标题</th>
+                <th>内容</th>
+                <th>联系方式</th>
+                <th>状态</th>
+                <th>管理员备注</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <tr key={index}>
+                    <td colSpan={10}>
+                      <div className="skeleton skeleton-text" />
+                    </td>
+                  </tr>
+                ))
+              ) : tickets.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="text-center p-8 text-gray-500">
+                    当前没有符合条件的反馈工单
+                  </td>
+                </tr>
+              ) : (
+                tickets.map((ticket) => (
+                  <tr key={ticket.id}>
+                    <td>#{ticket.id}</td>
+                    <td>{ticket.userId || '-'}</td>
+                    <td>{ticket.category || '-'}</td>
+                    <td>{ticket.title}</td>
+                    <td>
+                      <div className="text-sm text-gray-700" style={{ maxWidth: 260 }}>
+                        {ticket.content}
+                      </div>
+                    </td>
+                    <td>{ticket.contact || '-'}</td>
+                    <td>{ticket.status}</td>
+                    <td>
+                      <textarea
+                        className="announcement-editor-textarea"
+                        style={{ minHeight: 60 }}
+                        value={ticket.adminReplyDraft ?? ticket.adminReply ?? ''}
+                        onChange={(e) => handleReplyChange(ticket.id, e.target.value)}
+                      />
+                    </td>
+                    <td>{formatAnnouncementDateTime(ticket.createdAt) || '-'}</td>
+                    <td className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => handleSaveReply(ticket)}
+                      >
+                        保存备注
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        onClick={() => handleStatusChange(ticket, 'in_progress')}
+                        disabled={ticket.status === 'in_progress'}
+                      >
+                        标记处理中
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        onClick={() => handleStatusChange(ticket, 'resolved')}
+                        disabled={ticket.status === 'resolved'}
+                      >
+                        标记已解决
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        onClick={() => handleStatusChange(ticket, 'closed')}
+                        disabled={ticket.status === 'closed'}
+                      >
+                        关闭工单
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="table-pagination">
+          <div className="pagination-info">
+            共 {total} 条 | 第 {page} / {totalPages} 页
+          </div>
+          <div className="pagination-controls">
+            <button
+              className="pagination-btn"
+              onClick={() => {
+                const next = Math.max(1, page - 1);
+                setPage(next);
+                loadTickets(next);
+              }}
+              disabled={page <= 1}
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button className="pagination-btn active">{page}</button>
+            <button
+              className="pagination-btn"
+              onClick={() => {
+                const next = Math.min(totalPages, page + 1);
+                setPage(next);
+                loadTickets(next);
+              }}
+              disabled={page >= totalPages}
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
 // Backup Management Component
 function BackupManagement() {
@@ -762,11 +1333,52 @@ function BackupManagement() {
 function ExportModal({ isOpen, onClose }) {
   const [format, setFormat] = useState('json');
   const [exporting, setExporting] = useState(false);
+  const [filters, setFilters] = useState({
+    userId: '',
+    startDate: '',
+    endDate: '',
+    purpose: '',
+    minDistance: '',
+    maxDistance: '',
+  });
+
+  const handleFilterChange = (field) => (event) => {
+    setFilters((prev) => ({
+      ...prev,
+      [field]: event.target.value,
+    }));
+  };
 
   const handleExport = async () => {
     try {
       setExporting(true);
-      const { blob, filename } = await exportAdminRoutes({ format });
+      const payloadFilters = {};
+      if (filters.userId) {
+        const parsedId = Number(filters.userId);
+        if (Number.isFinite(parsedId)) {
+          payloadFilters.userId = parsedId;
+        }
+      }
+      if (filters.startDate) {
+        payloadFilters.startDate = filters.startDate;
+      }
+      if (filters.endDate) {
+        payloadFilters.endDate = filters.endDate;
+      }
+      if (filters.minDistance) {
+        payloadFilters.minDistance = Number(filters.minDistance) * 1000;
+      }
+      if (filters.maxDistance) {
+        payloadFilters.maxDistance = Number(filters.maxDistance) * 1000;
+      }
+      if (filters.purpose) {
+        payloadFilters.purpose = filters.purpose;
+      }
+
+      const { blob, filename } = await exportAdminRoutes({
+        format,
+        filters: payloadFilters,
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -838,6 +1450,78 @@ function ExportModal({ isOpen, onClose }) {
                 {format === 'csv' && <Check size={20} className="text-primary" />}
               </div>
             </div>
+            <div className="export-filters">
+              <div className="export-filters-title">筛选条件（可选）</div>
+              <div className="export-filters-grid">
+                <label className="export-filter-field">
+                  <span>用户 ID</span>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="例如 1"
+                    value={filters.userId}
+                    onChange={handleFilterChange('userId')}
+                    min="1"
+                  />
+                </label>
+                <label className="export-filter-field">
+                  <span>开始日期</span>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={filters.startDate}
+                    onChange={handleFilterChange('startDate')}
+                  />
+                </label>
+                <label className="export-filter-field">
+                  <span>结束日期</span>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={filters.endDate}
+                    onChange={handleFilterChange('endDate')}
+                  />
+                </label>
+                <label className="export-filter-field">
+                  <span>最小里程 (km)</span>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="例如 1"
+                    value={filters.minDistance}
+                    onChange={handleFilterChange('minDistance')}
+                    min="0"
+                    step="0.1"
+                  />
+                </label>
+                <label className="export-filter-field">
+                  <span>最大里程 (km)</span>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="不限"
+                    value={filters.maxDistance}
+                    onChange={handleFilterChange('maxDistance')}
+                    min="0"
+                    step="0.1"
+                  />
+                </label>
+                <label className="export-filter-field">
+                  <span>出行目的</span>
+                  <select
+                    className="form-input"
+                    value={filters.purpose}
+                    onChange={handleFilterChange('purpose')}
+                  >
+                    {PURPOSE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
           </div>
           <div className="modal-footer">
             <button className="btn btn-outline" onClick={onClose}>
@@ -874,6 +1558,7 @@ export default function AdminPage() {
   const tabs = [
     { id: 'users', label: '用户管理', icon: Users },
     { id: 'analytics', label: '数据分析', icon: BarChart3 },
+    { id: 'feedback', label: '用户反馈', icon: AlertTriangle },
     { id: 'announcements', label: '系统公告', icon: Megaphone },
     { id: 'backup', label: '备份管理', icon: Database },
   ];
@@ -928,6 +1613,7 @@ export default function AdminPage() {
         <div className="admin-tab-content">
           {activeTab === 'users' && <UserManagement />}
           {activeTab === 'analytics' && <DataAnalysis />}
+          {activeTab === 'feedback' && <FeedbackManagement />}
           {activeTab === 'announcements' && <AnnouncementsManagement />}
           {activeTab === 'backup' && <BackupManagement />}
         </div>

@@ -137,6 +137,7 @@ const USER_IDENTITY_VALUES = new Set(['minor', 'undergrad', 'postgrad', 'staff',
 const ANNOUNCEMENT_STATUS_VALUES = new Set(['draft', 'published']);
 const ANNOUNCEMENT_DELIVERY_MODE_VALUES = new Set(['single', 'persistent']);
 const ANNOUNCEMENT_TARGET_AUDIENCE_VALUES = new Set(['all', 'new_users']);
+const FEEDBACK_STATUS_VALUES = new Set(['open', 'in_progress', 'resolved', 'closed']);
 
 function sanitizeEnumValue(value, allowedValues) {
   if (typeof value !== 'string') {
@@ -1359,6 +1360,18 @@ function buildAdminRouteFilters(filters = {}) {
     }
   }
 
+  if (filters.purpose !== undefined && filters.purpose !== null) {
+    const rawPurpose = String(filters.purpose || '').trim();
+    if (rawPurpose) {
+      const normalizedPurpose = sanitizeEnumValue(rawPurpose, PURPOSE_TYPE_VALUES);
+      if (!normalizedPurpose) {
+        throw new Error('Invalid purpose filter');
+      }
+      params.push(normalizedPurpose);
+      conditions.push(`(r.meta->>'purposeType') = $${params.length}`);
+    }
+  }
+
   if (filters.routeId) {
     params.push(String(filters.routeId));
     conditions.push(`r.id = $${params.length}`);
@@ -1442,6 +1455,37 @@ function mapUserOverviewRow(row) {
   const totalDistance = Number(row.total_distance || 0);
   const totalDuration = normalizeDurationAggregate(row.total_duration);
   const totalCalories = Number(row.total_calories || 0);
+  const gender =
+    typeof row.gender === 'string'
+      ? row.gender
+      : typeof row.user_gender === 'string'
+      ? row.user_gender
+      : null;
+  const ageRange =
+    typeof row.age_range === 'string'
+      ? row.age_range
+      : typeof row.ageRange === 'string'
+      ? row.ageRange
+      : null;
+  const identity =
+    typeof row.identity_label === 'string'
+      ? row.identity_label
+      : typeof row.identity === 'string'
+      ? row.identity
+      : null;
+  const birthday = typeof row.birthday === 'string' ? row.birthday : null;
+  const heightCm =
+    row.height_cm !== null && row.height_cm !== undefined
+      ? Number(row.height_cm)
+      : row.heightCm !== null && row.heightCm !== undefined
+      ? Number(row.heightCm)
+      : null;
+  const weightKg =
+    row.weight_kg !== null && row.weight_kg !== undefined
+      ? Number(row.weight_kg)
+      : row.weightKg !== null && row.weightKg !== undefined
+      ? Number(row.weightKg)
+      : null;
   return {
     id: Number.isFinite(id) ? id : null,
     nickname: typeof row.nickname === 'string' ? row.nickname : null,
@@ -1455,6 +1499,12 @@ function mapUserOverviewRow(row) {
     totalCalories,
     averageDistance: routesCount > 0 ? totalDistance / routesCount : null,
     averageDuration: routesCount > 0 ? totalDuration / routesCount : null,
+    gender,
+    ageRange,
+    identity,
+    birthday,
+    heightCm,
+    weightKg,
     lastActiveAt: row.last_active instanceof Date ? row.last_active.getTime() : null,
     lastRouteUpdatedAt:
       row.last_route_updated instanceof Date ? row.last_route_updated.getTime() : null,
@@ -1481,6 +1531,23 @@ function mapAnnouncementRow(row) {
     publishAt: row.publish_at instanceof Date ? row.publish_at.getTime() : null,
     createdAt: row.created_at instanceof Date ? row.created_at.getTime() : null,
     updatedAt: row.updated_at instanceof Date ? row.updated_at.getTime() : null,
+  };
+}
+
+function mapFeedbackTicketRow(row) {
+  const id = Number(row.id);
+  return {
+    id: Number.isFinite(id) ? id : null,
+    userId: row.user_id !== undefined && row.user_id !== null ? Number(row.user_id) : null,
+    category: typeof row.category === 'string' ? row.category : '',
+    title: typeof row.title === 'string' ? row.title : '',
+    content: typeof row.content === 'string' ? row.content : '',
+    contact: typeof row.contact === 'string' ? row.contact : '',
+    status: typeof row.status === 'string' ? row.status : 'open',
+    adminReply: typeof row.admin_reply === 'string' ? row.admin_reply : '',
+    createdAt: row.created_at instanceof Date ? row.created_at.getTime() : null,
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.getTime() : null,
+    resolvedAt: row.resolved_at instanceof Date ? row.resolved_at.getTime() : null,
   };
 }
 
@@ -6043,6 +6110,89 @@ app.get('/api/admin/users/:id', ensureAuth, async (req, res) => {
   }
 });
 
+app.patch('/api/admin/users/:id', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const userIdRaw = req.params.id;
+  const userId = Number(userIdRaw);
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(400).json({ error: 'Invalid user id' });
+  }
+
+  const {
+    nickname,
+    avatar,
+    gender,
+    ageRange,
+    identity,
+    birthday,
+    height,
+    weight,
+  } = req.body || {};
+
+  const rawNickname = typeof nickname === 'string' ? nickname : '';
+  const rawAvatar = typeof avatar === 'string' ? avatar : '';
+  const normalizedNickname = rawNickname ? rawNickname.trim() : '';
+  const normalizedAvatar = rawAvatar ? rawAvatar.trim() : '';
+  const normalizedGender = sanitizeEnumValue(gender, USER_GENDER_VALUES);
+  const normalizedAgeRange = sanitizeEnumValue(ageRange, USER_AGE_RANGE_VALUES);
+  const normalizedIdentity = sanitizeEnumValue(identity, USER_IDENTITY_VALUES);
+  const normalizedBirthday =
+    typeof birthday === 'string' && birthday.trim() ? birthday.trim().slice(0, 64) : null;
+  const heightNumeric = Number(height);
+  const normalizedHeight =
+    Number.isFinite(heightNumeric) && heightNumeric > 0 && heightNumeric < 300
+      ? Math.round(heightNumeric)
+      : null;
+  const weightNumeric = Number(weight);
+  const normalizedWeight =
+    Number.isFinite(weightNumeric) && weightNumeric > 0 && weightNumeric < 400
+      ? Number(weightNumeric.toFixed(1))
+      : null;
+
+  if (typeof gender === 'string' && gender.trim() && !normalizedGender) {
+    return res.status(400).json({ error: 'Invalid gender value' });
+  }
+  if (typeof ageRange === 'string' && ageRange.trim() && !normalizedAgeRange) {
+    return res.status(400).json({ error: 'Invalid age range value' });
+  }
+  if (typeof identity === 'string' && identity.trim() && !normalizedIdentity) {
+    return res.status(400).json({ error: 'Invalid identity label value' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE users
+         SET nickname = $1,
+             avatar = $2,
+             gender = $3,
+             age_range = $4,
+             identity_label = $5,
+             birthday = $6,
+             height_cm = $7,
+             weight_kg = $8,
+             updated_at = NOW()
+       WHERE id = $9`,
+      [
+        normalizedNickname || null,
+        normalizedAvatar || null,
+        normalizedGender || null,
+        normalizedAgeRange || null,
+        normalizedIdentity || null,
+        normalizedBirthday,
+        normalizedHeight,
+        normalizedWeight,
+        userId,
+      ]
+    );
+    res.status(204).end();
+  } catch (error) {
+    console.error('PATCH /api/admin/users/:id failed', error);
+    res.status(500).json({ error: 'Failed to update user profile' });
+  }
+});
+
 app.get('/api/admin/analytics/summary', ensureAuth, async (req, res) => {
   if (!ensureAdminRequest(req, res)) {
     return;
@@ -6377,6 +6527,116 @@ app.delete('/api/admin/announcements/:id', ensureAuth, async (req, res) => {
   }
 });
 
+app.get('/api/admin/feedback', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const pagination = normalizePagination(req.query.page, req.query.pageSize);
+  const statusFilter =
+    typeof req.query.status === 'string' ? req.query.status.trim().toLowerCase() : '';
+  const params = [];
+  let whereClause = '';
+  if (statusFilter && FEEDBACK_STATUS_VALUES.has(statusFilter)) {
+    params.push(statusFilter);
+    whereClause = 'WHERE status = $1';
+  }
+
+  const listQuery = `
+    SELECT *
+    FROM feedback_tickets
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT $${params.length + 1}
+    OFFSET $${params.length + 2}
+  `;
+  const countQuery = `
+    SELECT COUNT(*) AS total
+    FROM feedback_tickets
+    ${whereClause}
+  `;
+
+  try {
+    const [listResult, countResult] = await Promise.all([
+      pool.query(listQuery, [...params, pagination.limit, pagination.offset]),
+      pool.query(countQuery, params),
+    ]);
+    res.json({
+      items: listResult.rows.map(mapFeedbackTicketRow),
+      pagination: {
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        total: Number(countResult.rows?.[0]?.total || 0),
+      },
+    });
+  } catch (error) {
+    console.error('GET /api/admin/feedback failed', error);
+    res.status(500).json({ error: 'Failed to fetch feedback tickets' });
+  }
+});
+
+app.patch('/api/admin/feedback/:id', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) {
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid feedback id' });
+  }
+  const body = req.body || {};
+  const fields = [];
+  const params = [];
+
+  if (Object.prototype.hasOwnProperty.call(body, 'status')) {
+    let nextStatus =
+      typeof body.status === 'string' && body.status.trim()
+        ? body.status.trim().toLowerCase()
+        : '';
+    if (nextStatus && !FEEDBACK_STATUS_VALUES.has(nextStatus)) {
+      return res.status(400).json({ error: 'Invalid status value' });
+    }
+    if (nextStatus) {
+      params.push(nextStatus);
+      fields.push(`status = $${params.length}`);
+      if (nextStatus === 'resolved') {
+        fields.push('resolved_at = NOW()');
+      }
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'adminReply')) {
+    const reply =
+      typeof body.adminReply === 'string' && body.adminReply.trim()
+        ? body.adminReply.trim()
+        : null;
+    params.push(reply);
+    fields.push(`admin_reply = $${params.length}`);
+  }
+
+  if (!fields.length) {
+    return res.status(400).json({ error: 'No updatable fields provided' });
+  }
+
+  fields.push('updated_at = NOW()');
+
+  const query = `
+    UPDATE feedback_tickets
+    SET ${fields.join(', ')}
+    WHERE id = $${params.length + 1}
+    RETURNING *
+  `;
+
+  try {
+    const result = await pool.query(query, [...params, id]);
+    if (!result.rows.length) {
+      return res.status(404).json({ error: 'Feedback ticket not found' });
+    }
+    res.json(mapFeedbackTicketRow(result.rows[0]));
+  } catch (error) {
+    console.error('PATCH /api/admin/feedback/:id failed', error);
+    res.status(500).json({ error: 'Failed to update feedback ticket' });
+  }
+});
+
 app.get('/api/admin/maintenance/backups', ensureAuth, async (req, res) => {
   if (!ensureAdminRequest(req, res)) {
     return;
@@ -6692,6 +6952,34 @@ app.get('/api/announcements/active', ensureAuth, async (req, res) => {
   } catch (error) {
     console.error('GET /api/announcements/active failed', error);
     res.status(500).json({ error: 'Failed to fetch active announcements' });
+  }
+});
+
+app.post('/api/feedback', ensureAuth, async (req, res) => {
+  const userId = req.userId || req.user_id || null;
+  const body = req.body || {};
+  const title = typeof body.title === 'string' ? body.title.trim() : '';
+  const content = typeof body.content === 'string' ? body.content.trim() : '';
+  const category = typeof body.category === 'string' ? body.category.trim() : '';
+  const contact = typeof body.contact === 'string' ? body.contact.trim() : '';
+
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Title and content are required' });
+  }
+
+  try {
+    const result = await pool.query(
+      `
+        INSERT INTO feedback_tickets (user_id, category, title, content, contact, status)
+        VALUES ($1, $2, $3, $4, $5, 'open')
+        RETURNING *
+      `,
+      [userId || null, category || null, title, content, contact || null]
+    );
+    res.status(201).json(mapFeedbackTicketRow(result.rows[0]));
+  } catch (error) {
+    console.error('POST /api/feedback failed', error);
+    res.status(500).json({ error: 'Failed to submit feedback' });
   }
 });
 

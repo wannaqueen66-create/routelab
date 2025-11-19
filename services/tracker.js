@@ -49,7 +49,7 @@ const REPRESENTATIVE_ACCURACY_THRESHOLD = 25;
 const MAP_MATCHING_SEGMENT_METERS = 80;
 const BUILDING_DISTANCE_TOLERANCE_METERS = 35;
 const BUILDING_NAME_WHITELIST = [
-  /��ѧ¥/i,
+  /教学楼/i,
   /ʵ��¥/i,
   /�ۺ�¥/i,
   /ѧԺ/i,

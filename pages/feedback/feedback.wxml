@@ -1,0 +1,66 @@
+<view class="feedback-page">
+  <rlab-nav title="问题反馈"></rlab-nav>
+
+  <scroll-view scroll-y class="feedback-scroll">
+    <view class="feedback-card">
+      <view class="feedback-field">
+        <text class="feedback-label">反馈类型</text>
+        <picker
+          mode="selector"
+          range="{{categoryOptions}}"
+          range-key="label"
+          value="{{categoryIndex}}"
+          bindchange="handleCategoryChange"
+        >
+          <view class="feedback-picker">
+            <text>{{categoryOptions[categoryIndex].label}}</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="feedback-field">
+        <text class="feedback-label">标题</text>
+        <input
+          class="feedback-input"
+          placeholder="用一句话概括你的问题或建议"
+          value="{{title}}"
+          bindinput="handleTitleInput"
+          maxlength="80"
+        />
+      </view>
+
+      <view class="feedback-field">
+        <text class="feedback-label">详细描述</text>
+        <textarea
+          class="feedback-textarea"
+          placeholder="请描述具体场景、期望行为以及复现步骤等信息"
+          value="{{content}}"
+          bindinput="handleContentInput"
+          maxlength="500"
+          auto-height
+        />
+      </view>
+
+      <view class="feedback-field">
+        <text class="feedback-label">联系方式（选填）</text>
+        <input
+          class="feedback-input"
+          placeholder="微信号 / 邮箱 / 手机号，便于我们与你联系"
+          value="{{contact}}"
+          bindinput="handleContactInput"
+          maxlength="80"
+        />
+      </view>
+
+      <button
+        class="feedback-submit-btn"
+        bindtap="handleSubmit"
+        loading="{{submitting}}"
+        disabled="{{submitting}}"
+      >
+        {{submitting ? '提交中...' : '提交反馈'}}
+      </button>
+    </view>
+  </scroll-view>
+</view>
+

@@ -1014,6 +1014,12 @@ Page({
     });
   },
 
+  handleOpenFeedback() {
+    wx.navigateTo({
+      url: '/pages/feedback/feedback',
+    });
+  },
+
   handleOpenAbout() {
     wx.showModal({
       title: '关于 RouteLab',

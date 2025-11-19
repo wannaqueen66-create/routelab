@@ -22,7 +22,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Popup, useMap } from 'react-leaflet';
-import { fetchAdminRoutes, fetchAdminRouteDetail, fetchAdminUsers } from '../api/client';
+import { fetchAdminRoutes, fetchAdminRouteDetail, fetchAdminUsers, deleteRouteById } from '../api/client';
 import { gcj02ToWgs84 } from '../utils/coord';
 import { formatDistance, formatDuration } from '../utils/format';
 import 'leaflet/dist/leaflet.css';
@@ -35,22 +35,51 @@ const SPEED_COLORS = [
   '#FF4D4F', // Very Fast - Red
 ];
 
-// Trip purpose colors
+// Trip purpose colors (aligned with mini-program definitions)
 const PURPOSE_COLORS = {
-  commute: '#4A90E2',
-  exercise: '#52C41A',
-  leisure: '#FAAD14',
-  business: '#722ED1',
+  walk: '#4A90E2',
+  run: '#FAAD14',
+  ride: '#52C41A',
+  gym: '#722ED1',
+  basketball: '#FF4D4F',
+  football: '#13C2C2',
+  badminton: '#EB2F96',
+  tableTennis: '#FADB14',
+  tennis: '#2F54EB',
+  volleyball: '#A0D911',
+  hiking: '#8C8C8C',
   other: '#8C8C8C',
 };
 
 const PURPOSE_LABELS = {
-  commute: '通勤',
-  exercise: '运动健身',
-  leisure: '休闲出行',
-  business: '商务出行',
+  walk: '散步',
+  run: '跑步',
+  ride: '骑行',
+  gym: '健身',
+  basketball: '篮球',
+  football: '足球',
+  badminton: '羽毛球',
+  tableTennis: '乒乓球',
+  tennis: '网球',
+  volleyball: '排球',
+  hiking: '爬山',
   other: '其他',
 };
+
+function formatPaceFromStats(distanceMeters, durationSeconds) {
+  const distanceKm = Number(distanceMeters || 0) / 1000;
+  const durationSec = Number(durationSeconds || 0);
+  if (!Number.isFinite(distanceKm) || !Number.isFinite(durationSec) || distanceKm <= 0 || durationSec <= 0) {
+    return '--';
+  }
+  const paceSecPerKm = durationSec / distanceKm;
+  if (!Number.isFinite(paceSecPerKm) || paceSecPerKm <= 0) {
+    return '--';
+  }
+  const minutes = Math.floor(paceSecPerKm / 60);
+  const seconds = Math.round(paceSecPerKm % 60);
+  return `${minutes}:${seconds.toString().padStart(2, '0')} /km`;
+}
 
 // Custom map controller
 function MapController({ routes, selectedRoute, autoFit }) {
@@ -442,6 +471,7 @@ export default function MapPage() {
   const [playbackPosition, setPlaybackPosition] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const playbackRef = useRef(null);
+  const [routeDetailModalOpen, setRouteDetailModalOpen] = useState(false);
 
   const mapRef = useRef(null);
 
@@ -520,16 +550,12 @@ export default function MapPage() {
       if (filters.maxDistance) {
         params.maxDistance = Number(filters.maxDistance) * 1000;
       }
+      if (filters.purpose) {
+        params.purpose = filters.purpose;
+      }
 
       const data = await fetchAdminRoutes(params);
-      let filteredRoutes = data.items || data.routes || [];
-
-      // Client-side purpose filtering (if not supported by API)
-      if (filters.purpose) {
-        filteredRoutes = filteredRoutes.filter(
-          (route) => route.purpose === filters.purpose || route.trip_purpose === filters.purpose
-        );
-      }
+      const filteredRoutes = data.items || data.routes || [];
 
       setRoutes(filteredRoutes);
       setAutoFit(true);
@@ -540,8 +566,14 @@ export default function MapPage() {
     }
   }, [filters]);
 
-  const handleRouteSelect = async (route) => {
+  const handleRouteSelect = async (route, options = {}) => {
+    const { openDetailModal = false } = options;
+    if (!route || !route.id) return;
     if (selectedRoute?.id === route.id) {
+      if (openDetailModal) {
+        setRouteDetailModalOpen(true);
+        return;
+      }
       setSelectedRoute(null);
       setIsPlaying(false);
       setPlaybackPosition(0);
@@ -553,6 +585,9 @@ export default function MapPage() {
         setPlaybackPosition(0);
         setIsPlaying(false);
         setAutoFit(true);
+        if (openDetailModal) {
+          setRouteDetailModalOpen(true);
+        }
       } catch (err) {
         console.error('Failed to load route detail:', err);
       }
@@ -771,8 +806,9 @@ export default function MapPage() {
                     const converted = gcj02ToWgs84(p.latitude, p.longitude);
                     return [converted.latitude, converted.longitude];
                   });
-                  const routeColor = route.purpose
-                    ? PURPOSE_COLORS[route.purpose] || '#4A90E2'
+                  const purposeKey = route.purposeType || route.purpose || route.trip_purpose;
+                  const routeColor = purposeKey
+                    ? PURPOSE_COLORS[purposeKey] || '#4A90E2'
                     : '#4A90E2';
                   return (
                     <Polyline
@@ -848,7 +884,9 @@ export default function MapPage() {
                             {route.title || '未命名路线'}
                           </span>
                           <span className="route-item-user">
-                            用户 #{route.user_id || route.userId}
+                            {route.owner?.displayName
+                              ? `用户：${route.owner.displayName}`
+                              : `用户 #${route.user_id || route.userId || '-'}`}
                           </span>
                         </div>
                         <div className="route-item-date">
@@ -863,16 +901,30 @@ export default function MapPage() {
                           <div className="route-stat">
                             <span>{formatDuration(route.stats?.duration_seconds || route.duration || 0)}</span>
                           </div>
-                          {(route.purpose || route.trip_purpose) && (
+                          {(() => {
+                            const purposeKey = route.purposeType || route.purpose || route.trip_purpose;
+                            if (!purposeKey) return null;
+                            return (
                             <div
                               className="route-purpose-badge"
                               style={{
-                                background: PURPOSE_COLORS[route.purpose || route.trip_purpose] || '#8C8C8C',
+                                background: PURPOSE_COLORS[purposeKey] || '#8C8C8C',
                               }}
                             >
-                              {PURPOSE_LABELS[route.purpose || route.trip_purpose] || '其他'}
+                              {PURPOSE_LABELS[purposeKey] || '其他'}
                             </div>
-                          )}
+                            );
+                          })()}
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-outline ml-auto"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleRouteSelect(route, { openDetailModal: true });
+                            }}
+                          >
+                            查看详情
+                          </button>
                         </div>
                       </motion.div>
                     ))
@@ -930,6 +982,162 @@ export default function MapPage() {
                 <X size={18} />
               </button>
             </motion.div>
+          )}
+
+          {routeDetailModalOpen && selectedRoute && (
+            <div
+              className="route-detail-modal-backdrop"
+              onClick={() => setRouteDetailModalOpen(false)}
+            >
+              <div
+                className="route-detail-modal"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="route-detail-header">
+                  <div>
+                    <h2 className="route-detail-title">
+                      {selectedRoute.title || '未命名路线'}
+                    </h2>
+                    <div className="route-detail-subtitle">
+                      {selectedRoute.owner?.displayName
+                        ? `用户：${selectedRoute.owner.displayName}`
+                        : selectedRoute.ownerId
+                        ? `用户 #${selectedRoute.ownerId}`
+                        : '未知用户'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-icon"
+                    onClick={() => setRouteDetailModalOpen(false)}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <div className="route-detail-body">
+                  <div className="route-detail-section">
+                    <div className="route-detail-label">日期</div>
+                    <div className="route-detail-value">
+                      {selectedRoute.startTime
+                        ? new Date(selectedRoute.startTime).toLocaleString('zh-CN')
+                        : '-'}
+                    </div>
+                  </div>
+                  <div className="route-detail-grid">
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">总里程</div>
+                      <div className="route-detail-value">
+                        {formatDistance(
+                          selectedRoute.statSummary?.distance ??
+                            selectedRoute.stats?.distance_meters ??
+                            selectedRoute.stats?.distance ??
+                            0
+                        )}
+                      </div>
+                    </div>
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">总时长</div>
+                      <div className="route-detail-value">
+                        {formatDuration(
+                          selectedRoute.statSummary?.durationSeconds ??
+                            selectedRoute.statSummary?.duration ??
+                            selectedRoute.stats?.duration_seconds ??
+                            0
+                        )}
+                      </div>
+                    </div>
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">平均配速</div>
+                      <div className="route-detail-value">
+                        {(() => {
+                          const distanceMeters =
+                            selectedRoute.statSummary?.distance ??
+                            selectedRoute.stats?.distance_meters ??
+                            selectedRoute.stats?.distance ??
+                            0;
+                          const durationSeconds =
+                            selectedRoute.statSummary?.durationSeconds ??
+                            selectedRoute.statSummary?.duration ??
+                            selectedRoute.stats?.duration_seconds ??
+                            0;
+                          return formatPaceFromStats(distanceMeters, durationSeconds);
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="route-detail-grid">
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">起点</div>
+                      <div className="route-detail-value">
+                        {selectedRoute.startCampusMeta?.name ||
+                          selectedRoute.meta?.startLabel ||
+                          (selectedRoute.points && selectedRoute.points.length
+                            ? `${selectedRoute.points[0].latitude?.toFixed(5)}, ${selectedRoute.points[0].longitude?.toFixed(5)}`
+                            : '-')}
+                      </div>
+                    </div>
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">终点</div>
+                      <div className="route-detail-value">
+                        {selectedRoute.endCampusMeta?.name ||
+                          selectedRoute.meta?.endLabel ||
+                          (selectedRoute.points && selectedRoute.points.length
+                            ? `${selectedRoute.points[selectedRoute.points.length - 1].latitude?.toFixed(5)}, ${selectedRoute.points[selectedRoute.points.length - 1].longitude?.toFixed(5)}`
+                            : '-')}
+                      </div>
+                    </div>
+                  </div>
+                  {selectedRoute.purposeType && (
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">出行目的</div>
+                      <div className="route-detail-value">
+                        {PURPOSE_LABELS[selectedRoute.purposeType] || '其他'}
+                      </div>
+                    </div>
+                  )}
+                  {selectedRoute.note && (
+                    <div className="route-detail-section">
+                      <div className="route-detail-label">备注</div>
+                      <div className="route-detail-value">{selectedRoute.note}</div>
+                    </div>
+                  )}
+                </div>
+                <div className="route-detail-footer">
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => setRouteDetailModalOpen(false)}
+                  >
+                    关闭
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={async () => {
+                      if (!selectedRoute?.id) return;
+                      if (typeof window !== 'undefined' && window.confirm) {
+                        const ok = window.confirm('确定要删除该轨迹吗？此操作不可恢复');
+                        if (!ok) return;
+                      }
+                      try {
+                        await deleteRouteById(selectedRoute.id);
+                        setRoutes((prev) => prev.filter((route) => route.id !== selectedRoute.id));
+                        setSelectedRoute(null);
+                        setRouteDetailModalOpen(false);
+                      } catch (error) {
+                        // eslint-disable-next-line no-console
+                        console.error('Failed to delete route:', error);
+                        if (typeof window !== 'undefined' && window.alert) {
+                          window.alert('删除轨迹失败，请稍后重试');
+                        }
+                      }
+                    }}
+                  >
+                    删除轨迹
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

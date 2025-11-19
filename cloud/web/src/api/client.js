@@ -201,6 +201,12 @@ export async function fetchAdminUserDetail(id, params = {}) {
   return response.data;
 }
 
+export async function updateAdminUser(id, payload = {}) {
+  if (!id) throw new Error('User id is required');
+  const response = await client.patch(`/admin/users/${id}`, payload);
+  return response.data;
+}
+
 export async function fetchAdminAnalyticsSummary(params = {}) {
   const response = await client.get('/admin/analytics/summary', { params });
   return response.data;
@@ -247,6 +253,17 @@ export async function deleteAdminAnnouncement(id) {
 
 export async function fetchLatestAnnouncement() {
   const response = await client.get('/announcements/latest');
+  return response.data;
+}
+
+export async function fetchAdminFeedback(params = {}) {
+  const response = await client.get('/admin/feedback', { params });
+  return response.data;
+}
+
+export async function updateAdminFeedback(id, payload = {}) {
+  if (!id) throw new Error('Feedback id is required');
+  const response = await client.patch(`/admin/feedback/${id}`, payload);
   return response.data;
 }
 

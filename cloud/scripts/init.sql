@@ -191,4 +191,23 @@ CREATE INDEX IF NOT EXISTS idx_announcements_status_publish_at
 ALTER TABLE announcements
   ADD COLUMN IF NOT EXISTS delivery_mode TEXT NOT NULL DEFAULT 'single',
   ADD COLUMN IF NOT EXISTS force_read BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS link_url TEXT;
+  ADD COLUMN IF NOT EXISTS link_url TEXT,
+  ADD COLUMN IF NOT EXISTS target_audience TEXT NOT NULL DEFAULT 'all';
+
+-- User feedback tickets
+CREATE TABLE IF NOT EXISTS feedback_tickets (
+  id BIGSERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  category TEXT,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  contact TEXT,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  resolved_at TIMESTAMPTZ,
+  admin_reply TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_feedback_tickets_status_created_at
+  ON feedback_tickets(status, created_at DESC);

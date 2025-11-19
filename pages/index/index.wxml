@@ -271,6 +271,14 @@
             <switch checked="{{userCard.defaultPublic}}" bindchange="handlePrivacySwitchChange"></switch>
           </view>
           <view class="settings-divider"></view>
+          <view class="settings-row settings-row--link" bindtap="handleOpenFeedback">
+            <view class="settings-row__texts">
+              <text class="settings-row__title">问题反馈</text>
+              <text class="settings-row__desc">遇到问题或提交功能建议</text>
+            </view>
+            <text class="settings-row__link-text">填写</text>
+          </view>
+          <view class="settings-divider"></view>
           <view class="settings-row settings-row--link" bindtap="handleOpenAbout">
             <view class="settings-row__texts">
               <text class="settings-row__title">关于 RouteLab</text>

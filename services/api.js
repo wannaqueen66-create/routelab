@@ -593,6 +593,27 @@ function getActiveAnnouncements() {
   });
 }
 
+function submitFeedbackTicket({ category, title, content, contact } = {}) {
+  const payload = {};
+  if (typeof category === 'string') {
+    payload.category = category.trim();
+  }
+  if (typeof title === 'string') {
+    payload.title = title.trim();
+  }
+  if (typeof content === 'string') {
+    payload.content = content.trim();
+  }
+  if (typeof contact === 'string') {
+    payload.contact = contact.trim();
+  }
+  return request({
+    path: '/feedback',
+    method: 'POST',
+    data: payload,
+  });
+}
+
 // Safe reverse geocoding with local fallbacks and normalization
 function reverseGeocodeSafe({ latitude, longitude } = {}) {
   if (latitude === undefined || longitude === undefined) {
@@ -660,6 +681,7 @@ module.exports = {
   getRouteById,
   getLatestAnnouncement,
   getActiveAnnouncements,
+  submitFeedbackTicket,
   updateUserProfile,
   getUserSettings,
   saveUserSettings,

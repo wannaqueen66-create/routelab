@@ -731,6 +731,83 @@
   .route-list-panel {
     width: 320px;
   }
+
+  .route-detail-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1200;
+  }
+
+  .route-detail-modal {
+    width: 520px;
+    max-height: 80vh;
+    background: var(--white);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .route-detail-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .route-detail-title {
+    font-size: var(--text-xl);
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .route-detail-subtitle {
+    font-size: var(--text-sm);
+    color: var(--gray-500);
+    margin-top: var(--space-1);
+  }
+
+  .route-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .route-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+  }
+
+  .route-detail-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .route-detail-label {
+    font-size: var(--text-xs);
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .route-detail-value {
+    font-size: var(--text-sm);
+    color: var(--gray-800);
+  }
+
+  .route-detail-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+  }
 }
 
 @media (max-width: 768px) {
@@ -1075,7 +1152,7 @@
 .map-page-admin {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - var(--header-height) - var(--space-12));
+  height: calc(100vh - var(--header-height) - var(--space-6));
   background: var(--white);
   border-radius: var(--radius-xl);
   overflow: hidden;
@@ -1083,7 +1160,7 @@
 }
 
 .map-page-header {
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--gray-200);
   display: flex;
   align-items: center;
@@ -1100,7 +1177,7 @@
 }
 
 .map-page-title h1 {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--gray-900);
   margin: 0;
@@ -1108,7 +1185,7 @@
 
 .stats-summary {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .stat-item {
