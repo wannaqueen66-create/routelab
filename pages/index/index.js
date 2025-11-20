@@ -162,13 +162,15 @@ function createWeatherState(overrides = {}) {
 }
 
 function formatAirQuality(airQuality = {}) {
-  const value =
-    Number.isFinite(Number(airQuality.value)) && Number(airQuality.value) >= 0
-      ? Number(airQuality.value)
-      : Number.isFinite(Number(airQuality.aqi)) && Number(airQuality.aqi) >= 0
-      ? Number(airQuality.aqi)
-      : null;
-  const level = airQuality.level || '';
+  const toNonNegativeNumber = (val) => {
+    if (val === null || val === undefined || val === '') {
+      return null;
+    }
+    const numeric = Number(val);
+    return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+  };
+  const value = toNonNegativeNumber(airQuality.value) ?? toNonNegativeNumber(airQuality.aqi);
+  const level = airQuality.level || airQuality.category || '';
   if (value === null) {
     return level || '--';
   }
@@ -177,7 +179,8 @@ function formatAirQuality(airQuality = {}) {
 }
 
 function analyzeSportAdvice(payload = {}) {
-  const text = `${payload.suggestion || ''}${payload.weatherText || ''}${payload.airQuality?.level || ''}`;
+  const airLevelText = payload.airQuality?.level || payload.airQuality?.category || '';
+  const text = `${payload.suggestion || ''}${payload.weatherText || ''}${airLevelText}`;
   const cautionKeywords = /(降温|雨|雾霾|谨慎|注意)/;
   const goodKeywords = /(晴|适宜|清爽|凉爽)/;
   let level = 'neutral';
@@ -226,7 +229,7 @@ function formatWeatherPayload(payload = {}) {
     humidityText: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : '--',
     windText: Number.isFinite(windSpeed) ? formatWind(windSpeed) : '--',
     airQualityText: formatAirQuality(payload.airQuality),
-    airQualityLevel: payload.airQuality?.level || '',
+    airQualityLevel: payload.airQuality?.level || payload.airQuality?.category || '',
     suggestion,
     fetchedAt: payload.fetchedAt || Date.now(),
     error: '',

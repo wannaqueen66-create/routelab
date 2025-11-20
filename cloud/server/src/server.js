@@ -55,9 +55,20 @@ const AMAP_TIMEOUT_MS = Math.max(Number(process.env.AMAP_TIMEOUT_MS) || 6500, 20
 const GEOCODE_CACHE_TTL_MS = Math.max(Number(process.env.GEOCODE_CACHE_TTL_MS) || 10 * 60 * 1000, 1000);
 const GEOCODE_CACHE_GRID_SIZE =
   Math.max(Number(process.env.GEOCODE_CACHE_GRID_SIZE) || 0.001, 0.0001);
-const QWEATHER_API_KEY = process.env.QWEATHER_API_KEY || '';
-const QWEATHER_BASE_URL =
-  (process.env.QWEATHER_BASE_URL || 'https://devapi.qweather.com/v7').replace(/\/$/, '');
+const QWEATHER_API_KEY = process.env.API_KEY || process.env.QWEATHER_API_KEY || '';
+const QWEATHER_API_HOST = process.env.API_HOST || process.env.QWEATHER_API_HOST || '';
+const LEGACY_QWEATHER_BASE = process.env.QWEATHER_BASE_URL || '';
+const QWEATHER_BASE_URL = (() => {
+  const normalizedHost = (QWEATHER_API_HOST || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  if (normalizedHost) {
+    return `https://${normalizedHost}/v7`;
+  }
+  if (LEGACY_QWEATHER_BASE) {
+    const trimmed = LEGACY_QWEATHER_BASE.replace(/\/$/, '');
+    return trimmed.endsWith('/v7') ? trimmed : `${trimmed}/v7`;
+  }
+  return '';
+})();
 const OPEN_METEO_WEATHER_BASE =
   (process.env.OPEN_METEO_WEATHER_BASE || 'https://api.open-meteo.com/v1/forecast').replace(
     /\/$/,
@@ -4214,63 +4225,175 @@ async function fetchAmapAround({
   return executeAmapRequest(url);
 }
 
-async function fetchQWeatherSnapshot(latitude, longitude) {
+function normalizeNumberValue(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function maskQWeatherKey(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.searchParams.has('key')) {
+      parsed.searchParams.set('key', '***');
+    }
+    return parsed.toString();
+  } catch (error) {
+    return url;
+  }
+}
+
+function logQWeatherError(context, { url, httpStatus, payloadCode, payload }) {
+  console.error(`[QWeather] ${context} error`, {
+    url: maskQWeatherKey(url),
+    httpStatus,
+    payloadCode: payloadCode ?? null,
+    message: payload?.message || payload?.warning || payload?.msg || '',
+  });
+}
+
+function mapQWeatherCodeToStatus(code, httpStatus) {
+  if (code === '401') return 401;
+  if (code === '404') return 502;
+  if (code === '429') return 429;
+  if (code === '102') return 429;
+  if (httpStatus && Number(httpStatus) >= 400) return httpStatus;
+  return 502;
+}
+
+function ensureQWeatherConfigured() {
   if (!QWEATHER_API_KEY) {
-    const error = new Error('QWeather key is not configured');
+    const error = new Error('QWeather API key is not configured');
     error.statusCode = 500;
     throw error;
   }
-  const base = `${QWEATHER_BASE_URL}/weather/now`;
-  const url = new URL(base);
-  url.searchParams.set('location', `${longitude},${latitude}`);
-  url.searchParams.set('key', QWEATHER_API_KEY);
-  url.searchParams.set('lang', 'zh-Hans');
-  url.searchParams.set('unit', 'm');
+  if (!QWEATHER_BASE_URL) {
+    const error = new Error('QWeather API host is not configured');
+    error.statusCode = 500;
+    throw error;
+  }
+}
 
-  const response = await fetch(url.toString(), {
-    headers: { 'User-Agent': WEATHER_USER_AGENT, Accept: 'application/json' },
+async function requestQWeather(pathname, params = {}, context = 'request') {
+  ensureQWeatherConfigured();
+  const base = QWEATHER_BASE_URL.replace(/\/$/, '');
+  const url = new URL(`${base}${pathname.startsWith('/') ? '' : '/'}${pathname}`);
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, value);
+    }
   });
-  if (!response.ok) {
-    const error = new Error('QWeather request failed');
-    error.statusCode = response.status;
+  url.searchParams.set('key', QWEATHER_API_KEY);
+
+  const headers = {
+    'User-Agent': WEATHER_USER_AGENT,
+    Accept: 'application/json',
+    'X-QWeather-Key': QWEATHER_API_KEY,
+  };
+
+  let response;
+  try {
+    response = await fetch(url.toString(), { headers });
+  } catch (networkError) {
+    logQWeatherError(context, {
+      url: url.toString(),
+      httpStatus: null,
+      payloadCode: null,
+      payload: null,
+    });
+    networkError.statusCode = 502;
+    throw networkError;
+  }
+
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (parseError) {
+    logQWeatherError(context, {
+      url: url.toString(),
+      httpStatus: response?.status || null,
+      payloadCode: null,
+      payload: null,
+    });
+    const error = new Error('Failed to parse QWeather response');
+    error.statusCode = response?.status || 502;
     throw error;
   }
-  const payload = await response.json();
-  const statusCode = String(payload.code || payload.status || '');
-  if (statusCode && statusCode !== '200') {
-    const error = new Error(`QWeather responded with code ${statusCode}`);
-    error.statusCode = 502;
+
+  const payloadCode = String(payload?.code || payload?.status || '');
+  if (!response.ok || (payloadCode && payloadCode !== '200')) {
+    logQWeatherError(context, {
+      url: url.toString(),
+      httpStatus: response.status,
+      payloadCode,
+      payload,
+    });
+    const error = new Error(`QWeather ${context} failed`);
+    error.statusCode = mapQWeatherCodeToStatus(payloadCode, response.status);
+    error.httpStatus = response.status;
+    error.payloadCode = payloadCode;
+    error.url = maskQWeatherKey(url.toString());
     throw error;
   }
+
+  return { payload, url: url.toString(), httpStatus: response.status };
+}
+
+async function fetchQWeatherWeatherSnapshot(latitude, longitude) {
+  const location = `${longitude},${latitude}`;
+  const { payload } = await requestQWeather(
+    '/weather/now',
+    { location, unit: 'm', lang: 'zh-hans' },
+    'weather/now'
+  );
   const now = payload.now || {};
-  const temperature =
-    now.temp !== undefined && now.temp !== null && now.temp !== ''
-      ? Number(now.temp)
-      : null;
-  const apparentTemperature =
-    now.feelsLike !== undefined && now.feelsLike !== null && now.feelsLike !== ''
-      ? Number(now.feelsLike)
-      : null;
-  const humidity =
-    now.humidity !== undefined && now.humidity !== null && now.humidity !== ''
-      ? Number(now.humidity)
-      : null;
-  const windSpeed =
-    now.windSpeed !== undefined && now.windSpeed !== null && now.windSpeed !== ''
-      ? Number(now.windSpeed)
-      : null;
-  const fetchedAt = payload.updateTime
-    ? new Date(payload.updateTime).getTime()
-    : Date.now();
+  const fetchedAt = Date.now();
+  const observedAt = now.obsTime ? new Date(now.obsTime).getTime() : null;
+  const weatherCode = normalizeNumberValue(now.icon);
 
   return {
-    temperature: Number.isFinite(temperature) ? temperature : null,
-    apparentTemperature: Number.isFinite(apparentTemperature) ? apparentTemperature : null,
-    weatherCode: null,
+    temperature: normalizeNumberValue(now.temp),
+    apparentTemperature: normalizeNumberValue(now.feelsLike),
+    weatherCode: Number.isFinite(weatherCode) ? weatherCode : null,
     weatherText: typeof now.text === 'string' ? now.text : null,
-    humidity: Number.isFinite(humidity) ? humidity : null,
-    windSpeed: Number.isFinite(windSpeed) ? windSpeed : null,
-    windDirection: now.windDir || null,
+    humidity: normalizeNumberValue(now.humidity),
+    windSpeed: normalizeNumberValue(now.windSpeed),
+    windDirection: normalizeNumberValue(now.wind360 ?? now.windDir),
+    windDirectionText: now.windDir || null,
+    fetchedAt,
+    observedAt,
+    obsTime: now.obsTime || null,
+    source: 'qweather',
+  };
+}
+
+async function fetchQWeatherAirSnapshot(latitude, longitude) {
+  const location = `${longitude},${latitude}`;
+  const { payload } = await requestQWeather(
+    '/air/now',
+    { location, lang: 'zh-hans' },
+    'air/now'
+  );
+  const now = payload.now || {};
+  const fetchedAt = Date.now();
+  const aqi = normalizeNumberValue(now.aqi);
+  const meta = describeAqi(aqi);
+  const category = typeof now.category === 'string' ? now.category : '';
+  const level = category || now.level || meta.level;
+
+  return {
+    aqi: aqi ?? null,
+    category: category || meta.category,
+    level,
+    pm2p5: normalizeNumberValue(now.pm2p5),
+    pm25: normalizeNumberValue(now.pm2p5),
+    pm10: normalizeNumberValue(now.pm10),
+    o3: normalizeNumberValue(now.o3),
+    so2: normalizeNumberValue(now.so2),
+    no2: normalizeNumberValue(now.no2),
+    co: normalizeNumberValue(now.co),
     fetchedAt,
     source: 'qweather',
   };
@@ -4374,9 +4497,9 @@ async function fetchOpenMeteoWeatherSnapshot(latitude, longitude) {
 async function fetchWeatherSnapshot(latitude, longitude) {
   const errors = [];
 
-  if (QWEATHER_API_KEY) {
+  if (QWEATHER_API_KEY && QWEATHER_BASE_URL) {
     try {
-      return await fetchQWeatherSnapshot(latitude, longitude);
+      return await fetchQWeatherWeatherSnapshot(latitude, longitude);
     } catch (error) {
       error.provider = 'qweather';
       errors.push(error);
@@ -4408,7 +4531,7 @@ async function fetchWeatherSnapshot(latitude, longitude) {
   }
 }
 
-async function fetchAirQualitySnapshot(latitude, longitude) {
+async function fetchOpenMeteoAirQualitySnapshot(latitude, longitude) {
   const url = new URL(OPEN_METEO_AIR_BASE);
   url.searchParams.set('latitude', latitude);
   url.searchParams.set('longitude', longitude);
@@ -4439,6 +4562,34 @@ async function fetchAirQualitySnapshot(latitude, longitude) {
     pm10: pm10List[index] ?? null,
     fetchedAt: times[index] ? new Date(times[index]).getTime() : Date.now(),
   };
+}
+
+async function fetchAirQualitySnapshot(latitude, longitude) {
+  const errors = [];
+
+  if (QWEATHER_API_KEY && QWEATHER_BASE_URL) {
+    try {
+      return await fetchQWeatherAirSnapshot(latitude, longitude);
+    } catch (error) {
+      error.provider = 'qweather';
+      errors.push(error);
+    }
+  }
+
+  try {
+    return await fetchOpenMeteoAirQualitySnapshot(latitude, longitude);
+  } catch (error) {
+    error.provider = 'open_meteo';
+    errors.push(error);
+    const aggregate = new Error('All air quality providers failed');
+    aggregate.statusCode = error.statusCode || 502;
+    aggregate.details = errors.map((item) => ({
+      provider: item.provider || 'unknown',
+      statusCode: item.statusCode,
+      message: item.message,
+    }));
+    throw aggregate;
+  }
 }
 
 async function reverseGeocode(latitude, longitude) {
@@ -7200,7 +7351,28 @@ app.get('/api/weather', ensureAuth, async (req, res) => {
         pm10: null,
       })),
     ]);
-    const aqiMeta = describeAqi(air.aqi);
+    const normalizeMetric = (value) =>
+      value !== null &&
+      value !== undefined &&
+      value !== '' &&
+      Number.isFinite(Number(value))
+        ? Number(value)
+        : null;
+    const aqiValue = normalizeMetric(air.aqi);
+    const aqiMeta = describeAqi(aqiValue);
+    const airLevel = air.category || air.level || aqiMeta.level;
+    const airCategory = air.category || air.level || aqiMeta.category;
+    const fetchedAt = weather.fetchedAt || Date.now();
+    const airFetchedAt = air.fetchedAt || fetchedAt;
+    const obsTimeMs = weather.obsTime ? new Date(weather.obsTime).getTime() : NaN;
+    const observedAt =
+      weather.observedAt !== null &&
+      weather.observedAt !== undefined &&
+      Number.isFinite(Number(weather.observedAt))
+        ? Number(weather.observedAt)
+        : Number.isFinite(obsTimeMs)
+        ? obsTimeMs
+        : null;
     const weatherText =
       typeof weather.weatherText === 'string' && weather.weatherText.trim()
         ? weather.weatherText.trim()
@@ -7227,14 +7399,22 @@ app.get('/api/weather', ensureAuth, async (req, res) => {
         : null,
       weatherCode: weather.weatherCode,
       weatherText,
+      obsTime: weather.obsTime || null,
+      observedAt,
       airQuality: {
-        aqi: air.aqi !== null && air.aqi !== undefined ? Number(air.aqi) : null,
-        level: aqiMeta.level,
-        category: aqiMeta.category,
-        pm25: air.pm25 !== null && air.pm25 !== undefined ? Number(air.pm25) : null,
-        pm10: air.pm10 !== null && air.pm10 !== undefined ? Number(air.pm10) : null,
+        aqi: aqiValue,
+        level: airLevel,
+        category: airCategory,
+        pm25: normalizeMetric(air.pm25 ?? air.pm2p5),
+        pm2p5: normalizeMetric(air.pm2p5 ?? air.pm25),
+        pm10: normalizeMetric(air.pm10),
+        o3: normalizeMetric(air.o3),
+        so2: normalizeMetric(air.so2),
+        no2: normalizeMetric(air.no2),
+        co: normalizeMetric(air.co),
+        fetchedAt: airFetchedAt,
       },
-      fetchedAt: weather.fetchedAt,
+      fetchedAt,
       suggestion: suggestionText,
     });
   } catch (error) {
