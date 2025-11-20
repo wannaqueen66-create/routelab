@@ -37,33 +37,45 @@ const SPEED_COLORS = [
 
 // Trip purpose colors (aligned with mini-program definitions)
 const PURPOSE_COLORS = {
-  walk: '#4A90E2',
-  run: '#FAAD14',
-  ride: '#52C41A',
-  gym: '#722ED1',
-  basketball: '#FF4D4F',
+  basketball: '#FF7A45',
   football: '#13C2C2',
+  run: '#FAAD14',
   badminton: '#EB2F96',
-  tableTennis: '#FADB14',
-  tennis: '#2F54EB',
+  table_tennis: '#FADB14',
   volleyball: '#A0D911',
+  tennis: '#2F54EB',
+  swimming: '#1890FF',
+  gym: '#722ED1',
+  yoga_pilates: '#A855F7',
+  martial_arts: '#FF4D4F',
+  dance: '#FF85C0',
+  // legacy
+  walk: '#4A90E2',
+  ride: '#52C41A',
   hiking: '#8C8C8C',
   other: '#8C8C8C',
+  tabletennis: '#FADB14',
 };
 
 const PURPOSE_LABELS = {
-  walk: '散步',
-  run: '跑步',
-  ride: '骑行',
-  gym: '健身',
   basketball: '篮球',
   football: '足球',
+  run: '跑步',
   badminton: '羽毛球',
-  tableTennis: '乒乓球',
-  tennis: '网球',
+  table_tennis: '乒乓球',
   volleyball: '排球',
+  tennis: '网球',
+  swimming: '游泳',
+  gym: '健身',
+  yoga_pilates: '瑜伽 / 普拉提',
+  martial_arts: '武术类',
+  dance: '舞蹈类',
+  // legacy
+  walk: '散步',
+  ride: '骑行',
   hiking: '爬山',
   other: '其他',
+  tabletennis: '乒乓球',
 };
 
 function formatPaceFromStats(distanceMeters, durationSeconds) {

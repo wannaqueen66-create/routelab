@@ -26,6 +26,7 @@ function buildRoutesCsv(items = []) {
     'duration',
     'calories',
     'pointCount',
+    'activityType',
     'purposeType',
     'privacyLevel',
     'createdAt',
@@ -60,6 +61,7 @@ function buildRoutesCsv(items = []) {
       statSummary.duration ?? route.stats?.duration ?? null,
       statSummary.calories ?? route.stats?.calories ?? null,
       route.pointCount ?? (Array.isArray(route.points) ? route.points.length : null),
+      route.meta?.activityType ?? route.activityType ?? '',
       route.purposeType ?? route.meta?.purposeType ?? null,
       route.privacyLevel,
       route.createdAt ? new Date(route.createdAt).toISOString() : '',
@@ -112,4 +114,3 @@ const routes = [
 const csv = buildRoutesCsv(routes);
 fs.writeFileSync('test_routes_export.csv', csv, 'utf8');
 console.log(csv);
-

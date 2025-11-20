@@ -133,7 +133,7 @@
   >
     <view class="purpose-picker">
       <view class="purpose-picker__header">
-        <text class="purpose-picker__title">选择此次出行目的</text>
+        <text class="purpose-picker__title">你这次是去做什么运动？</text>
         <text class="purpose-picker__subtitle">用于分析不同路线的运动偏好</text>
       </view>
       <view class="purpose-picker__grid">

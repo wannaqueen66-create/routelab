@@ -70,18 +70,24 @@ const IDENTITY_OPTIONS = [
 
 const PURPOSE_OPTIONS = [
   { value: '', label: '不限' },
-  { value: 'walk', label: '散步' },
-  { value: 'run', label: '跑步' },
-  { value: 'ride', label: '骑行' },
-  { value: 'gym', label: '健身' },
   { value: 'basketball', label: '篮球' },
   { value: 'football', label: '足球' },
+  { value: 'run', label: '跑步' },
   { value: 'badminton', label: '羽毛球' },
-  { value: 'tableTennis', label: '乒乓球' },
-  { value: 'tennis', label: '网球' },
+  { value: 'table_tennis', label: '乒乓球' },
   { value: 'volleyball', label: '排球' },
-  { value: 'hiking', label: '爬山' },
-  { value: 'other', label: '其他' },
+  { value: 'tennis', label: '网球' },
+  { value: 'swimming', label: '游泳' },
+  { value: 'gym', label: '健身' },
+  { value: 'yoga_pilates', label: '瑜伽 / 普拉提' },
+  { value: 'martial_arts', label: '武术类' },
+  { value: 'dance', label: '舞蹈类' },
+  // legacy keys for backward compatibility
+  { value: 'walk', label: '散步（旧）' },
+  { value: 'ride', label: '骑行（旧）' },
+  { value: 'hiking', label: '爬山（旧）' },
+  { value: 'other', label: '其他（旧）' },
+  { value: 'tabletennis', label: '乒乓球（旧键）' },
 ];
 
 const EXPORT_FORMAT_STORAGE_KEY = 'routelab.admin.exportFormat';

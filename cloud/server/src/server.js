@@ -125,20 +125,27 @@ const ACTIVITY_TYPE_DEFINITIONS = {
   run: { key: 'run', label: '跑步' },
   ride: { key: 'ride', label: '骑行' },
 };
+const ACTIVITY_TYPE_VALUES = new Set(Object.keys(ACTIVITY_TYPE_DEFINITIONS));
 const DEFAULT_ACTIVITY_TYPE = 'walk';
 const PURPOSE_TYPE_DEFINITIONS = {
-  walk: { key: 'walk', label: '散步' },
-  run: { key: 'run', label: '跑步' },
-  ride: { key: 'ride', label: '骑行' },
-  gym: { key: 'gym', label: '健身' },
   basketball: { key: 'basketball', label: '篮球' },
   football: { key: 'football', label: '足球' },
+  run: { key: 'run', label: '跑步' },
   badminton: { key: 'badminton', label: '羽毛球' },
-  tableTennis: { key: 'tableTennis', label: '乒乓球' },
-  tennis: { key: 'tennis', label: '网球' },
+  table_tennis: { key: 'table_tennis', label: '乒乓球' },
   volleyball: { key: 'volleyball', label: '排球' },
+  tennis: { key: 'tennis', label: '网球' },
+  swimming: { key: 'swimming', label: '游泳' },
+  gym: { key: 'gym', label: '健身' },
+  yoga_pilates: { key: 'yoga_pilates', label: '瑜伽 / 普拉提' },
+  martial_arts: { key: 'martial_arts', label: '武术类' },
+  dance: { key: 'dance', label: '舞蹈类' },
+  // legacy options kept for compatibility
+  walk: { key: 'walk', label: '散步' },
+  ride: { key: 'ride', label: '骑行' },
   hiking: { key: 'hiking', label: '爬山' },
   other: { key: 'other', label: '其他' },
+  tabletennis: { key: 'tabletennis', label: '乒乓球' },
 };
 const PURPOSE_TYPE_VALUES = new Set(Object.keys(PURPOSE_TYPE_DEFINITIONS));
 
@@ -2154,6 +2161,7 @@ function buildRoutesCsv(items = []) {
     'duration',
     'calories',
     'pointCount',
+    'activityType',
     'points',
     'purposeType',
     'privacyLevel',
@@ -2178,6 +2186,10 @@ function buildRoutesCsv(items = []) {
         .filter(Boolean)
         .join(' ; ');
     }
+    const activityType = sanitizeEnumValue(
+      route.meta?.activityType ?? route.activityType,
+      ACTIVITY_TYPE_VALUES
+    );
     const line = [
       route.id,
       route.ownerId ?? route.userId ?? null,
@@ -2188,6 +2200,7 @@ function buildRoutesCsv(items = []) {
       statSummary.duration ?? route.stats?.duration ?? null,
       statSummary.calories ?? route.stats?.calories ?? null,
       route.pointCount ?? (Array.isArray(route.points) ? route.points.length : null),
+      activityType,
       pointsCell,
       sanitizeEnumValue(route.purposeType ?? route.meta?.purposeType, PURPOSE_TYPE_VALUES),
       route.privacyLevel,
@@ -6233,12 +6246,17 @@ app.post('/api/admin/routes/export', ensureAuth, async (req, res) => {
         { header: 'Duration (s)', key: 'duration', width: 14 },
         { header: 'Calories', key: 'calories', width: 12 },
         { header: 'Point Count', key: 'pointCount', width: 12 },
+        { header: 'Activity Type', key: 'activityType', width: 14 },
         { header: 'Privacy', key: 'privacyLevel', width: 12 },
         { header: 'Created At', key: 'createdAt', width: 20 },
         { header: 'Updated At', key: 'updatedAt', width: 20 },
       ];
       for (const route of items) {
         const statSummary = route.statSummary || {};
+        const activityType = sanitizeEnumValue(
+          route.meta?.activityType ?? route.activityType,
+          ACTIVITY_TYPE_VALUES
+        );
         sheet.addRow({
           id: route.id,
           ownerId: route.ownerId ?? route.userId ?? null,
@@ -6252,6 +6270,7 @@ app.post('/api/admin/routes/export', ensureAuth, async (req, res) => {
           calories:
             statSummary.calories ?? route.stats?.calories ?? route.stats?.calories_kcal ?? null,
           pointCount: route.pointCount ?? (Array.isArray(route.points) ? route.points.length : null),
+          activityType,
           privacyLevel: route.privacyLevel,
           createdAt: route.createdAt ? new Date(route.createdAt) : null,
           updatedAt: route.updatedAt ? new Date(route.updatedAt) : null,
