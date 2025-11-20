@@ -162,12 +162,18 @@ function createWeatherState(overrides = {}) {
 }
 
 function formatAirQuality(airQuality = {}) {
-  const value = Number(airQuality.value);
-  if (!Number.isFinite(value)) {
-    return airQuality.level || '--';
+  const value =
+    Number.isFinite(Number(airQuality.value)) && Number(airQuality.value) >= 0
+      ? Number(airQuality.value)
+      : Number.isFinite(Number(airQuality.aqi)) && Number(airQuality.aqi) >= 0
+      ? Number(airQuality.aqi)
+      : null;
+  const level = airQuality.level || '';
+  if (value === null) {
+    return level || '--';
   }
-  const level = airQuality.level || '良好';
-  return `${level} · ${value.toFixed(0)}`;
+  const label = level || '良好';
+  return `${label} · ${value.toFixed(0)}`;
 }
 
 function analyzeSportAdvice(payload = {}) {

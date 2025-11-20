@@ -392,8 +392,20 @@ Page({
         if (app && typeof app.getProfileCompletionStatus === 'function') {
           app.getProfileCompletionStatus();
         }
+        // 自动回到个人主页，并保证资料立即刷新。
+        // 使用 reLaunch 等价于“重新打开小程序到个人主页”，和你手动重启效果一致，但体验更顺滑。
         setTimeout(() => {
-          wx.navigateBack();
+          if (typeof wx.reLaunch === 'function') {
+            wx.reLaunch({
+              url: '/pages/profile/profile',
+            });
+          } else if (typeof wx.switchTab === 'function') {
+            wx.switchTab({
+              url: '/pages/profile/profile',
+            });
+          } else if (typeof wx.navigateBack === 'function') {
+            wx.navigateBack();
+          }
         }, 600);
       })
       .catch((error) => {

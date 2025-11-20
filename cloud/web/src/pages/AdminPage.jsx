@@ -38,7 +38,9 @@ import {
   updateAdminFeedback,
   fetchAdminUserDetail,
   updateAdminUser,
+  updateAdminUserAchievements,
 } from '../api/client';
+import { formatDistance, formatDuration } from '../utils/format';
 
 const GENDER_OPTIONS = [
   { value: '', label: '未设置' },
@@ -584,6 +586,7 @@ function UserManagement() {
                 />
               </th>
               <th>用户ID</th>
+              <th>昵称</th>
               <th>注册时间</th>
               <th>路线数</th>
               <th>总里程</th>
@@ -595,14 +598,14 @@ function UserManagement() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className="skeleton skeleton-text" />
                   </td>
                 </tr>
               ))
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center p-8 text-gray-500">
+                <td colSpan={8} className="text-center p-8 text-gray-500">
                   暂无用户数据
                 </td>
               </tr>
@@ -623,6 +626,9 @@ function UserManagement() {
                   </td>
                   <td>
                     <span className="font-medium">{user.id}</span>
+                  </td>
+                  <td>
+                    {user.displayName || user.nickname || '-'}
                   </td>
                   <td>
                     {user.createdAt
@@ -653,7 +659,17 @@ function UserManagement() {
 
       <div className="table-pagination">
         <div className="pagination-info">
-          显示 {(currentPage - 1) * pageSize + 1} - {currentPage * pageSize} 项
+          {totalUsers > 0 ? (
+            <>
+              显示{' '}
+              {(currentPage - 1) * pageSize + 1}
+              {' - '}
+              {Math.min(currentPage * pageSize, totalUsers)} 项（共 {totalUsers} 项，第{' '}
+              {currentPage} / {Math.max(1, Math.ceil(totalUsers / pageSize))} 页）
+            </>
+          ) : (
+            '暂无用户数据'
+          )}
         </div>
         <div className="pagination-controls">
           <button

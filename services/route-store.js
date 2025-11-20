@@ -16,6 +16,7 @@ const { formatDuration } = require('../utils/time');
 const { ACTIVITY_TYPE_MAP, DEFAULT_ACTIVITY_TYPE } = require('../constants/activity');
 const { PURPOSE_MAP } = require('../constants/purpose');
 const api = require('./api');
+const { ensureRemotePhotos } = require('./media');
 const logger = require('../utils/logger');
 
 const subscribers = new Set();
@@ -276,6 +277,53 @@ function normalizePhotoList(photos = []) {
       };
     })
     .filter(Boolean);
+}
+
+function extractPhotoPath(photo) {
+  if (!photo) {
+    return null;
+  }
+  if (typeof photo === 'string') {
+    return photo;
+  }
+  const candidate = photo.path || photo.url || photo.fileId || photo.tempFilePath;
+  return typeof candidate === 'string' ? candidate : null;
+}
+
+function isRemotePhotoPath(path) {
+  if (typeof path !== 'string') {
+    return false;
+  }
+  const normalized = path.trim().toLowerCase();
+  return normalized.startsWith('http://') || normalized.startsWith('https://');
+}
+
+function ensureRoutePhotosAreRemote(route) {
+  if (!route?.photos || !route.photos.length) {
+    return Promise.resolve(route);
+  }
+  const normalizedPhotos = normalizePhotoList(route.photos);
+  const hasLocalPhotos = normalizedPhotos.some((item) => !isRemotePhotoPath(extractPhotoPath(item)));
+  if (!hasLocalPhotos) {
+    return Promise.resolve({ ...route, photos: normalizedPhotos });
+  }
+  return ensureRemotePhotos(normalizedPhotos)
+    .then((uploaded) => {
+      const sanitized = normalizePhotoList(uploaded || normalizedPhotos);
+      const patched = updateRoute(route.id, { photos: sanitized });
+      if (patched) {
+        notify();
+        return patched;
+      }
+      return { ...route, photos: sanitized };
+    })
+    .catch((error) => {
+      logger.warn('Upload photos before route sync failed', {
+        id: route.id,
+        error: error?.errMsg || error?.message || error,
+      });
+      return route;
+    });
 }
 
 function normalizePausePoints(points = []) {
@@ -655,20 +703,22 @@ function syncRouteToCloud(route) {
   if (!route?.id) {
     return Promise.resolve();
   }
-  const remoteId = route.remoteId || route.id;
-  const payload = sanitizeRouteForUpload({
-    ...route,
-    id: remoteId,
-    clientId: route.id,
-  });
-  if (!payload) {
-    logger.warn('Route sync skipped (invalid payload)', {
-      id: route?.id,
+  return ensureRoutePhotosAreRemote(route).then((preparedRoute) => {
+    const target = preparedRoute || route;
+    const remoteId = target.remoteId || target.id;
+    const payload = sanitizeRouteForUpload({
+      ...target,
+      id: remoteId,
+      clientId: route.id,
     });
-    return Promise.resolve();
-  }
-  const request = route.remoteId ? api.upsertRoute(payload) : api.createRoute(payload);
-  return request
+    if (!payload) {
+      logger.warn('Route sync skipped (invalid payload)', {
+        id: route?.id,
+      });
+      return Promise.resolve();
+    }
+    const request = target.remoteId ? api.upsertRoute(payload) : api.createRoute(payload);
+    return request
     .then((response) => {
       if (response && typeof response === 'object') {
         const syncAt = Number(response.lastSyncAt);
@@ -691,6 +741,7 @@ function syncRouteToCloud(route) {
       });
       throw err;
     });
+  });
 }
 
 function syncRoutesToCloud() {
