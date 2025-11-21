@@ -10,10 +10,22 @@ const {
 } = require('../constants/achievements');
 const api = require('./api');
 
-const MIN_DURATION_SECONDS = 90;
-const MIN_DISTANCE_METERS = 200;
+const MIN_DURATION_SECONDS = 60;
+const MIN_DISTANCE_METERS = 150;
 const MIN_POINT_COUNT = 5;
-const MAX_AVG_SPEED_MPS = 20;
+const DEFAULT_AVG_SPEED_LIMIT_MPS = 12;
+const ACTIVITY_SPEED_LIMITS_MPS = {
+  walk: 3.5, // ~12.6 km/h，超出视为异常
+  run: 6.5, // ~23.4 km/h，已覆盖一般跑步
+  ride: 12, // ~43.2 km/h
+};
+
+function getSpeedLimit(activityType) {
+  if (activityType && ACTIVITY_SPEED_LIMITS_MPS[activityType]) {
+    return ACTIVITY_SPEED_LIMITS_MPS[activityType];
+  }
+  return DEFAULT_AVG_SPEED_LIMIT_MPS;
+}
 
 function evaluateRouteValidity(route) {
   if (!route || typeof route !== 'object') {
@@ -32,6 +44,8 @@ function evaluateRouteValidity(route) {
   const distanceMeters = Number(stats.distance) || 0;
   const pointCount = Array.isArray(route.points) ? route.points.length : 0;
   const averageSpeed = durationSeconds > 0 ? distanceMeters / durationSeconds : 0;
+  const activityType = route?.meta?.activityType || route?.activityType || null;
+  const speedLimit = getSpeedLimit(activityType);
 
   const reasons = [];
   if (durationSeconds < MIN_DURATION_SECONDS) {
@@ -43,7 +57,7 @@ function evaluateRouteValidity(route) {
   if (pointCount < MIN_POINT_COUNT) {
     reasons.push('insufficient_points');
   }
-  if (averageSpeed > MAX_AVG_SPEED_MPS || averageSpeed <= 0) {
+  if (averageSpeed > speedLimit || averageSpeed <= 0) {
     reasons.push('avg_speed_abnormal');
   }
 
@@ -52,7 +66,7 @@ function evaluateRouteValidity(route) {
     distanceMeters >= MIN_DISTANCE_METERS &&
     pointCount >= MIN_POINT_COUNT &&
     averageSpeed > 0 &&
-    averageSpeed <= MAX_AVG_SPEED_MPS;
+    averageSpeed <= speedLimit;
 
   return {
     valid,

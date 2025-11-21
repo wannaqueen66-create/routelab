@@ -621,6 +621,11 @@ Page({
   },
 
   beginTrackingWithPurpose(purposeKey) {
+    if (!purposeKey || !PURPOSE_MAP[purposeKey]) {
+      wx.showToast({ title: TOAST.purposeRequired, icon: 'none' });
+      this.openPurposePicker();
+      return;
+    }
     if (!this.data.locationAuthorized) {
       this.setData({ showLocationPrompt: true });
       wx.showToast({ title: TOAST.requireLocation, icon: 'none' });
@@ -661,6 +666,11 @@ Page({
       })
       .catch((error) => {
         logger.warn('startTracking failed', error?.errMsg || error);
+        if (error?.code === 'PURPOSE_REQUIRED') {
+          wx.showToast({ title: TOAST.purposeRequired, icon: 'none' });
+          this.openPurposePicker();
+          return;
+        }
         wx.showToast({ title: TOAST.startFailed, icon: 'none' });
       });
   },

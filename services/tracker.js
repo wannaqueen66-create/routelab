@@ -3,6 +3,7 @@ const geocodeLocal = require('./geocode-local');
 const { formatDuration } = require('../utils/time');
 const { calculateSegmentDistance, calculateTotalDistance } = require('../utils/geo');
 const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../constants/activity');
+const { PURPOSE_MAP } = require('../constants/purpose');
 const { inferActivityType } = require('../utils/activity');
 const logger = require('../utils/logger');
 const {
@@ -37,6 +38,13 @@ const WEAK_SAMPLING_DISTANCE_PENALTY_METERS = 2;
 const WEAK_INTERVAL_THRESHOLD_MS = 12 * 1000;
 const WEAK_INTERVAL_STREAK_LIMIT = 2;
 const SUSPENSION_GAP_THRESHOLD_MS = 20 * 1000;
+
+const SENSOR_WINDOW_MS = 3000;
+const SENSOR_MAX_SAMPLES = 200;
+const SENSOR_ZERO_CROSSING_GAP_MS = 80;
+const ACTIVITY_UPGRADE_DURATION_MS = 3000;
+const ACTIVITY_DOWNGRADE_DURATION_MS = 5000;
+const ACTIVITY_RIDE_DOWNGRADE_DURATION_MS = 7000;
 
 const BATCH_MIN_POINTS = 5;
 const BATCH_MAX_POINTS = 8;
@@ -97,6 +105,18 @@ let samplingSuspendedForStillness = false;
 let stillStateStartedAt = null;
 let movementResumeCandidateAt = null;
 let lastAcceptedPointTimestamp = 0;
+let accelerometerHandler = null;
+let gyroscopeHandler = null;
+let accelerometerActive = false;
+let gyroscopeActive = false;
+let accelerometerSamples = [];
+let gyroscopeSamples = [];
+let activityStabilizer = {
+  current: DEFAULT_ACTIVITY_TYPE,
+  candidate: DEFAULT_ACTIVITY_TYPE,
+  candidateSince: 0,
+  lastChangeAt: 0,
+};
 let pendingUploadBatch = [];
 let lastBatchFlushAt = 0;
 let nextUploadAllowedAt = 0;
@@ -240,6 +260,196 @@ function resetStillnessState() {
   samplingSuspendedForStillness = false;
   stillStateStartedAt = null;
   movementResumeCandidateAt = null;
+}
+
+function trimSensorSamples(buffer, windowMs = SENSOR_WINDOW_MS) {
+  if (!Array.isArray(buffer) || !buffer.length) {
+    return;
+  }
+  const cutoff = Date.now() - windowMs;
+  while (buffer.length && buffer[0].ts < cutoff) {
+    buffer.shift();
+  }
+  if (buffer.length > SENSOR_MAX_SAMPLES) {
+    buffer.splice(0, buffer.length - SENSOR_MAX_SAMPLES);
+  }
+}
+
+function clearMotionBuffers() {
+  accelerometerSamples = [];
+  gyroscopeSamples = [];
+}
+
+function handleAccelerometerReading({ x = 0, y = 0, z = 0 } = {}) {
+  const ts = Date.now();
+  const magnitude = Math.sqrt(x * x + y * y + z * z);
+  accelerometerSamples.push({ ts, magnitude });
+  trimSensorSamples(accelerometerSamples);
+}
+
+function handleGyroscopeReading({ x = 0, y = 0, z = 0 } = {}) {
+  const ts = Date.now();
+  const magnitude = Math.sqrt(x * x + y * y + z * z);
+  gyroscopeSamples.push({ ts, magnitude });
+  trimSensorSamples(gyroscopeSamples);
+}
+
+function attachMotionListeners() {
+  if (typeof wx.onAccelerometerChange === 'function' && !accelerometerHandler) {
+    accelerometerHandler = (reading) => handleAccelerometerReading(reading || {});
+    wx.onAccelerometerChange(accelerometerHandler);
+  }
+  if (typeof wx.onGyroscopeChange === 'function' && !gyroscopeHandler) {
+    gyroscopeHandler = (reading) => handleGyroscopeReading(reading || {});
+    wx.onGyroscopeChange(gyroscopeHandler);
+  }
+}
+
+function detachMotionListeners() {
+  if (accelerometerHandler && typeof wx.offAccelerometerChange === 'function') {
+    wx.offAccelerometerChange(accelerometerHandler);
+  }
+  if (gyroscopeHandler && typeof wx.offGyroscopeChange === 'function') {
+    wx.offGyroscopeChange(gyroscopeHandler);
+  }
+  accelerometerHandler = null;
+  gyroscopeHandler = null;
+}
+
+function startMotionSensors() {
+  attachMotionListeners();
+  const tasks = [];
+  if (typeof wx.startAccelerometer === 'function' && !accelerometerActive) {
+    tasks.push(
+      new Promise((resolve) => {
+        wx.startAccelerometer({
+          interval: 'game',
+          success: () => {
+            accelerometerActive = true;
+            resolve(true);
+          },
+          fail: (err) => {
+            accelerometerActive = false;
+            logger.warn('startAccelerometer failed', err?.errMsg || err?.message || err);
+            resolve(false);
+          },
+        });
+      })
+    );
+  }
+  if (typeof wx.startGyroscope === 'function' && !gyroscopeActive) {
+    tasks.push(
+      new Promise((resolve) => {
+        wx.startGyroscope({
+          interval: 'game',
+          success: () => {
+            gyroscopeActive = true;
+            resolve(true);
+          },
+          fail: (err) => {
+            gyroscopeActive = false;
+            logger.warn('startGyroscope failed', err?.errMsg || err?.message || err);
+            resolve(false);
+          },
+        });
+      })
+    );
+  }
+  if (!tasks.length) {
+    return Promise.resolve(false);
+  }
+  return Promise.all(tasks)
+    .then((results) => results.some(Boolean))
+    .catch(() => false);
+}
+
+function stopMotionSensors({ clearBuffers = false } = {}) {
+  detachMotionListeners();
+  if (typeof wx.stopAccelerometer === 'function' && accelerometerActive) {
+    try {
+      wx.stopAccelerometer({ complete: () => {} });
+    } catch (_) {
+      // swallow
+    }
+  }
+  if (typeof wx.stopGyroscope === 'function' && gyroscopeActive) {
+    try {
+      wx.stopGyroscope({ complete: () => {} });
+    } catch (_) {
+      // swallow
+    }
+  }
+  accelerometerActive = false;
+  gyroscopeActive = false;
+  if (clearBuffers) {
+    clearMotionBuffers();
+  }
+}
+
+function computeVariance(values = []) {
+  if (!Array.isArray(values) || values.length < 2) {
+    return null;
+  }
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance =
+    values.reduce((sum, value) => {
+      const delta = value - mean;
+      return sum + delta * delta;
+    }, 0) / values.length;
+  return Number.isFinite(variance) ? variance : null;
+}
+
+function computeZeroCrossings(samples = [], mean = 0) {
+  if (!Array.isArray(samples) || samples.length < 2) {
+    return 0;
+  }
+  let lastSign = null;
+  let lastTimestamp = 0;
+  let crossings = 0;
+  samples.forEach((item) => {
+    if (!item) {
+      return;
+    }
+    const centered = item.magnitude - mean;
+    const sign = centered >= 0 ? 1 : -1;
+    if (lastSign !== null && sign !== lastSign) {
+      if (!lastTimestamp || item.ts - lastTimestamp >= SENSOR_ZERO_CROSSING_GAP_MS) {
+        crossings += 1;
+        lastTimestamp = item.ts;
+      }
+    }
+    lastSign = sign;
+  });
+  return crossings;
+}
+
+function getMotionFeatureSnapshot() {
+  trimSensorSamples(accelerometerSamples);
+  trimSensorSamples(gyroscopeSamples);
+  const now = Date.now();
+  const accWindow = accelerometerSamples.filter((item) => item && now - item.ts <= SENSOR_WINDOW_MS);
+  const gyroWindow = gyroscopeSamples.filter((item) => item && now - item.ts <= SENSOR_WINDOW_MS);
+  const accValues = accWindow.map((item) => item.magnitude);
+  const gyroValues = gyroWindow.map((item) => item.magnitude);
+  const accVar = computeVariance(accValues);
+  const gyroVar = computeVariance(gyroValues);
+  const accMean = accValues.length
+    ? accValues.reduce((sum, value) => sum + value, 0) / accValues.length
+    : 0;
+  const accZeroCrossings = accValues.length ? computeZeroCrossings(accWindow, accMean) : 0;
+  const windowStartCandidate = Math.min(
+    accWindow.length ? accWindow[0].ts : now,
+    gyroWindow.length ? gyroWindow[0].ts : now
+  );
+  const windowMs = windowStartCandidate ? Math.max(0, now - windowStartCandidate) : 0;
+  return {
+    accVar: accVar !== null ? accVar : null,
+    gyroVar: gyroVar !== null ? gyroVar : null,
+    accZeroCrossings,
+    accSampleCount: accWindow.length,
+    gyroSampleCount: gyroWindow.length,
+    windowMs,
+  };
 }
 
 function resetIntervalWeakSignal() {
@@ -727,18 +937,69 @@ function logSessionQualitySummary(points = [], pausePoints = []) {
 
 function updateDetectedActivityType() {
   const override = trackerState.options?.activityType;
+  const now = Date.now();
   if (override && ACTIVITY_TYPE_MAP[override]) {
     trackerState.detectedActivityType = override;
+    activityStabilizer = {
+      current: override,
+      candidate: override,
+      candidateSince: now,
+      lastChangeAt: now,
+    };
     return trackerState.detectedActivityType;
   }
+  const sensorStats = getMotionFeatureSnapshot();
   const detected = inferActivityType({
     distance: trackerState.stats.distance || 0,
     duration: trackerState.stats.duration || 0,
     speed: trackerState.stats.speed || 0,
     points: trackerState.points || [],
+    sensorStats,
   });
-  trackerState.detectedActivityType = detected || DEFAULT_ACTIVITY_TYPE;
+  const stabilized = applyActivityHysteresis(detected || DEFAULT_ACTIVITY_TYPE, { now });
+  trackerState.detectedActivityType = stabilized;
   return trackerState.detectedActivityType;
+}
+
+function getActivityPriority(activityType) {
+  if (activityType === 'ride') {
+    return 3;
+  }
+  if (activityType === 'run') {
+    return 2;
+  }
+  return 1;
+}
+
+function applyActivityHysteresis(candidateType, { now = Date.now() } = {}) {
+  const normalized = ACTIVITY_TYPE_MAP[candidateType] ? candidateType : DEFAULT_ACTIVITY_TYPE;
+  const current = trackerState.detectedActivityType || activityStabilizer.current || DEFAULT_ACTIVITY_TYPE;
+  if (!ACTIVITY_TYPE_MAP[current]) {
+    activityStabilizer.current = DEFAULT_ACTIVITY_TYPE;
+  }
+  if (activityStabilizer.candidate !== normalized) {
+    activityStabilizer.candidate = normalized;
+    activityStabilizer.candidateSince = now;
+  }
+  const currentPriority = getActivityPriority(current);
+  const candidatePriority = getActivityPriority(normalized);
+  const isUpgrade = candidatePriority > currentPriority;
+  const isDowngrade = candidatePriority < currentPriority;
+  const requiredDuration = isUpgrade
+    ? ACTIVITY_UPGRADE_DURATION_MS
+    : current === 'ride' && isDowngrade
+    ? ACTIVITY_RIDE_DOWNGRADE_DURATION_MS
+    : isDowngrade
+    ? ACTIVITY_DOWNGRADE_DURATION_MS
+    : 0;
+  const elapsed = now - (activityStabilizer.candidateSince || now);
+  if (!requiredDuration || elapsed >= requiredDuration) {
+    activityStabilizer.current = normalized;
+    activityStabilizer.lastChangeAt = now;
+    activityStabilizer.candidateSince = now;
+    return normalized;
+  }
+  return activityStabilizer.current || normalized;
 }
 
 function notifyTracker() {
@@ -778,6 +1039,14 @@ function stopDurationTicker() {
 
 function resetState() {
   stopDurationTicker();
+  stopMotionSensors({ clearBuffers: true });
+  activityStabilizer = {
+    current: DEFAULT_ACTIVITY_TYPE,
+    candidate: DEFAULT_ACTIVITY_TYPE,
+    candidateSince: 0,
+    lastChangeAt: 0,
+  };
+  clearMotionBuffers();
   flushPendingBatch({ force: true });
   pendingUploadBatch = [];
   lastBatchFlushAt = 0;
@@ -1143,6 +1412,16 @@ function startTracking(options = {}) {
     return Promise.resolve({ ...trackerState });
   }
 
+  const normalizedPurpose =
+    typeof options.purposeType === 'string' && PURPOSE_MAP[options.purposeType]
+      ? options.purposeType
+      : '';
+  if (!normalizedPurpose) {
+    const error = new Error('Purpose type is required');
+    error.code = 'PURPOSE_REQUIRED';
+    return Promise.reject(error);
+  }
+
   trackerState.active = true;
   trackerState.paused = false;
   trackerState.pauseReason = null;
@@ -1188,10 +1467,7 @@ function startTracking(options = {}) {
     title: options.title || '',
     note: options.note || '',
     photos: Array.isArray(options.photos) ? options.photos : [],
-    purposeType:
-      typeof options.purposeType === 'string'
-        ? options.purposeType
-        : trackerState.options.purposeType || '',
+    purposeType: normalizedPurpose,
     activityType:
       typeof options.activityType === 'string' && ACTIVITY_TYPE_MAP[options.activityType]
         ? options.activityType
@@ -1200,6 +1476,8 @@ function startTracking(options = {}) {
   trackerState.detectedActivityType = DEFAULT_ACTIVITY_TYPE;
 
   notifyTracker();
+
+  startMotionSensors().catch(() => {});
 
   return ensureLocationPermission()
     .then(() => ensureLocationStream({ force: true }))
@@ -1221,6 +1499,7 @@ function startTracking(options = {}) {
       trackerState.pauseReason = null;
       stopLocationStream().catch(() => {});
       detachLocationListener();
+      stopMotionSensors({ clearBuffers: true });
       notifyTracker();
       return Promise.reject(err);
     });
@@ -1249,6 +1528,7 @@ function pauseTracking(options = {}) {
   flushPendingBatch({ force: true });
   clearSuspensionMonitor();
   stopDurationTicker();
+  stopMotionSensors({ clearBuffers: true });
   notifyTracker();
   ensureLocationStream({ force: true }).catch((err) => {
     logger.warn('Pause tracking stopped location stream failed', err?.errMsg || err?.message || err);
@@ -1276,6 +1556,7 @@ function resumeTracking(options = {}) {
   trackerState.startTime = resumeAt;
   trackerState.paused = false;
   startDurationTicker();
+  startMotionSensors().catch(() => {});
   notifyTracker();
   ensureLocationStream({ force: true })
     .then(() => scheduleSuspensionMonitor())
@@ -1879,6 +2160,7 @@ function stopTracking(meta = {}) {
   detachLocationListener();
 
   stopLocationStream().catch(() => {});
+  stopMotionSensors({ clearBuffers: true });
 
   flushPendingBatch({ force: true });
 
@@ -1996,6 +2278,7 @@ function cancelTracking() {
   stopDurationTicker();
   detachLocationListener();
   stopLocationStream().catch(() => {});
+  stopMotionSensors({ clearBuffers: true });
   flushPendingBatch({ force: true });
   // 丢弃离线片段，不生成轨迹记录
   flushOfflineFragments();
