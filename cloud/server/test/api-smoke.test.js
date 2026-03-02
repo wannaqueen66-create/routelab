@@ -148,6 +148,65 @@ test('POST /api/routes/sync returns sync payload', async () => {
   assert.equal(response.body.items[0].id, 'route-sync-1');
   assert.ok(Array.isArray(response.body.missingRemoteIds));
   assert.equal(response.body.missingRemoteIds.includes('route-missing-2'), true);
+  assert.equal(response.body.hasMore, false);
+  assert.equal(response.body.nextCursor, null);
+});
+
+test('POST /api/routes/sync supports cursor pagination', async () => {
+  const now = Date.now();
+  mockRoutesByUserId = [
+    {
+      id: 'route-page-2',
+      user_id: 42,
+      client_id: 'local-2',
+      name: 'Route Page 2',
+      activity_type: 'walk',
+      purpose_code: null,
+      privacy_level: 'private',
+      start_time: new Date(now - 120000),
+      end_time: new Date(now - 90000),
+      stats: { distance: 220 },
+      meta: { activityType: 'walk' },
+      photos: [],
+      weather: null,
+      created_at: new Date(now - 120000),
+      updated_at: new Date(now + 2000),
+      deleted_at: null,
+    },
+    {
+      id: 'route-page-3',
+      user_id: 42,
+      client_id: 'local-3',
+      name: 'Route Page 3',
+      activity_type: 'walk',
+      purpose_code: null,
+      privacy_level: 'private',
+      start_time: new Date(now - 60000),
+      end_time: new Date(now - 30000),
+      stats: { distance: 320 },
+      meta: { activityType: 'walk' },
+      photos: [],
+      weather: null,
+      created_at: new Date(now - 60000),
+      updated_at: new Date(now + 3000),
+      deleted_at: null,
+    },
+  ];
+  mockPointsByRoute = {
+    'route-page-2': [{ latitude: 31.21, longitude: 121.51, altitude: null, timestamp: new Date(now - 110000) }],
+    'route-page-3': [{ latitude: 31.22, longitude: 121.52, altitude: null, timestamp: new Date(now - 50000) }],
+  };
+
+  const response = await request
+    .post('/api/routes/sync')
+    .set('Authorization', `Bearer ${signUserToken('42')}`)
+    .send({ lastSyncAt: now - 3600 * 1000, limit: 1, cursor: 0 });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.items.length, 1);
+  assert.equal(response.body.items[0].id, 'route-page-2');
+  assert.equal(response.body.hasMore, true);
+  assert.equal(response.body.nextCursor, 1);
 });
 
 test('PUT /api/routes/:id upserts route and returns payload', async () => {

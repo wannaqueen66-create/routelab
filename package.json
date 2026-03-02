@@ -2,6 +2,7 @@
   "name": "routelab-workspace",
   "private": true,
   "scripts": {
-    "check": "npm --prefix cloud/server run check && npm --prefix cloud/web run check"
+    "lint": "node ./scripts/lint-js.mjs cloud/server/src cloud/server/test cloud/web/src cloud/web/test services pages utils config",
+    "check": "npm run lint && npm --prefix cloud/server run check && npm --prefix cloud/web run check"
   }
 }

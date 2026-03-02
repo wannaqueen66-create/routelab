@@ -193,7 +193,8 @@ router.post('/sync', ensureAuth, async (req, res) => {
     const body = req.body || {};
     const includeDeleted = body.includeDeleted !== false;
     const limit = Math.min(Math.max(Number(body.limit) || 200, 1), 500);
-    const lastSyncAt = Number(body.lastSyncAt) || 0;
+    const lastSyncAt = Math.max(Number(body.lastSyncAt) || 0, 0);
+    const cursor = Math.max(Number(body.cursor) || 0, 0);
     const knownRemoteIds = Array.isArray(body.knownRemoteIds)
         ? body.knownRemoteIds.map((id) => normalizeRouteId(id)).filter(Boolean)
         : [];
@@ -201,14 +202,18 @@ router.post('/sync', ensureAuth, async (req, res) => {
     try {
         const routes = await getRoutesByUserId(req.userId, {
             includeDeleted: true,
-            limit,
-            offset: 0,
+            limit: limit + 1,
+            offset: cursor,
         });
 
-        const routeIds = routes.map((r) => r.id);
+        const pageRows = routes.slice(0, limit);
+        const hasMore = routes.length > limit;
+        const nextCursor = hasMore ? cursor + limit : null;
+
+        const routeIds = pageRows.map((r) => r.id);
         const pointsByRoute = await getPointsByRoute(routeIds);
 
-        const allMapped = routes.map((row) =>
+        const allMapped = pageRows.map((row) =>
             mapRouteRow(row, pointsByRoute[row.id] || [], {
                 includePoints: true,
             })
@@ -233,7 +238,9 @@ router.post('/sync', ensureAuth, async (req, res) => {
             missingRemoteIds,
             lastSyncAt: Date.now(),
             limit,
-            hasMore: false,
+            cursor,
+            nextCursor,
+            hasMore,
         });
     } catch (error) {
         console.error('POST /api/routes/sync failed', error);

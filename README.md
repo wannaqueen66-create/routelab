@@ -282,6 +282,7 @@ npm run check
 
 What it does / 它会做什么：
 
+- Run JS syntax lint checks / 执行 JS 语法 lint 检查
 - Run server smoke tests / 执行后端 smoke test
 - Run web utility tests / 执行 web 工具函数测试
 - Provide a single CI-friendly entry / 提供统一的 CI 入口

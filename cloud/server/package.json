@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "NODE_ENV=test node --test",
-    "check": "npm run test"
+    "lint": "node --check src/server.js src/app.js src/routes/index.js src/routes/routes.js src/db/index.js",
+    "check": "npm run lint && npm run test"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -250,7 +250,8 @@ npm run check
 
 当前会执行：
 
-- 后端 smoke test（含 `/api/ping`、`/api/routes` 鉴权、`/api/upload`）
+- JS 语法 lint 检查
+- 后端 smoke test（含 `/api/ping`、`/api/routes` 鉴权、`/api/upload`、`/api/routes/sync`）
 - Web 工具函数测试（`gcj02ToWgs84`）
 
 CI 已接入 GitHub Actions，配置文件：
