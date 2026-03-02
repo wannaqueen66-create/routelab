@@ -11,6 +11,7 @@ const { sanitizeEnumValue, normalizeRouteId } = require('../utils/format');
 const {
     getRouteById,
     getRoutesByUserId,
+    getAllRouteIdsByUserId,
     createRoute,
     updateRoute,
     softDeleteRoute,
@@ -229,7 +230,8 @@ router.post('/sync', ensureAuth, async (req, res) => {
             .map((item) => item.id);
 
         const items = afterFiltered.filter((item) => !item.deletedAt);
-        const fullRemoteIdSet = new Set(allMapped.map((item) => item.id));
+        const allRouteIds = await getAllRouteIdsByUserId(req.userId, { includeDeleted: true });
+        const fullRemoteIdSet = new Set(allRouteIds);
         const missingRemoteIds = knownRemoteIds.filter((id) => !fullRemoteIdSet.has(id));
 
         res.json({

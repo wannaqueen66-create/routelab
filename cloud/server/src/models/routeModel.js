@@ -29,6 +29,20 @@ async function getRoutesByUserId(userId, options = {}) {
     return result.rows;
 }
 
+async function getAllRouteIdsByUserId(userId, options = {}) {
+    const { includeDeleted = false } = options;
+    const conditions = ['user_id = $1'];
+    if (!includeDeleted) {
+        conditions.push('deleted_at IS NULL');
+    }
+    const whereClause = conditions.join(' AND ');
+    const result = await pool.query(
+        `SELECT id FROM routes WHERE ${whereClause}`,
+        [userId]
+    );
+    return result.rows.map((row) => row.id).filter(Boolean);
+}
+
 async function createRoute(userId, routeData) {
     const {
         clientId,
@@ -350,6 +364,7 @@ module.exports = {
     // Route CRUD
     getRouteById,
     getRoutesByUserId,
+    getAllRouteIdsByUserId,
     createRoute,
     updateRoute,
     softDeleteRoute,

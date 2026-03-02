@@ -1020,42 +1020,121 @@ function syncRoutesFromCloud(options = {}) {
   const knownRemoteIds = getRoutes({ includeDeleted: true })
     .filter((route) => route && route.synced && route.remoteId)
     .map((route) => route.remoteId);
-  const payload = {
-    lastSyncAt: effectiveUpdatedAfter || 0,
-    includeDeleted: includeDeleted !== false,
-    limit: rest.limit || 200,
-    knownRemoteIds,
+
+  const pageLimit = Math.min(Math.max(Number(rest.limit) || 200, 1), 500);
+  const maxPages = Math.min(Math.max(Number(rest.maxPages) || 50, 1), 200);
+  let cursor = Math.max(Number(rest.cursor) || 0, 0);
+
+  const aggregated = {
+    items: [],
+    deletedIds: new Set(),
+    missingRemoteIds: new Set(),
+    metaMax: 0,
+    pagesFetched: 0,
   };
-  if (rest.cursor) {
-    payload.cursor = rest.cursor;
-  }
-  return api
-    .syncRoutes(payload)
-    .then((result) => {
+
+  const fetchPage = (pageIndex = 1) => {
+    const payload = {
+      lastSyncAt: effectiveUpdatedAfter || 0,
+      includeDeleted: includeDeleted !== false,
+      limit: pageLimit,
+      knownRemoteIds,
+      cursor,
+    };
+
+    return api.syncRoutes(payload).then((result) => {
       const list = Array.isArray(result?.items)
         ? result.items
         : Array.isArray(result)
           ? result
           : [];
-      const remote = list.filter((item) => item && item.id);
+
+      aggregated.pagesFetched = pageIndex;
+
+      list.forEach((item) => {
+        if (item && item.id) {
+          aggregated.items.push(item);
+        }
+      });
+
       const deletedIds = Array.isArray(result?.deletedIds) ? result.deletedIds : [];
       const missingRemoteIds = Array.isArray(result?.missingRemoteIds) ? result.missingRemoteIds : [];
-      const merged = mergeRoutes(remote, { deletedIds, missingRemoteIds });
-      const nonDeletedRemote = remote.filter((item) => item && !item.deletedAt && !item.deleted);
-      const remoteMax = getMaxUpdatedAt(nonDeletedRemote);
-      const metaMax =
+      deletedIds.forEach((id) => id && aggregated.deletedIds.add(id));
+      missingRemoteIds.forEach((id) => id && aggregated.missingRemoteIds.add(id));
+
+      const pageMetaMax =
         Number(
           result?.latestSyncAt ||
           result?.lastSyncAt ||
           result?.maxUpdatedAt ||
           result?.cursorUpdatedAt
         ) || 0;
+      if (pageMetaMax > aggregated.metaMax) {
+        aggregated.metaMax = pageMetaMax;
+      }
+
+      const nextCursorCandidate = Number(result?.nextCursor);
+      const hasMore =
+        result?.hasMore === true ||
+        (Number.isFinite(nextCursorCandidate) && nextCursorCandidate > cursor);
+
+      if (hasMore && pageIndex < maxPages) {
+        cursor = Number.isFinite(nextCursorCandidate) ? nextCursorCandidate : cursor + pageLimit;
+        return fetchPage(pageIndex + 1);
+      }
+
+      if (hasMore && pageIndex >= maxPages) {
+        logger.warn('Route sync pagination stopped due to maxPages guard', {
+          maxPages,
+          cursor,
+        });
+      }
+
+      return result;
+    });
+  };
+
+  return fetchPage()
+    .then(() => {
+      const dedupedMap = new Map();
+      aggregated.items.forEach((item) => {
+        if (!item || !item.id) {
+          return;
+        }
+        const existing = dedupedMap.get(item.id);
+        if (!existing) {
+          dedupedMap.set(item.id, item);
+          return;
+        }
+        const existingUpdated = Number(existing.updatedAt || existing.createdAt || 0);
+        const nextUpdated = Number(item.updatedAt || item.createdAt || 0);
+        if (nextUpdated >= existingUpdated) {
+          dedupedMap.set(item.id, item);
+        }
+      });
+
+      const remote = Array.from(dedupedMap.values());
+      const deletedIds = Array.from(aggregated.deletedIds);
+      const missingRemoteIds = Array.from(aggregated.missingRemoteIds);
+
+      const merged = mergeRoutes(remote, { deletedIds, missingRemoteIds });
+      const nonDeletedRemote = remote.filter((item) => item && !item.deletedAt && !item.deleted);
+      const remoteMax = getMaxUpdatedAt(nonDeletedRemote);
+      const metaMax = aggregated.metaMax;
       const hasChanges =
         nonDeletedRemote.length > 0 || deletedIds.length > 0 || missingRemoteIds.length > 0 || forceFull;
       const nextSyncPoint = hasChanges
         ? Math.max(remoteMax, metaMax, Date.now())
         : Math.max(lastSync, metaMax);
       setLastSyncTimestamp(nextSyncPoint || Date.now());
+
+      logger.info('Route sync from cloud finished', {
+        pagesFetched: aggregated.pagesFetched,
+        remoteCount: remote.length,
+        deletedCount: deletedIds.length,
+        missingCount: missingRemoteIds.length,
+      });
+
       return merged;
     })
     .catch((err) => {
