@@ -22,7 +22,13 @@
     </button>
   </view>
 
-  <scroll-view class="list" scroll-y enable-back-to-top>
+  <scroll-view
+    class="list"
+    scroll-y
+    enable-back-to-top
+    lower-threshold="180"
+    bindscrolltolower="handleLoadMore"
+  >
     <view wx:if="{{empty}}" class="empty">
       <text class="empty__title">暂无轨迹记录</text>
       <text class="empty__desc">开启一次记录，RouteLab 会自动识别起点终点并生成统计。</text>
@@ -70,6 +76,12 @@
           </view>
         </view>
       </block>
+      <view class="list-load-more" wx:if="{{hasMore}}">
+        <text>上拉加载更多轨迹…</text>
+      </view>
+      <view class="list-load-more list-load-more--end" wx:else>
+        <text>已显示全部轨迹</text>
+      </view>
     </block>
   </scroll-view>
 </view>

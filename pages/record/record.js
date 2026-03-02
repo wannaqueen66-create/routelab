@@ -1088,18 +1088,57 @@ Page({
     if (!Number.isFinite(targetIndex) || targetIndex < 0) {
       return;
     }
-    const nextPhotos = normalizePhotos(this.data.photos).map((item, i) => {
+
+    const photos = normalizePhotos(this.data.photos);
+    const target = photos[targetIndex];
+    if (!target || !target.path) {
+      return;
+    }
+
+    const nextPhotos = photos.map((item, i) => {
       if (i !== targetIndex) {
         return item;
       }
       return {
         ...item,
-        uploadState: 'pending',
+        uploadState: 'uploading',
         uploadError: '',
       };
     });
     this.setData({ photos: nextPhotos, syncHintText: getSyncHintText() });
-    wx.showToast({ title: '已标记重试', icon: 'none' });
+
+    media
+      .uploadSinglePhoto({ path: target.path, note: target.note || '' })
+      .then((uploaded) => {
+        const afterSuccess = normalizePhotos(this.data.photos).map((item, i) => {
+          if (i !== targetIndex) {
+            return item;
+          }
+          return {
+            ...item,
+            path: uploaded.path || item.path,
+            uploadState: 'done',
+            uploadError: '',
+          };
+        });
+        this.setData({ photos: afterSuccess, syncHintText: getSyncHintText() });
+        wx.showToast({ title: '图片重传成功', icon: 'success' });
+      })
+      .catch((error) => {
+        const message = error?.message || error?.errMsg || '重传失败';
+        const afterFail = normalizePhotos(this.data.photos).map((item, i) => {
+          if (i !== targetIndex) {
+            return item;
+          }
+          return {
+            ...item,
+            uploadState: 'failed',
+            uploadError: message,
+          };
+        });
+        this.setData({ photos: afterFail, syncHintText: getSyncHintText() });
+        wx.showToast({ title: '图片重传失败', icon: 'none' });
+      });
   },
 
   handlePreviewPhoto(event) {

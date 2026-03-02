@@ -19,6 +19,8 @@ const FILTER_TABS = [
   { key: 'private', label: '仅自己可见' },
 ];
 
+const HISTORY_PAGE_SIZE = 20;
+
 function normalizeRoute(route) {
   const activityType = route.meta?.activityType || DEFAULT_ACTIVITY_TYPE;
   const activityMeta = ACTIVITY_TYPE_MAP[activityType] || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
@@ -71,9 +73,12 @@ Page({
     empty: true,
     syncing: false,
     syncSummaryText: '待同步 0 · 已同步 0 · 上次同步 --',
+    hasMore: false,
   },
   onLoad() {
     this.rawRoutes = [];
+    this.filteredRoutes = [];
+    this.renderCount = HISTORY_PAGE_SIZE;
     this.unsubscribe = subscribe((routes) => this.refresh(routes));
     this.refresh(getRoutes());
     this.syncFromCloud(true);
@@ -121,12 +126,30 @@ Page({
       }
       return route.privacyLevel === filterKey;
     });
-    const formatted = filtered.map(normalizeRoute);
+    this.filteredRoutes = filtered.map(normalizeRoute);
+    this.renderCount = HISTORY_PAGE_SIZE;
+    this.applyRenderedRoutes();
+  },
+
+  applyRenderedRoutes() {
+    const list = Array.isArray(this.filteredRoutes) ? this.filteredRoutes : [];
+    const visible = list.slice(0, this.renderCount);
+    const hasMore = list.length > visible.length;
     this.setData({
-      routes: formatted,
-      empty: formatted.length === 0,
+      routes: visible,
+      empty: visible.length === 0,
+      hasMore,
     });
-    this.resolveRoutePlaceNames(formatted);
+    this.resolveRoutePlaceNames(visible);
+  },
+
+  handleLoadMore() {
+    const total = Array.isArray(this.filteredRoutes) ? this.filteredRoutes.length : 0;
+    if (this.renderCount >= total) {
+      return;
+    }
+    this.renderCount += HISTORY_PAGE_SIZE;
+    this.applyRenderedRoutes();
   },
   resolveRoutePlaceNames(list = []) {
     if (!Array.isArray(list) || !list.length) return;
