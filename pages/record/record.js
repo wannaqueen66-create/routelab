@@ -7,10 +7,11 @@ const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../../constants/ac
 const { getRecentSettings, saveRecentSettings, getKeepScreenPreference } = require('../../utils/storage');
 const api = require('../../services/api');
 const { formatSpeed, formatCalories } = require('../../utils/format');
-const { formatDuration } = require('../../utils/time');
+const { formatDuration, formatClock } = require('../../utils/time');
 const { estimateCalories } = require('../../utils/geo');
 const logger = require('../../utils/logger');
 const media = require('../../services/media');
+const { getSyncStatus } = require('../../services/route-store');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
 const rewards = require('../../services/rewards');
@@ -63,13 +64,30 @@ const TOAST = {
 function normalizePhotos(photos = []) {
   return photos.map((item) => {
     if (typeof item === 'string') {
-      return { path: item, note: '' };
+      return { path: item, note: '', uploadState: 'pending', uploadError: '' };
     }
     return {
       path: item.path,
       note: item.note || '',
+      uploadState: item.uploadState || 'pending',
+      uploadError: item.uploadError || '',
     };
   });
+}
+
+function getSyncHintText() {
+  try {
+    const status = getSyncStatus() || {};
+    const pending = Number(status.pending) || 0;
+    const ts = Number(status.lastSyncAt) || 0;
+    const lastSyncText = ts > 0 ? formatClock(ts) : '--';
+    if (pending > 0) {
+      return `待同步 ${pending} 条 · 上次同步 ${lastSyncText}`;
+    }
+    return `已同步 · 上次同步 ${lastSyncText}`;
+  } catch (_) {
+    return '同步状态暂不可用';
+  }
 }
 
 function formatSpeedByActivity(activityKey, value) {
@@ -151,6 +169,8 @@ Page({
     finishSheetVisible: false,
     finishAutoPaused: false,
     locateAnimationActive: false,
+    signalQualityLabel: '定位良好',
+    syncHintText: '同步状态暂不可用',
   },
 
   onLoad() {
@@ -158,6 +178,7 @@ Page({
     this._lastUserMapInteractionAt = 0;
     this.unsubscribe = tracker.subscribe((state) => this.updateState(state));
     this.applySettings();
+    this.setData({ syncHintText: getSyncHintText() });
     this.checkLocationPermission(true);
     // 记录当前页面栈深度，后续用于识别系统返回导致的离开
     if (typeof getCurrentPages === 'function') {
@@ -166,6 +187,7 @@ Page({
   },
 
   onShow() {
+    this.setData({ syncHintText: getSyncHintText() });
     this.checkLocationPermission(false).then(() => {
       if (this.data.locationAuthorized) {
         this.refreshCurrentLocation();
@@ -493,6 +515,8 @@ Page({
     this.setData({
       tracking: trackingFlag,
       paused: pausedFlag,
+      signalQualityLabel: state.signalQuality === 'weak' ? '定位较弱' : '定位良好',
+      syncHintText: getSyncHintText(),
       durationText,
       distanceText,
       speedText,
@@ -851,17 +875,23 @@ Page({
     const weight = this.data.weight || 60;
     this.setData({ uploading: true });
     return media
-      .ensureRemotePhotos(this.data.photos)
-      .then((uploadedPhotos) =>
-        tracker.stopTracking({
+      .ensureRemotePhotos(this.data.photos, { continueOnError: true })
+      .then((uploadedPhotos) => {
+        const normalizedUploaded = normalizePhotos(uploadedPhotos || []);
+        const failedCount = normalizedUploaded.filter((item) => item.uploadError).length;
+        this.setData({ photos: normalizedUploaded });
+        if (failedCount > 0) {
+          wx.showToast({ title: `${failedCount} 张图片上传失败，可稍后重试`, icon: 'none' });
+        }
+        return tracker.stopTracking({
           title: this.data.title,
           note: this.data.note,
           privacyLevel,
-          photos: uploadedPhotos,
+          photos: normalizedUploaded.filter((item) => !item.uploadError),
           weight,
           purposeType: this.data.purposeSelectionKey,
-        })
-      )
+        });
+      })
       .then((route) => {
         const success = Boolean(route);
         wx.showToast({
@@ -1012,7 +1042,12 @@ Page({
       sourceType: ['camera'],
       sizeType: ['compressed'],
       success: (res) => {
-        const newPhotos = res.tempFiles.map((file) => ({ path: file.tempFilePath, note: '' }));
+        const newPhotos = res.tempFiles.map((file) => ({
+          path: file.tempFilePath,
+          note: '',
+          uploadState: 'pending',
+          uploadError: '',
+        }));
         const normalized = normalizePhotos([...this.data.photos, ...newPhotos]);
         this.setData({ photos: normalized });
       },
@@ -1033,6 +1068,26 @@ Page({
     const { index } = event.currentTarget.dataset || {};
     const nextPhotos = this.data.photos.filter((_, i) => i !== Number(index));
     this.setData({ photos: nextPhotos });
+  },
+
+  handleRetryPhoto(event) {
+    const { index } = event.currentTarget.dataset || {};
+    const targetIndex = Number(index);
+    if (!Number.isFinite(targetIndex) || targetIndex < 0) {
+      return;
+    }
+    const nextPhotos = normalizePhotos(this.data.photos).map((item, i) => {
+      if (i !== targetIndex) {
+        return item;
+      }
+      return {
+        ...item,
+        uploadState: 'pending',
+        uploadError: '',
+      };
+    });
+    this.setData({ photos: nextPhotos });
+    wx.showToast({ title: '已标记重试', icon: 'none' });
   },
 
   handlePreviewPhoto(event) {

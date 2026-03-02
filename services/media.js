@@ -171,15 +171,32 @@ function uploadSinglePhoto(photo, attempt = 1, maxAttempts = 3) {
     });
 }
 
-function ensureRemotePhotos(photos = []) {
+function ensureRemotePhotos(photos = [], options = {}) {
   if (!Array.isArray(photos) || photos.length === 0) {
     return Promise.resolve([]);
   }
 
-  logger.info('ensureRemotePhotos called', { photoCount: photos.length });
-  return Promise.all(photos.map((item) => uploadSinglePhoto(item || {})));
+  const continueOnError = options?.continueOnError === true;
+  logger.info('ensureRemotePhotos called', { photoCount: photos.length, continueOnError });
+
+  if (!continueOnError) {
+    return Promise.all(photos.map((item) => uploadSinglePhoto(item || {})));
+  }
+
+  return Promise.all(
+    photos.map((item) =>
+      uploadSinglePhoto(item || {})
+        .then((uploaded) => ({ ...uploaded, uploadError: null }))
+        .catch((error) => ({
+          ...(item || {}),
+          uploaded: false,
+          uploadError: error?.message || error?.errMsg || '上传失败',
+        }))
+    )
+  );
 }
 
 module.exports = {
   ensureRemotePhotos,
+  uploadSinglePhoto,
 };

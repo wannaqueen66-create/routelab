@@ -40,6 +40,8 @@ const {
 } = require('./building-resolver');
 
 const MIN_DISTANCE_METERS = 3;
+const MIN_POINT_TIME_DELTA_MS = 1200;
+const SHORT_INTERVAL_JITTER_DISTANCE_METERS = 8;
 const MAX_SPEED_MPS = 10; // ~36 km/h, reject abnormal spikes
 const SPEED_CLAMP_THRESHOLD_MPS = 8; // clamp path before hard rejection
 const MAX_DISTANCE_JUMP_METERS = 250;
@@ -595,6 +597,17 @@ function shouldKeepPoint(previousPoint, point, segmentDistance, previousGpsPoint
       ? previousGpsPoint
       : previousPoint;
   const timeDelta = point.timestamp - referencePoint.timestamp;
+  if (
+    timeDelta > 0 &&
+    timeDelta < MIN_POINT_TIME_DELTA_MS &&
+    segmentDistance < SHORT_INTERVAL_JITTER_DISTANCE_METERS
+  ) {
+    logger.info('Tracker drop point due to short-interval jitter', {
+      segmentDistance,
+      timeDelta,
+    });
+    return false;
+  }
   if (segmentDistance > MAX_DISTANCE_JUMP_METERS) {
     logger.info('Tracker drop point due to jump', { segmentDistance });
     return false;

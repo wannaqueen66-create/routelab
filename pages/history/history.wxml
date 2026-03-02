@@ -3,6 +3,10 @@
     title="RouteLab · 历史轨迹"
   ></rlab-nav>
 
+  <view class="sync-status-bar">
+    <text>{{syncSummaryText}}</text>
+  </view>
+
   <view class="filter">
     <block wx:for="{{filterTabs}}" wx:key="key">
       <view

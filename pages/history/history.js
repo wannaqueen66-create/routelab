@@ -1,6 +1,7 @@
 const {
   subscribe,
   getRoutes,
+  getSyncStatus,
   updateRoutePrivacy,
   deleteRoute,
   syncRoutesFromCloud,
@@ -54,6 +55,14 @@ function isWeakPlaceName(name = '') {
   return s.includes('未识别') || s.includes('待定') || s.startsWith('坐标') || s.includes('离线轨迹');
 }
 
+function formatSyncSummary(status = {}) {
+  const pending = Number(status.pending) || 0;
+  const synced = Number(status.synced) || 0;
+  const ts = Number(status.lastSyncAt) || 0;
+  const lastSyncText = ts > 0 ? formatClock(ts) : '--';
+  return `待同步 ${pending} · 已同步 ${synced} · 上次同步 ${lastSyncText}`;
+}
+
 Page({
   data: {
     filterTabs: FILTER_TABS,
@@ -61,6 +70,7 @@ Page({
     routes: [],
     empty: true,
     syncing: false,
+    syncSummaryText: '待同步 0 · 已同步 0 · 上次同步 --',
   },
   onLoad() {
     this.rawRoutes = [];
@@ -96,6 +106,7 @@ Page({
   },
   refresh(routes) {
     this.rawRoutes = routes || [];
+    this.setData({ syncSummaryText: formatSyncSummary(getSyncStatus()) });
     this.applyFilter(this.data.activeFilter);
   },
   applyFilter(filterKey) {

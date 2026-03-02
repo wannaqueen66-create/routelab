@@ -74,6 +74,12 @@
       </view>
 
       <view class="sheet-meta">
+        <view class="status-chips">
+          <view class="status-chip status-chip--signal {{signalQualityLabel === '定位较弱' ? 'status-chip--warn' : ''}}">
+            {{signalQualityLabel}}
+          </view>
+          <view class="status-chip status-chip--sync">{{syncHintText}}</view>
+        </view>
         <view class="meta-inline">
           <view
             class="meta-inline__cell meta-inline__cell--action {{tracking ? '' : 'meta-inline__cell--disabled'}}"
@@ -227,6 +233,10 @@
                   bindtap="handleRemovePhoto"
                 >
                   ✕
+                </view>
+                <view class="finish-photo__state" wx:if="{{item.uploadError}}">
+                  <text class="finish-photo__state-text">上传失败</text>
+                  <text class="finish-photo__state-retry" data-index="{{index}}" bindtap="handleRetryPhoto">重试</text>
                 </view>
               </view>
             </block>

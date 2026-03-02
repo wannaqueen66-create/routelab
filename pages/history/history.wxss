@@ -9,6 +9,15 @@
     color: var(--color-text-primary);
   }
   
+  .sync-status-bar {
+    margin: 16rpx 32rpx 0;
+    padding: 14rpx 18rpx;
+    border-radius: 16rpx;
+    background: rgba(47, 107, 255, 0.1);
+    color: var(--color-primary);
+    font-size: 24rpx;
+  }
+
   .filter {
     display: flex;
     align-items: center;
