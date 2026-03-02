@@ -12,6 +12,7 @@ const { ACTIVITY_TYPE_MAP, DEFAULT_ACTIVITY_TYPE } = require('../../constants/ac
 const { formatDistance, formatCalories } = require('../../utils/format');
 const { formatDuration, formatDate, formatClock } = require('../../utils/time');
 const api = require('../../services/api');
+const auth = require('../../services/auth');
 const { classifySyncError } = require('../../services/history-formatter');
 
 const FILTER_TABS = [
@@ -70,15 +71,24 @@ function isWeakPlaceName(name = '') {
   return s.includes('未识别') || s.includes('待定') || s.startsWith('坐标') || s.includes('离线轨迹');
 }
 
+function getSyncActionLabel(errorType = '') {
+  return errorType === 'auth' ? '重新登录并同步' : '重试同步';
+}
+
 function formatSyncSummary(status = {}) {
   const pending = Number(status.pending) || 0;
   const synced = Number(status.synced) || 0;
   const ts = Number(status.lastSyncAt) || 0;
-  const errorMessage = status?.lastError?.message || '';
   const lastSyncText = ts > 0 ? formatClock(ts) : '--';
+  const rawError = status?.lastError && typeof status.lastError === 'object' ? status.lastError : null;
+  const errorMessage = rawError?.message || '';
+  const classified = rawError ? classifySyncError(rawError) : null;
   return {
     text: `待同步 ${pending} · 已同步 ${synced} · 上次同步 ${lastSyncText}`,
     errorMessage,
+    errorType: classified?.type || '',
+    errorHint: classified?.hint || '',
+    actionLabel: getSyncActionLabel(classified?.type || ''),
   };
 }
 
@@ -92,6 +102,9 @@ Page({
     historyLoading: true,
     syncSummaryText: '待同步 0 · 已同步 0 · 上次同步 --',
     syncErrorText: '',
+    syncErrorHint: '',
+    syncErrorType: '',
+    syncErrorActionLabel: '重试同步',
     hasMore: false,
   },
   onLoad() {
@@ -140,6 +153,9 @@ Page({
     this.setData({
       syncSummaryText: syncSummary.text,
       syncErrorText: syncSummary.errorMessage || '',
+      syncErrorHint: syncSummary.errorHint || '',
+      syncErrorType: syncSummary.errorType || '',
+      syncErrorActionLabel: syncSummary.actionLabel || '重试同步',
     });
     this.applyFilter(this.data.activeFilter);
   },
@@ -280,5 +296,26 @@ Page({
     }
     const current = !!this.data.routes[index].syncErrorExpanded;
     this.setData({ [`routes[${index}].syncErrorExpanded`]: !current });
+  },
+
+  handleSyncErrorAction() {
+    if (this.data.syncing) {
+      return;
+    }
+    if (this.data.syncErrorType === 'auth') {
+      wx.showLoading({ title: '重新登录中', mask: true });
+      auth
+        .refreshToken()
+        .then(() => {
+          wx.hideLoading();
+          this.syncFromCloud(true, true);
+        })
+        .catch(() => {
+          wx.hideLoading();
+          wx.showToast({ title: '重新登录失败，请稍后重试', icon: 'none' });
+        });
+      return;
+    }
+    this.handleForceSyncTap();
   },
 });

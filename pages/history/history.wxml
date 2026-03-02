@@ -6,8 +6,11 @@
   <view class="sync-status-bar">
     <text>{{syncSummaryText}}</text>
     <view class="sync-status-error" wx:if="{{syncErrorText}}">
-      <text>{{syncErrorText}}</text>
-      <button class="sync-status-error__retry" loading="{{syncing}}" bindtap="handleForceSyncTap">重试同步</button>
+      <view class="sync-status-error__texts">
+        <text>{{syncErrorText}}</text>
+        <text class="sync-status-error__hint" wx:if="{{syncErrorHint}}">建议：{{syncErrorHint}}</text>
+      </view>
+      <button class="sync-status-error__retry" loading="{{syncing}}" bindtap="handleSyncErrorAction">{{syncErrorActionLabel}}</button>
     </view>
   </view>
 

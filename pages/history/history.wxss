@@ -31,6 +31,19 @@
     gap: 12rpx;
   }
 
+  .sync-status-error__texts {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+  }
+
+  .sync-status-error__hint {
+    font-size: 20rpx;
+    color: #7f1d1d;
+  }
+
   .sync-status-error__retry {
     margin: 0;
     padding: 0 16rpx;
