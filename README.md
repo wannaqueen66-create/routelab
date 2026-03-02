@@ -270,11 +270,35 @@ Before deploying to production, verify the following:
 4. Validate cloud endpoints before testing on a real device  
    真机前先验证云端接口
 
+### Development check flow / 开发检查流程
+
+Before pushing code, run:
+
+提交前建议执行：
+
+```bash
+npm run check
+```
+
+What it does / 它会做什么：
+
+- Run server smoke tests / 执行后端 smoke test
+- Run web utility tests / 执行 web 工具函数测试
+- Provide a single CI-friendly entry / 提供统一的 CI 入口
+
+GitHub Actions workflow is available at:
+
+GitHub Actions 工作流位置：
+
+```text
+.github/workflows/ci.yml
+```
+
 ### Current repo status / 当前仓库状态
 
 - Basic feature set is already usable / 基础功能已可用
 - Cloud stack and dashboard are present / 云端与后台已具备雏形
-- Test coverage and CI are still missing / 自动化测试与 CI 仍待补齐
+- Baseline tests and CI have been added / 已补上基础测试与 CI
 
 ## 9. API and Sync Notes / 接口与同步说明
 

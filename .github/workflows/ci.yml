@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            cloud/server/package-lock.json
+            cloud/web/package-lock.json
+
+      - name: Install server deps
+        working-directory: cloud/server
+        run: npm ci --include=dev
+
+      - name: Install web deps
+        working-directory: cloud/web
+        run: npm ci --include=dev
+
+      - name: Run full check
+        run: npm run check

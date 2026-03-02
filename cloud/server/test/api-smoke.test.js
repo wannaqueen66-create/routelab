@@ -60,6 +60,12 @@ test('GET /api/routes returns empty list for valid token', async () => {
   assert.deepEqual(response.body, { items: [], total: 0 });
 });
 
+test('POST /api/upload returns 400 when file is missing', async () => {
+  const response = await request.post('/api/upload');
+  assert.equal(response.status, 400);
+  assert.equal(response.body.error, 'No file uploaded');
+});
+
 test('POST /api/upload returns file metadata', async () => {
   fs.mkdirSync(process.env.STORAGE_LOCAL_PATH, { recursive: true });
   const filePath = path.join(__dirname, 'upload-fixture.txt');

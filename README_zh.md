@@ -240,14 +240,34 @@ https://your-domain.example/api/upload
 
 ---
 
-## 11. 下一步优化建议
+## 11. 开发检查流程（提交前）
+
+建议每次提交前在仓库根目录执行：
+
+```bash
+npm run check
+```
+
+当前会执行：
+
+- 后端 smoke test（含 `/api/ping`、`/api/routes` 鉴权、`/api/upload`）
+- Web 工具函数测试（`gcj02ToWgs84`）
+
+CI 已接入 GitHub Actions，配置文件：
+
+```text
+.github/workflows/ci.yml
+```
+
+当你 push 或提 PR 到 `main` 时，会自动跑同一套检查。
+
+## 12. 下一步优化建议
 
 建议按优先级推进：
 
-1. **P0（立即）**：上传链路稳定性 + 日志清理
-2. **P1（本周）**：补测试（`/api/ping`、`/api/upload`、`/api/routes/sync`）
-3. **P2（下周）**：上 GitHub Actions（lint/test/build）
-4. **长期**：配置分层（dev/staging/prod）+ 监控告警
+1. **P1（持续）**：继续补关键 API 测试覆盖（尤其 sync 链路）
+2. **P2（下周）**：增加 lint/type-check，完善前端构建门禁
+3. **长期**：配置分层（dev/staging/prod）+ 监控告警
 
 ---
 
