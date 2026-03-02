@@ -172,6 +172,8 @@ ALTER TABLE users
   ADD COLUMN IF NOT EXISTS height_cm INTEGER;
 ALTER TABLE users
   ADD COLUMN IF NOT EXISTS weight_kg NUMERIC;
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 
 -- System announcements for in-app notices
 CREATE TABLE IF NOT EXISTS announcements (

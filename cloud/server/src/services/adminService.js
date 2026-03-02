@@ -345,7 +345,7 @@ async function fetchAdminRoutes(options = {}) {
     }
 
     if (filters.activityType) {
-        conditions.push(`r.activity_type = $${paramIndex++}`);
+        conditions.push(`COALESCE(r.meta->>'activityType', '') = $${paramIndex++}`);
         params.push(filters.activityType);
     }
 
