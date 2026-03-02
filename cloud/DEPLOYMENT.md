@@ -203,7 +203,7 @@
        timeout: 15000,
        retries: 1,
        token: '',
-       uploadEndpoint: '/photos',
+       uploadEndpoint: '/upload',
        staticBase: 'https://routelab.example.com/static/uploads',
      },
      // 其它配置按需调整

@@ -1,82 +1,357 @@
-# RouteLab (WeChat Mini Program)
+# RouteLab / 路迹实验室
 
-RouteLab 是一个专注于户外运动追踪与分析的微信小程序。它能够高精度记录用户的运动轨迹（跑步、骑行、步行等），利用传感器数据分析运动状态，并提供丰富的数据可视化与社交分享功能。
+> A WeChat Mini Program for campus route tracking, activity analysis, social interaction, and cloud synchronization.  
+> 一个用于校园轨迹记录、运动分析、社交互动与云端同步的微信小程序。
 
-## 🌟 核心特性
+## Table of Contents / 目录
 
-### 1. 智能轨迹追踪 (`services/tracker.js`)
-- **高精度定位**: 结合 GPS 与基站定位，智能滤除漂移点。
-- **运动状态识别**:
-  - 利用加速度计和陀螺仪 (`services/motion-sensor.js`) 实时分析用户动作。
-  - 智能区分静止、步行、跑步、骑行状态 (`services/activity-inference.js`)。
-  - 自动暂停/恢复：检测到静止时自动挂起记录，节省电量。
-- **离线与弱网支持**: 支持断网记录，网络恢复后自动同步数据。
+- [1. Project Overview / 项目简介](#1-project-overview--项目简介)
+- [2. Core Features / 核心功能](#2-core-features--核心功能)
+- [3. Architecture / 技术架构](#3-architecture--技术架构)
+- [4. Repository Structure / 仓库结构](#4-repository-structure--仓库结构)
+- [5. Quick Start / 快速开始](#5-quick-start--快速开始)
+- [6. Environment Configuration / 环境配置](#6-environment-configuration--环境配置)
+- [7. Deployment / 部署说明](#7-deployment--部署说明)
+- [8. Development Workflow / 开发流程](#8-development-workflow--开发流程)
+- [9. API and Sync Notes / 接口与同步说明](#9-api-and-sync-notes--接口与同步说明)
+- [10. Current Risks and TODOs / 当前风险与待优化项](#10-current-risks-and-todos--当前风险与待优化项)
+- [11. FAQ / 常见问题](#11-faq--常见问题)
+- [12. License / 许可](#12-license--许可)
 
-### 2. 多维度数据分析
-- **实时数据**: 速度、海拔、步频、卡路里消耗实时计算。
-- **地理信息**: 自动解析当前位置（街道、POI），支持反向地理编码。
-- **环境感知**: 集成实时天气与空气质量信息。
+## 1. Project Overview / 项目简介
 
-### 3. 可视化与社交
-- **动态轨迹图**: 在地图上绘制平滑轨迹，支持热力图显示速度/海拔变化。
-- **海报生成**: 一键生成包含轨迹全览、关键数据和照片的精美分享海报。
+**RouteLab** is a WeChat Mini Program focused on route recording and activity analytics in campus or outdoor scenarios. It combines location data, motion sensing, cloud APIs, and an admin dashboard to provide a full workflow from collection to review and management.
 
-## 🛠 技术架构
+**RouteLab** 是一个面向校园/户外场景的微信小程序，核心能力包括轨迹记录、运动分析、云端同步与后台管理。项目把定位、传感器、服务端接口和 Web 管理后台串起来，形成一套完整的数据采集与管理链路。
 
-本项目包含小程序端（Client）与云服务后端（Server）两部分：
+### Typical scenarios / 典型场景
 
-### 目录结构
+- Running / walking / riding route recording  
+  跑步、步行、骑行轨迹记录
+- Activity type inference and statistics  
+  运动类型识别与统计
+- Offline-first local storage with cloud sync  
+  先本地存储，后云端同步
+- Public route sharing, likes, comments, and admin review  
+  公开轨迹分享、点赞评论、后台审核管理
 
+## 2. Core Features / 核心功能
+
+### Mini Program / 小程序端
+
+- Background location tracking / 后台持续定位
+- Motion-sensor-based activity inference / 基于传感器的运动识别
+- Route history, detail view, and privacy control / 历史轨迹、详情页与隐私控制
+- Weather snapshot and reverse geocoding / 天气快照与逆地理编码
+- Photo upload and route attachment / 轨迹照片上传
+- Offline cache + retry + cloud sync / 离线缓存、重试与云同步
+
+### Cloud API / 云端接口
+
+- WeChat login and token-based auth / 微信登录与 token 鉴权
+- Route CRUD and incremental sync / 轨迹增删改查与增量同步
+- Comments, likes, public route feed / 评论、点赞、公开路线
+- Weather and geocode proxy / 天气与地理编码代理
+- Admin dashboard data services / 管理后台数据接口
+
+### Admin Dashboard / 管理后台
+
+- User list and route management / 用户列表与路线管理
+- Analytics summary / 数据分析汇总
+- Backup utilities / 备份工具
+- Export CSV / Excel / 导出 CSV 与 Excel
+
+## 3. Architecture / 技术架构
+
+```text
+WeChat Mini Program
+  ├─ pages/                 UI pages
+  ├─ components/            reusable UI components
+  ├─ services/              business logic and cloud API wrappers
+  ├─ utils/                 storage, format, geo, permission helpers
+  └─ config/                runtime configuration
+
+Cloud Stack
+  ├─ cloud/server/          Express + PostgreSQL API service
+  ├─ cloud/web/             React + Vite admin dashboard
+  ├─ cloud/nginx/           reverse proxy and static hosting
+  └─ cloud/scripts/         database initialization SQL
 ```
-miniprogram-1/
-├── cloud/                  # 云服务相关代码 (后端 + Web控制台)
-│   ├── server/             # Node.js 后端 (Express + PG)
-│   └── web/                # React Web 仪表盘
-├── services/               # 核心业务逻辑层 (Headless)
-│   ├── tracker.js          # 核心追踪控制器
-│   ├── motion-sensor.js    # 传感器数据处理
-│   ├── activity-inference.js # 运动推断算法
-│   ├── route-store.js      # 轨迹数据存储管理
-│   └── ...
-├── pages/                  # 小程序 UI 页面
-│   ├── index/              # 首页 (地图/开始运动)
-│   ├── profile/            # 个人中心
-│   └── ...
-├── components/             # 通用 UI 组件
-├── utils/                  # 工具函数库
-├── config/                 # 配置文件
-└── app.js                  # 小程序入口
+
+### Main flow / 主链路
+
+1. User starts tracking in the mini program  
+   用户在小程序开始记录轨迹
+2. Location + motion data are filtered and aggregated locally  
+   定位与传感器数据先在本地进行过滤与聚合
+3. Route data are stored locally and marked for sync  
+   轨迹先写入本地并标记待同步
+4. Cloud API receives route data and persists them to PostgreSQL  
+   云端 API 接收并写入 PostgreSQL
+5. Admin dashboard reads and manages the same dataset  
+   管理后台读取并管理同一份数据
+
+## 4. Repository Structure / 仓库结构
+
+```text
+routelab/
+├── app.js                         # Mini program entry
+├── app.json                       # Mini program global config
+├── pages/                         # Mini program pages
+├── components/                    # Shared components
+├── services/                      # Core service layer
+├── utils/                         # Utility functions
+├── config/                        # Mini program config
+├── constants/                     # Constant definitions
+├── cloud/
+│   ├── server/                    # Express backend
+│   ├── web/                       # React admin dashboard
+│   ├── nginx/                     # Nginx config
+│   ├── scripts/                   # SQL bootstrap scripts
+│   ├── docker-compose.yml         # Full cloud stack compose file
+│   └── DEPLOYMENT.md              # Cloud deployment guide
+└── README_zh.md                   # Chinese-only beginner guide
 ```
 
-### 关键技术栈
+## 5. Quick Start / 快速开始
 
-- **前端**: 微信小程序原生框架 (WXML, WXSS, JS/TS)
-- **地图**: 腾讯地图 SDK (用于展示), 高德/OSM (用于服务端地理编码)
-- **后端**: Node.js, Express, PostgreSQL (位于 `cloud/server`)
-- **部署**: Docker 容器化部署
+### 5.1 Prerequisites / 环境准备
 
-## 🚀 快速开始
+Before you start, prepare the following:
 
-1. **环境准备**:
-   - 安装 [微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)。
-   - 准备一个支持 Node.js 的服务器用于部署后端（可选，本地开发可模拟）。
+在开始之前，请先准备：
 
-2. **配置**:
-   - 在 `config/` 目录下检查配置项 (如 API 地址)。
-   - 后端部署请参考 `cloud/server/DEPLOYMENT.md`。
+- WeChat DevTools / 微信开发者工具
+- Node.js 18+ for cloud services / 云端建议 Node.js 18+
+- Docker + Docker Compose plugin (for server deployment) / 服务器部署建议 Docker + Compose
+- PostgreSQL 16 (if not using Docker compose bundle) / 如不用 Docker 套件，需单独准备 PostgreSQL 16
 
-3. **运行**:
-   - 使用微信开发者工具导入本项目根目录。
-   - 编译运行即可在模拟器中看到效果。
-   - 真机调试建议打开 "不校验合法域名" 选项（如果是开发环境）。
+### 5.2 Run the mini program locally / 本地运行小程序
 
-## 📝 开发规范
+1. Clone the repository:
 
-- **Service 层分离**: 复杂的业务逻辑（如定位、蓝牙、音频）应封装在 `services/` 目录下，保持 UI 层 (`pages/`) 轻量。
-- **代码风格**: 遵循项目内的 ESLint 配置。
-- **云端开发**: 修改 `cloud/` 目录下的代码应遵循其独立的开发流程，并参考其内部文档。
+   ```bash
+   git clone git@github.com:wannaqueen66-create/routelab.git
+   cd routelab
+   ```
 
-## ⚠️ 注意事项
+2. Open the project root in WeChat DevTools.  
+   用微信开发者工具导入仓库根目录。
 
-- 本项目依赖微信小程序的后台定位权限，真机调试时请确保授权。
-- `cloud/` 目录下的代码是独立部署的服务端，不打包进小程序包。
+3. Check `config/saaa-config.js` and confirm the API base URL.  
+   检查 `config/saaa-config.js` 中的小程序接口地址。
+
+4. Compile and preview. For development-only debugging, you may temporarily disable domain validation in DevTools.  
+   编译预览；如果是开发环境调试，可以临时关闭合法域名校验。
+
+### 5.3 Run the cloud backend locally / 本地运行云端后端
+
+1. Enter the backend directory:
+
+   ```bash
+   cd cloud/server
+   ```
+
+2. Create env file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Fill in database and JWT settings.  
+   补齐数据库与 JWT 配置。
+
+4. Install dependencies and run:
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+5. The health endpoint is:
+
+   ```text
+   GET /api/ping
+   ```
+
+### 5.4 Run the admin dashboard locally / 本地运行管理后台
+
+1. Enter the dashboard directory:
+
+   ```bash
+   cd cloud/web
+   ```
+
+2. Create env file:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+3. Install dependencies and run:
+
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+## 6. Environment Configuration / 环境配置
+
+### Mini program config / 小程序配置
+
+Important file: `config/saaa-config.js`
+
+Key fields / 关键字段：
+
+- `api.baseUrl`: cloud API base URL / 云端 API 地址
+- `api.uploadEndpoint`: **use `/upload`** so the final request becomes `/api/upload`  
+  使用 `/upload`，由统一请求构造函数拼成 `/api/upload`
+- `api.staticBase`: public base URL for uploaded files / 上传文件访问前缀
+- `map.amapWebKey`: AMap Web Service key / 高德 Web Service Key
+- `config/saaa-config.local.js`: local override file for secrets (not committed) / 本地私有覆盖配置（不入库）
+
+You can create the local file from:
+
+```bash
+cp config/saaa-config.local.example.js config/saaa-config.local.js
+```
+
+### Cloud env / 云端环境变量
+
+Important templates / 模板文件：
+
+- `cloud/.env.example`
+- `cloud/server/.env.example`
+- `cloud/web/.env.example`
+
+Recommended production items / 生产环境重点项：
+
+- `JWT_SECRET`
+- `POSTGRES_PASSWORD`
+- `WECHAT_APPID`
+- `WECHAT_SECRET`
+- `STORAGE_BASE_URL`
+- `AMAP_WEB_KEY`
+- `API_HOST` / `API_KEY` (if QWeather is used)
+
+## 7. Deployment / 部署说明
+
+For full-server deployment, see:
+
+完整云主机部署请看：
+
+- `cloud/DEPLOYMENT.md`
+
+### Pre-deployment checklist / 部署前检查清单
+
+Before deploying to production, verify the following:
+
+上线前请逐项确认：
+
+- [ ] Domain name is ready and HTTPS works / 域名已配置且 HTTPS 正常
+- [ ] `JWT_SECRET` is replaced with a strong secret / 已替换强随机 JWT 密钥
+- [ ] PostgreSQL is reachable and initialized / PostgreSQL 已初始化并可访问
+- [ ] `STORAGE_BASE_URL` points to the real public upload path / 上传资源地址已指向真实公开路径
+- [ ] WeChat AppID and Secret are correct / 微信小程序 AppID 和 Secret 正确
+- [ ] Upload endpoint path is `/api/upload` through config composition / 上传链路最终落到 `/api/upload`
+- [ ] Admin account is configured securely / 管理员账户已安全配置
+- [ ] Map and weather provider keys are injected from environment / 地图与天气服务 key 已通过环境变量配置
+
+## 8. Development Workflow / 开发流程
+
+### Suggested workflow / 建议流程
+
+1. Update or add service logic in `services/` first  
+   先改 `services/` 中的核心逻辑
+2. Keep page logic thin and UI-focused  
+   `pages/` 保持轻量，专注展示与交互
+3. Update docs together with feature changes  
+   功能变更时同步更新文档
+4. Validate cloud endpoints before testing on a real device  
+   真机前先验证云端接口
+
+### Current repo status / 当前仓库状态
+
+- Basic feature set is already usable / 基础功能已可用
+- Cloud stack and dashboard are present / 云端与后台已具备雏形
+- Test coverage and CI are still missing / 自动化测试与 CI 仍待补齐
+
+## 9. API and Sync Notes / 接口与同步说明
+
+### Important endpoints / 关键接口
+
+- `POST /api/login/wechat`
+- `GET /api/ping`
+- `GET /api/routes`
+- `GET /api/routes/:id`
+- `POST /api/routes`
+- `PUT /api/routes/:id`
+- `DELETE /api/routes/:id`
+- `POST /api/routes/sync`
+- `POST /api/upload`
+- `GET /api/weather`
+- `GET /api/geocode/reverse`
+
+### Upload path note / 上传路径说明
+
+The mini program should use `uploadEndpoint: '/upload'`, and the shared URL builder will combine it with the API base URL so the actual request becomes:
+
+小程序端应配置 `uploadEndpoint: '/upload'`，再由统一 URL 构造器拼接为实际请求地址：
+
+```text
+https://your-domain.example/api/upload
+```
+
+This avoids mismatches between `/photos` and `/api/upload`.
+
+这样可以避免 `/photos` 与 `/api/upload` 不一致导致的上传失败。
+
+## 10. Current Risks and TODOs / 当前风险与待优化项
+
+### Already improved in this round / 本轮已处理
+
+- [x] Upload endpoint unified to `/upload` / 上传端点已统一为 `/upload`
+- [x] Noisy debug logs in `services/media.js` reduced / `services/media.js` 调试噪音已清理
+- [x] README upgraded to bilingual format / README 已升级为双语结构
+- [x] Added standalone Chinese doc / 已补充独立中文文档
+
+### Still recommended next / 下一步建议继续做
+
+- [ ] Move hard-coded production config out of source files  
+      把源码中的生产环境硬编码配置继续外移
+- [ ] Add automated tests for `/api/ping`, `/api/upload`, `/api/routes/sync`  
+      给关键接口补自动化测试
+- [ ] Add GitHub Actions for lint / test / build  
+      增加 GitHub Actions 质量门禁
+- [ ] Add environment separation for dev/staging/prod  
+      建立 dev/staging/prod 配置分层
+
+## 11. FAQ / 常见问题
+
+### Q1. Why does photo upload fail? / 为什么图片上传会失败？
+
+Common causes / 常见原因：
+
+- The client is still pointing to the wrong endpoint  
+  客户端仍然指向错误上传路径
+- `STORAGE_BASE_URL` is incorrect  
+  上传资源公开地址配置不对
+- Login token is missing or expired  
+  登录 token 缺失或过期
+- WeChat domain whitelist is not configured  
+  微信合法域名未配置
+
+### Q2. Why can the mini program run locally but not on a device? / 为什么本地能跑，真机不行？
+
+Usually because the device enforces real domain, TLS, and permission checks.  
+通常是因为真机会严格校验域名、HTTPS 和权限。
+
+### Q3. Is `cloud/` bundled into the mini program package? / `cloud/` 会打进小程序包吗？
+
+No. It is deployed separately as a server-side stack.  
+不会，`cloud/` 是独立部署的服务端。
+
+## 12. License / 许可
+
+This repository currently has no explicit license file. Add one before open-source distribution if needed.  
+当前仓库未见明确 License 文件，如需正式开源，建议补充许可证文件。
