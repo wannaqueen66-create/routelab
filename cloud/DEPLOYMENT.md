@@ -58,7 +58,7 @@
 
    ```bash
    # 在本地仓库根目录
-   scp -r cloud/ user@your-server:/opt/routelab/
+   scp -r cloud/ user@<your-server-ip-or-host>:/opt/routelab/
    ```
 
    在服务器上目录结构应类似：
@@ -96,7 +96,7 @@
      - `API_PORT`：容器内 API 端口（默认 8080）
      - `NGINX_PORT_HTTP` / `NGINX_PORT_HTTPS`：宿主机对外暴露的 80/443 端口（一般保持默认）
    - 对外 URL：
-     - `STORAGE_BASE_URL`：访问上传图片的完整 URL，例如 `https://your-domain.com/static/uploads`
+     - `STORAGE_BASE_URL`：访问上传图片的完整 URL，例如 `https://routelab.qzz.io/static/uploads`
    - WeChat 小程序：
      - `WECHAT_APPID` / `WECHAT_SECRET`：微信小程序的真实 AppID 和 Secret，用于 `/api/login/wechat`
    - 管理后台账号：
@@ -109,11 +109,11 @@
 
 ## 3. Cloudflare 配置（域名 + 源站证书）
 
-> 假设你的域名为 `routelab.example.com`，以下步骤以该域名为例。
+> 假设你的域名为 `routelab.qzz.io`，以下步骤以该域名为例。
 
 1. 在 Cloudflare 添加站点并接入域名（按照 Cloudflare 指引修改 NS）。
 2. 在 Cloudflare「DNS」页：
-   - 新建 A 记录：`routelab.example.com` → 指向你的服务器公网 IP
+   - 新建 A 记录：`routelab.qzz.io` → 指向你的服务器公网 IP
    - 代理状态保持「Proxied」（小橙云），让请求经过 Cloudflare
 3. 在 Cloudflare「SSL/TLS → Overview」：
    - 建议模式选择 `Full (strict)`
@@ -134,8 +134,8 @@
 
    # 将 origin.pem 上传为 cf-origin.pem，将 origin.key 上传为 cf-origin.key
    # 例如：
-   # scp origin.pem root@your-server:/opt/certs/cf-origin.pem
-   # scp origin.key root@your-server:/opt/certs/cf-origin.key
+   # scp origin.pem root@<your-server-ip-or-host>:/opt/certs/cf-origin.pem
+   # scp origin.key root@<your-server-ip-or-host>:/opt/certs/cf-origin.key
 
    sudo chmod 600 /opt/certs/cf-origin.pem /opt/certs/cf-origin.key
    ```
@@ -184,10 +184,10 @@
 
 5. 在浏览器访问：
 
-   - 管理后台：`https://routelab.example.com/`（React Dashboard）
-   - API 基础路径：`https://routelab.example.com/api`
-     - 示例：`GET https://routelab.example.com/api/ping`
-     - 小程序使用：`https://routelab.example.com/api/routes`, `/api/routes/sync` 等
+   - 管理后台：`https://routelab.qzz.io/`（React Dashboard）
+   - API 基础路径：`https://routelab.qzz.io/api`
+     - 示例：`GET https://routelab.qzz.io/api/ping`
+     - 小程序使用：`https://routelab.qzz.io/api/routes`, `/api/routes/sync` 等
 
 ---
 
@@ -197,14 +197,14 @@
 
    ```js
    module.exports = {
-     apiBaseUrl: 'https://routelab.example.com/api',
+     apiBaseUrl: 'https://routelab.qzz.io/api',
      api: {
-       baseUrl: 'https://routelab.example.com/api',
+       baseUrl: 'https://routelab.qzz.io/api',
        timeout: 15000,
        retries: 1,
        token: '',
        uploadEndpoint: '/upload',
-       staticBase: 'https://routelab.example.com/static/uploads',
+       staticBase: 'https://routelab.qzz.io/static/uploads',
      },
      // 其它配置按需调整
    };
