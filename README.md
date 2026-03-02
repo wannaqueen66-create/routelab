@@ -378,5 +378,7 @@ No. It is deployed separately as a server-side stack.
 
 ## 12. License / 许可
 
-This repository currently has no explicit license file. Add one before open-source distribution if needed.  
-当前仓库未见明确 License 文件，如需正式开源，建议补充许可证文件。
+This project is licensed under **PolyForm Noncommercial 1.0.0**. Commercial use is prohibited unless separately authorized by the copyright holder.  
+本项目采用 **PolyForm Noncommercial 1.0.0** 许可证，默认**禁止商用**；如需商用，需另行获得版权方书面授权。
+
+See: `LICENSE`
