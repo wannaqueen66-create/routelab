@@ -117,6 +117,23 @@ function buildProgressFromOverview(overview = {}) {
   };
 }
 
+function buildHomeSyncBanner(syncInfo = {}) {
+  const pending = Number(syncInfo.pending) || 0;
+  const lastSyncText = syncInfo.lastSyncText || '尚未同步';
+  if (pending > 0) {
+    return {
+      tone: 'warn',
+      title: `还有 ${pending} 条记录待同步`,
+      desc: `建议尽快同步，避免换机或清缓存时丢失本地数据 · 上次同步：${lastSyncText}`,
+    };
+  }
+  return {
+    tone: 'ok',
+    title: '同步状态良好',
+    desc: `当前本地与云端基本一致 · 上次同步：${lastSyncText}`,
+  };
+}
+
 const EMPTY_OVERVIEW = createOverview([]);
 const EMPTY_PROGRESS = buildProgressFromOverview(EMPTY_OVERVIEW);
 const DEFAULT_WEATHER = createWeatherState({ loading: true });
@@ -145,6 +162,7 @@ Page({
     privacyLevel: 'private',
     showLocationPrompt: false,
     syncInfo: formatSyncInfo({}),
+    homeSyncBanner: buildHomeSyncBanner(formatSyncInfo({})),
     syncBusy: false,
     announcementModalVisible: false,
     announcementModal: null,
@@ -449,9 +467,17 @@ Page({
   refreshSyncInfo() {
     try {
       const status = typeof getSyncStatus === 'function' ? getSyncStatus() : {};
-      this.setData({ syncInfo: formatSyncInfo(status) });
+      const syncInfo = formatSyncInfo(status);
+      this.setData({
+        syncInfo,
+        homeSyncBanner: buildHomeSyncBanner(syncInfo),
+      });
     } catch (err) {
-      this.setData({ syncInfo: formatSyncInfo({}) });
+      const syncInfo = formatSyncInfo({});
+      this.setData({
+        syncInfo,
+        homeSyncBanner: buildHomeSyncBanner(syncInfo),
+      });
     }
   },
 

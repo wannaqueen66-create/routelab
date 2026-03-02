@@ -512,11 +512,20 @@ Page({
     const trackingFlag = this.data.finishSheetVisible ? false : isTracking;
     const pausedFlag = this.data.finishSheetVisible ? false : isPaused;
 
+    const failedPhotoCount = normalizePhotos(this.data.photos).filter((item) => item.uploadError).length;
+    const pendingPhotoCount = normalizePhotos(this.data.photos).filter((item) => !item.uploadError).length;
+    const syncHintBase = getSyncHintText();
+    const syncHintText = failedPhotoCount > 0
+      ? `${syncHintBase} · ${failedPhotoCount} 张图片待重试`
+      : pendingPhotoCount > 0
+        ? `${syncHintBase} · ${pendingPhotoCount} 张图片待上传`
+        : syncHintBase;
+
     this.setData({
       tracking: trackingFlag,
       paused: pausedFlag,
       signalQualityLabel: state.signalQuality === 'weak' ? '定位较弱' : '定位良好',
-      syncHintText: getSyncHintText(),
+      syncHintText,
       durationText,
       distanceText,
       speedText,
@@ -879,7 +888,10 @@ Page({
       .then((uploadedPhotos) => {
         const normalizedUploaded = normalizePhotos(uploadedPhotos || []);
         const failedCount = normalizedUploaded.filter((item) => item.uploadError).length;
-        this.setData({ photos: normalizedUploaded });
+        this.setData({
+          photos: normalizedUploaded,
+          syncHintText: getSyncHintText(),
+        });
         if (failedCount > 0) {
           wx.showToast({ title: `${failedCount} 张图片上传失败，可稍后重试`, icon: 'none' });
         }
@@ -1049,7 +1061,7 @@ Page({
           uploadError: '',
         }));
         const normalized = normalizePhotos([...this.data.photos, ...newPhotos]);
-        this.setData({ photos: normalized });
+        this.setData({ photos: normalized, syncHintText: getSyncHintText() });
       },
       complete: () => {
         const backup = this.__hidePromptStateBackup;
@@ -1067,7 +1079,7 @@ Page({
   handleRemovePhoto(event) {
     const { index } = event.currentTarget.dataset || {};
     const nextPhotos = this.data.photos.filter((_, i) => i !== Number(index));
-    this.setData({ photos: nextPhotos });
+    this.setData({ photos: nextPhotos, syncHintText: getSyncHintText() });
   },
 
   handleRetryPhoto(event) {
@@ -1086,7 +1098,7 @@ Page({
         uploadError: '',
       };
     });
-    this.setData({ photos: nextPhotos });
+    this.setData({ photos: nextPhotos, syncHintText: getSyncHintText() });
     wx.showToast({ title: '已标记重试', icon: 'none' });
   },
 

@@ -75,6 +75,10 @@
       </view>
 
       <view class="card card--hero">
+        <view class="home-sync-banner home-sync-banner--{{homeSyncBanner.tone}}">
+          <text class="home-sync-banner__title">{{homeSyncBanner.title}}</text>
+          <text class="home-sync-banner__desc">{{homeSyncBanner.desc}}</text>
+        </view>
         <view class="hero__top">
           <view class="hero__titles">
             <text class="hero__eyebrow">今日概览</text>

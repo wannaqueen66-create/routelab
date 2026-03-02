@@ -105,6 +105,35 @@
   border: 1px solid rgba(59, 130, 246, 0.12);
 }
 
+.home-sync-banner {
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  margin-bottom: 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.home-sync-banner--warn {
+  background: rgba(245, 158, 11, 0.18);
+  color: #92400e;
+}
+
+.home-sync-banner--ok {
+  background: rgba(34, 197, 94, 0.15);
+  color: #166534;
+}
+
+.home-sync-banner__title {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.home-sync-banner__desc {
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+
 .hero__eyebrow {
   font-size: 24rpx;
   color: #64748b;

@@ -59,6 +59,8 @@ const WEAK_ACCURACY_THRESHOLD_METERS = 25;
 const WEAK_ACCURACY_STREAK_LIMIT = 3;
 const WEAK_SAMPLING_INTERVAL_PENALTY_MS = 2000;
 const WEAK_SAMPLING_DISTANCE_PENALTY_METERS = 2;
+const LOW_QUALITY_DISTANCE_PENALTY_METERS = 4;
+const LOW_QUALITY_INTERVAL_PENALTY_MS = 3000;
 const WEAK_INTERVAL_THRESHOLD_MS = 12 * 1000;
 const WEAK_INTERVAL_STREAK_LIMIT = 2;
 const SUSPENSION_GAP_THRESHOLD_MS = 20 * 1000;
@@ -646,6 +648,16 @@ function shouldKeepPoint(previousPoint, point, segmentDistance, previousGpsPoint
     }
     if (Number.isFinite(distanceMeters)) {
       distanceMeters += WEAK_SAMPLING_DISTANCE_PENALTY_METERS;
+    }
+  }
+
+  const isLowQualityPoint = isFiniteNumber(point.accuracy) && point.accuracy > 12;
+  if (isLowQualityPoint) {
+    if (Number.isFinite(intervalMs)) {
+      intervalMs += LOW_QUALITY_INTERVAL_PENALTY_MS;
+    }
+    if (Number.isFinite(distanceMeters)) {
+      distanceMeters += LOW_QUALITY_DISTANCE_PENALTY_METERS;
     }
   }
 
