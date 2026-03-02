@@ -177,6 +177,9 @@
                 <text>{{item.activityLabel}}</text>
                 <text>｜{{item.weekLabel}} {{item.timeRange}}</text>
               </view>
+              <view class="history-route__sync-error" wx:if="{{item.syncPending && item.syncErrorMessage}}">
+                <text>⚠️ {{item.syncStatusLabel}}：{{item.syncErrorHint || item.syncErrorMessage}}</text>
+              </view>
               <view class="history-route__extra" wx:if="{{item.photosCount}}">
                 <text>{{item.photosCount}} 张照片</text>
               </view>

@@ -79,6 +79,17 @@
             <text>{{item.activityLabel}}</text>
             <text>{{item.timeRange}}</text>
           </view>
+          <view class="route-card__sync-error" wx:if="{{item.syncPending && item.syncErrorMessage}}">
+            <view class="route-card__sync-error-head" data-id="{{item.id}}" bindtap="handleToggleSyncError">
+              <text>⚠️ {{item.syncStatusLabel}} · {{item.syncErrorHint || '请稍后重试'}}</text>
+              <text>{{item.syncErrorExpanded ? '收起' : '详情'}}</text>
+            </view>
+            <view class="route-card__sync-error-body" wx:if="{{item.syncErrorExpanded}}">
+              <text>错误：{{item.syncErrorMessage}}</text>
+              <text wx:if="{{item.syncErrorCode}}">状态码：{{item.syncErrorCode}}</text>
+              <text wx:if="{{item.syncErrorAt}}">时间：{{item.syncErrorAt}}</text>
+            </view>
+          </view>
           <view class="route-card__extra" wx:if="{{item.photosCount}}">
             <image
               class="route-card__photo-thumb"

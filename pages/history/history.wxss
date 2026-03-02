@@ -245,6 +245,32 @@
     background: rgba(148, 163, 184, 0.18);
   }
   
+  .route-card__sync-error {
+    margin-top: 4rpx;
+    border-radius: 14rpx;
+    background: rgba(220, 38, 38, 0.08);
+    color: #991b1b;
+    padding: 10rpx 12rpx;
+    font-size: 22rpx;
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+  }
+
+  .route-card__sync-error-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10rpx;
+  }
+
+  .route-card__sync-error-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+    color: #7f1d1d;
+  }
+
   .route-card__date {
     font-size: 22rpx;
     color: var(--color-text-tertiary);

@@ -20,6 +20,46 @@ const HISTORY_FILTERS = [
 
 const HISTORY_RECENT_DAYS = 7;
 
+function classifySyncError(error = {}) {
+    const statusCode = Number(error?.statusCode) || 0;
+    const message = (error?.message || '').toLowerCase();
+
+    if (statusCode === 401 || statusCode === 403 || message.includes('token') || message.includes('auth')) {
+        return {
+            type: 'auth',
+            label: '登录失效',
+            hint: '请重新登录后再试',
+        };
+    }
+
+    if (
+        message.includes('timeout') ||
+        message.includes('network') ||
+        message.includes('fail') ||
+        statusCode === 408
+    ) {
+        return {
+            type: 'network',
+            label: '网络异常',
+            hint: '请检查网络并重试',
+        };
+    }
+
+    if (statusCode >= 500) {
+        return {
+            type: 'server',
+            label: '服务异常',
+            hint: '服务器开小差了，稍后重试',
+        };
+    }
+
+    return {
+        type: 'unknown',
+        label: '同步失败',
+        hint: '可稍后重试或手动强制同步',
+    };
+}
+
 /**
  * 格式化单条历史路线为展示格式
  * @param {Object} route - 原始路线数据
@@ -32,6 +72,9 @@ function formatHistoryRoute(route) {
     const activityType = route.meta?.activityType || route.activityType || DEFAULT_ACTIVITY_TYPE;
     const activityMeta = ACTIVITY_TYPE_MAP[activityType] || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
     const synced = route.synced === true;
+    const uploadError = route.uploadError && typeof route.uploadError === 'object' ? route.uploadError : null;
+    const syncError = uploadError ? classifySyncError(uploadError) : null;
+    const errorAt = Number(uploadError?.at) || Number(route?.lastSyncAttemptAt) || 0;
     return {
         id: route.id,
         title: route.title || '未命名路线',
@@ -50,7 +93,14 @@ function formatHistoryRoute(route) {
         photosCount: Array.isArray(route.photos) ? route.photos.length : 0,
         synced,
         syncPending: !synced,
-        syncStatusLabel: synced ? '已同步' : '待同步',
+        syncStatusLabel: synced ? '已同步' : (syncError ? `${syncError.label}` : '待同步'),
+        syncErrorType: syncError?.type || '',
+        syncErrorLabel: syncError?.label || '',
+        syncErrorHint: syncError?.hint || '',
+        syncErrorMessage: uploadError?.message || '',
+        syncErrorCode: uploadError?.statusCode || '',
+        syncErrorAt: errorAt > 0 ? `${formatDate(errorAt)} ${formatClock(errorAt)}` : '',
+        syncErrorExpanded: false,
     };
 }
 
@@ -94,6 +144,8 @@ function formatSyncInfo(status = {}) {
     const timestamp = Number(status.lastSyncAt);
     const hasTimestamp = Number.isFinite(timestamp) && timestamp > 0;
     const lastError = status.lastError && typeof status.lastError === 'object' ? status.lastError : null;
+    const lastErrorAt = Number(lastError?.at) || 0;
+    const errorClass = classifySyncError(lastError || {});
     return {
         pending: status.pending || 0,
         synced: status.synced || 0,
@@ -101,7 +153,11 @@ function formatSyncInfo(status = {}) {
         total: status.total || 0,
         lastSyncText: hasTimestamp ? `${formatDate(timestamp)} ${formatClock(timestamp)}` : '尚未同步',
         lastErrorMessage: lastError?.message || '',
-        lastErrorAt: Number(lastError?.at) || 0,
+        lastErrorAt,
+        lastErrorAtText: lastErrorAt > 0 ? `${formatDate(lastErrorAt)} ${formatClock(lastErrorAt)}` : '',
+        lastErrorType: lastError ? errorClass.type : '',
+        lastErrorHint: lastError ? errorClass.hint : '',
+        lastErrorLabel: lastError ? errorClass.label : '',
     };
 }
 
@@ -133,4 +189,5 @@ module.exports = {
     filterHistoryRoutes,
     formatSyncInfo,
     shouldFixPlaceName,
+    classifySyncError,
 };

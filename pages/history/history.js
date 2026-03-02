@@ -12,6 +12,7 @@ const { ACTIVITY_TYPE_MAP, DEFAULT_ACTIVITY_TYPE } = require('../../constants/ac
 const { formatDistance, formatCalories } = require('../../utils/format');
 const { formatDuration, formatDate, formatClock } = require('../../utils/time');
 const api = require('../../services/api');
+const { classifySyncError } = require('../../services/history-formatter');
 
 const FILTER_TABS = [
   { key: 'all', label: '全部' },
@@ -30,6 +31,9 @@ function normalizeRoute(route) {
   const endLabel = route.meta?.endLabel || startLabel;
   const synced = route.synced === true;
   const previewPhoto = photos[0]?.path || photos[0] || '';
+  const uploadError = route.uploadError && typeof route.uploadError === 'object' ? route.uploadError : null;
+  const syncError = uploadError ? classifySyncError(uploadError) : null;
+  const syncErrorAt = Number(uploadError?.at) || Number(route?.lastSyncAttemptAt) || 0;
   return {
     id: route.id,
     title: route.title,
@@ -48,7 +52,13 @@ function normalizeRoute(route) {
     previewPhoto,
     synced,
     syncPending: !synced,
-    syncStatusLabel: synced ? '已同步' : '待同步',
+    syncStatusLabel: synced ? '已同步' : (syncError ? syncError.label : '待同步'),
+    syncErrorType: syncError?.type || '',
+    syncErrorHint: syncError?.hint || '',
+    syncErrorMessage: uploadError?.message || '',
+    syncErrorCode: uploadError?.statusCode || '',
+    syncErrorAt: syncErrorAt > 0 ? `${formatDate(syncErrorAt)} ${formatClock(syncErrorAt)}` : '',
+    syncErrorExpanded: false,
   };
 }
 
@@ -257,5 +267,18 @@ Page({
 
   handleForceSyncTap() {
     this.syncFromCloud(true, true);
+  },
+
+  handleToggleSyncError(event) {
+    const { id } = event.currentTarget.dataset || {};
+    if (!id) {
+      return;
+    }
+    const index = (this.data.routes || []).findIndex((item) => item && item.id === id);
+    if (index < 0) {
+      return;
+    }
+    const current = !!this.data.routes[index].syncErrorExpanded;
+    this.setData({ [`routes[${index}].syncErrorExpanded`]: !current });
   },
 });

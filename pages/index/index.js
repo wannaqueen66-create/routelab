@@ -121,11 +121,13 @@ function buildHomeSyncBanner(syncInfo = {}) {
   const pending = Number(syncInfo.pending) || 0;
   const lastSyncText = syncInfo.lastSyncText || '尚未同步';
   const errorMessage = syncInfo.lastErrorMessage || '';
+  const errorLabel = syncInfo.lastErrorLabel || '同步失败';
+  const errorHint = syncInfo.lastErrorHint || '请稍后重试';
   if (errorMessage) {
     return {
       tone: 'danger',
-      title: '最近一次同步失败',
-      desc: `${errorMessage} · 上次成功同步：${lastSyncText}`,
+      title: `最近一次同步失败（${errorLabel}）`,
+      desc: `${errorHint} · ${errorMessage} · 上次成功同步：${lastSyncText}`,
     };
   }
   if (pending > 0) {
