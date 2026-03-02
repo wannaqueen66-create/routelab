@@ -1,17 +1,18 @@
 /**
  * Route Routes
- * Handles /api/routes/* endpoints for route CRUD, likes, and comments
+ * Handles /api/routes/* endpoints for route CRUD, sync, likes, and comments
  */
 
 const express = require('express');
 const createEnsureAuth = require('../middlewares/ensureAuth');
-const { pool } = require('../db/index');
 const { JWT_SECRET, PUBLIC_ROUTE_LIMIT, ACTIVITY_TYPE_VALUES } = require('../config/index');
-const { sanitizeEnumValue } = require('../utils/format');
+const { sanitizeEnumValue, normalizeRouteId } = require('../utils/format');
 
 const {
     getRouteById,
     getRoutesByUserId,
+    createRoute,
+    updateRoute,
     softDeleteRoute,
     getPointsByRoute,
     addLike,
@@ -27,23 +28,133 @@ const {
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
 
+const PRIVACY_LEVEL_VALUES = new Set(['private', 'public']);
+
+function normalizePrivacyLevel(value, fallback = 'private') {
+    if (typeof value !== 'string') {
+        return fallback;
+    }
+    const normalized = value.trim().toLowerCase();
+    return PRIVACY_LEVEL_VALUES.has(normalized) ? normalized : fallback;
+}
+
+function normalizeTimestamp(value) {
+    if (value === null || value === undefined || value === '') {
+        return null;
+    }
+    if (value instanceof Date) {
+        return Number.isFinite(value.getTime()) ? value : null;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const date = new Date(value);
+        return Number.isFinite(date.getTime()) ? date : null;
+    }
+    if (typeof value === 'string') {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            const date = new Date(numeric);
+            return Number.isFinite(date.getTime()) ? date : null;
+        }
+        const date = new Date(value);
+        return Number.isFinite(date.getTime()) ? date : null;
+    }
+    return null;
+}
+
+function normalizePhotos(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value.filter(Boolean);
+}
+
+function normalizePoints(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value
+        .map((point) => {
+            if (!point || typeof point !== 'object') {
+                return null;
+            }
+            const latitude = Number(point.latitude);
+            const longitude = Number(point.longitude);
+            if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+                return null;
+            }
+            const altitude = Number(point.altitude);
+            const timestamp = normalizeTimestamp(point.timestamp || point.recordedAt || point.time);
+            return {
+                latitude,
+                longitude,
+                altitude: Number.isFinite(altitude) ? altitude : null,
+                timestamp,
+            };
+        })
+        .filter(Boolean);
+}
+
+function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
+    const body = input && typeof input === 'object' ? input : {};
+    const meta = body.meta && typeof body.meta === 'object' ? body.meta : {};
+    const stats = body.stats && typeof body.stats === 'object' ? body.stats : {};
+
+    const normalizedId = normalizeRouteId(routeId || body.id);
+    const clientId = normalizeRouteId(body.clientId);
+    const nameCandidate = typeof body.title === 'string' ? body.title : body.name;
+    const name = typeof nameCandidate === 'string' ? nameCandidate.trim() : '';
+    const privacyLevel = normalizePrivacyLevel(body.privacyLevel, 'private');
+
+    const activityType = sanitizeEnumValue(
+        body.activityType || meta.activityType,
+        ACTIVITY_TYPE_VALUES
+    ) || 'walk';
+
+    const purposeCode =
+        typeof body.purposeCode === 'string' && body.purposeCode.trim()
+            ? body.purposeCode.trim()
+            : typeof body.purposeType === 'string' && body.purposeType.trim()
+                ? body.purposeType.trim()
+                : null;
+
+    return {
+        id: normalizedId,
+        clientId,
+        name,
+        privacyLevel,
+        activityType,
+        purposeCode,
+        startTime: normalizeTimestamp(body.startTime),
+        endTime: normalizeTimestamp(body.endTime),
+        stats,
+        meta,
+        photos: normalizePhotos(body.photos),
+        points: normalizePoints(body.points),
+        weather: body.weather && typeof body.weather === 'object' ? body.weather : null,
+    };
+}
+
 // Helper: Map route row to API response
 function mapRouteRow(row, points = [], options = {}) {
     const { includePoints = false, includeOwner = false } = options;
+
+    const routeName = row.name || row.title || null;
+    const routeMeta = row.meta || {};
+    const routeActivityType = row.activity_type || routeMeta.activityType || 'walk';
 
     const result = {
         id: row.id,
         userId: row.user_id,
         clientId: row.client_id,
-        name: row.name,
-        title: row.name,
-        activityType: row.activity_type,
-        purposeCode: row.purpose_code,
+        name: routeName,
+        title: routeName,
+        activityType: routeActivityType,
+        purposeCode: row.purpose_code || routeMeta.purposeType || null,
         privacyLevel: row.privacy_level,
         startTime: row.start_time?.getTime() || null,
         endTime: row.end_time?.getTime() || null,
         stats: row.stats || {},
-        meta: row.meta || {},
+        meta: routeMeta,
         photos: row.photos || [],
         weather: row.weather || null,
         pointCount: points.length,
@@ -57,7 +168,7 @@ function mapRouteRow(row, points = [], options = {}) {
             latitude: p.latitude,
             longitude: p.longitude,
             altitude: p.altitude,
-            timestamp: p.timestamp?.getTime() || null,
+            timestamp: p.timestamp?.getTime() || p.recorded_at?.getTime() || null,
         }));
     }
 
@@ -70,6 +181,221 @@ function mapRouteRow(row, points = [], options = {}) {
 
     return result;
 }
+
+// === Sync ===
+
+// POST /api/routes/sync
+router.post('/sync', ensureAuth, async (req, res) => {
+    if (!req.userId) {
+        return res.status(403).json({ error: 'User context required' });
+    }
+
+    const body = req.body || {};
+    const includeDeleted = body.includeDeleted !== false;
+    const limit = Math.min(Math.max(Number(body.limit) || 200, 1), 500);
+    const lastSyncAt = Number(body.lastSyncAt) || 0;
+    const knownRemoteIds = Array.isArray(body.knownRemoteIds)
+        ? body.knownRemoteIds.map((id) => normalizeRouteId(id)).filter(Boolean)
+        : [];
+
+    try {
+        const routes = await getRoutesByUserId(req.userId, {
+            includeDeleted: true,
+            limit,
+            offset: 0,
+        });
+
+        const routeIds = routes.map((r) => r.id);
+        const pointsByRoute = await getPointsByRoute(routeIds);
+
+        const allMapped = routes.map((row) =>
+            mapRouteRow(row, pointsByRoute[row.id] || [], {
+                includePoints: true,
+            })
+        );
+
+        const afterFiltered = allMapped.filter((item) => {
+            const updatedAt = Number(item.updatedAt || item.createdAt || 0);
+            return updatedAt > lastSyncAt;
+        });
+
+        const deletedIds = afterFiltered
+            .filter((item) => item.deletedAt)
+            .map((item) => item.id);
+
+        const items = afterFiltered.filter((item) => !item.deletedAt);
+        const fullRemoteIdSet = new Set(allMapped.map((item) => item.id));
+        const missingRemoteIds = knownRemoteIds.filter((id) => !fullRemoteIdSet.has(id));
+
+        res.json({
+            items,
+            deletedIds: includeDeleted ? deletedIds : [],
+            missingRemoteIds,
+            lastSyncAt: Date.now(),
+            limit,
+            hasMore: false,
+        });
+    } catch (error) {
+        console.error('POST /api/routes/sync failed', error);
+        res.status(500).json({ error: 'Failed to sync routes' });
+    }
+});
+
+// === Route CRUD ===
+
+// POST /api/routes
+router.post('/', ensureAuth, async (req, res) => {
+    if (!req.userId) {
+        return res.status(403).json({ error: 'User context required' });
+    }
+
+    const payload = normalizeRoutePayload(req.body || {});
+    if (!payload.id) {
+        return res.status(400).json({ error: 'Route id is required' });
+    }
+
+    try {
+        const existing = await getRouteById(payload.id);
+        if (existing) {
+            if (existing.user_id !== req.userId) {
+                return res.status(403).json({ error: 'Route id already exists for another user' });
+            }
+            return res.status(409).json({ error: 'Route already exists' });
+        }
+
+        const created = await createRoute(req.userId, payload);
+        const pointsByRoute = await getPointsByRoute([created.id]);
+        const item = mapRouteRow(created, pointsByRoute[created.id] || [], { includePoints: true });
+
+        res.status(201).json({
+            route: item,
+            lastSyncAt: Date.now(),
+        });
+    } catch (error) {
+        console.error('POST /api/routes failed', error);
+        res.status(500).json({ error: 'Failed to create route' });
+    }
+});
+
+// PUT /api/routes/:id (upsert)
+router.put('/:id', ensureAuth, async (req, res) => {
+    if (!req.userId) {
+        return res.status(403).json({ error: 'User context required' });
+    }
+
+    const routeId = normalizeRouteId(req.params.id);
+    if (!routeId) {
+        return res.status(400).json({ error: 'Route id is required' });
+    }
+
+    const payload = normalizeRoutePayload(req.body || {}, { routeId });
+    payload.id = routeId;
+
+    try {
+        const existing = await getRouteById(routeId);
+
+        if (!existing) {
+            const created = await createRoute(req.userId, payload);
+            const pointsByRoute = await getPointsByRoute([created.id]);
+            const item = mapRouteRow(created, pointsByRoute[created.id] || [], { includePoints: true });
+            return res.status(201).json({ route: item, upserted: 'created', lastSyncAt: Date.now() });
+        }
+
+        if (existing.user_id !== req.userId) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const updated = await updateRoute(routeId, req.userId, {
+            name: payload.name,
+            privacyLevel: payload.privacyLevel,
+            activityType: payload.activityType,
+            purposeCode: payload.purposeCode,
+            stats: payload.stats,
+            meta: payload.meta,
+            photos: payload.photos,
+        });
+
+        if (!updated) {
+            return res.status(404).json({ error: 'Route not found' });
+        }
+
+        const pointsByRoute = await getPointsByRoute([updated.id]);
+        const item = mapRouteRow(updated, pointsByRoute[updated.id] || [], { includePoints: true });
+        return res.json({ route: item, upserted: 'updated', lastSyncAt: Date.now() });
+    } catch (error) {
+        console.error('PUT /api/routes/:id failed', error);
+        return res.status(500).json({ error: 'Failed to upsert route' });
+    }
+});
+
+// PATCH /api/routes/:id
+router.patch('/:id', ensureAuth, async (req, res) => {
+    if (!req.userId) {
+        return res.status(403).json({ error: 'User context required' });
+    }
+
+    const routeId = normalizeRouteId(req.params.id);
+    if (!routeId) {
+        return res.status(400).json({ error: 'Route ID is required' });
+    }
+
+    const body = req.body || {};
+    const hasKnownField =
+        body.name !== undefined ||
+        body.title !== undefined ||
+        body.privacyLevel !== undefined ||
+        body.activityType !== undefined ||
+        body.purposeCode !== undefined ||
+        body.purposeType !== undefined ||
+        body.stats !== undefined ||
+        body.meta !== undefined ||
+        body.photos !== undefined;
+
+    if (!hasKnownField) {
+        return res.status(400).json({ error: 'No patchable fields provided' });
+    }
+
+    const normalizedActivity =
+        body.activityType !== undefined
+            ? sanitizeEnumValue(body.activityType, ACTIVITY_TYPE_VALUES)
+            : undefined;
+
+    const patch = {
+        name:
+            body.title !== undefined
+                ? String(body.title || '').trim()
+                : body.name !== undefined
+                    ? String(body.name || '').trim()
+                    : undefined,
+        privacyLevel:
+            body.privacyLevel !== undefined
+                ? normalizePrivacyLevel(body.privacyLevel, 'private')
+                : undefined,
+        activityType: body.activityType !== undefined ? normalizedActivity || 'walk' : undefined,
+        purposeCode:
+            body.purposeCode !== undefined
+                ? body.purposeCode
+                : body.purposeType !== undefined
+                    ? body.purposeType
+                    : undefined,
+        stats: body.stats !== undefined && typeof body.stats === 'object' ? body.stats : undefined,
+        meta: body.meta !== undefined && typeof body.meta === 'object' ? body.meta : undefined,
+        photos: body.photos !== undefined ? normalizePhotos(body.photos) : undefined,
+    };
+
+    try {
+        const updated = await updateRoute(routeId, req.userId, patch);
+        if (!updated) {
+            return res.status(404).json({ error: 'Route not found or not owned by user' });
+        }
+        const pointsByRoute = await getPointsByRoute([updated.id]);
+        const item = mapRouteRow(updated, pointsByRoute[updated.id] || [], { includePoints: true });
+        return res.json({ route: item, lastSyncAt: Date.now() });
+    } catch (error) {
+        console.error('PATCH /api/routes/:id failed', error);
+        return res.status(500).json({ error: 'Failed to patch route' });
+    }
+});
 
 // === Public Routes ===
 
@@ -174,7 +500,7 @@ router.delete('/:id', ensureAuth, async (req, res) => {
         if (!deleted) {
             return res.status(404).json({ error: 'Route not found or already deleted' });
         }
-        res.json({ id: routeId, deleted: true });
+        res.json({ id: routeId, deleted: true, lastSyncAt: Date.now() });
     } catch (error) {
         console.error('DELETE /api/routes/:id failed', error);
         res.status(500).json({ error: 'Failed to delete route' });

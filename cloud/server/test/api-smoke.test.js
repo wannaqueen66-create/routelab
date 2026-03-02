@@ -17,10 +17,52 @@ db.ensureDatabaseReady = async () => {};
 db.pool.query = async () => ({ rows: [] });
 
 const routeModel = require('../src/models/routeModel');
-routeModel.getPublicRoutes = async () => [];
-routeModel.getPointsByRoute = async () => ({});
-routeModel.getRoutesByUserId = async () => [];
-routeModel.getRouteById = async () => null;
+
+let mockPublicRoutes = [];
+let mockPointsByRoute = {};
+let mockRoutesByUserId = [];
+let mockRouteById = null;
+
+routeModel.getPublicRoutes = async () => mockPublicRoutes;
+routeModel.getPointsByRoute = async () => mockPointsByRoute;
+routeModel.getRoutesByUserId = async () => mockRoutesByUserId;
+routeModel.getRouteById = async () => mockRouteById;
+routeModel.createRoute = async (userId, route) => ({
+  id: route.id,
+  user_id: userId,
+  client_id: route.clientId || null,
+  name: route.name || null,
+  activity_type: route.activityType || 'walk',
+  purpose_code: route.purposeCode || null,
+  privacy_level: route.privacyLevel || 'private',
+  start_time: route.startTime || null,
+  end_time: route.endTime || null,
+  stats: route.stats || {},
+  meta: route.meta || {},
+  photos: route.photos || [],
+  weather: route.weather || null,
+  created_at: new Date(),
+  updated_at: new Date(),
+  deleted_at: null,
+});
+routeModel.updateRoute = async (id, userId, patch) => ({
+  id,
+  user_id: userId,
+  client_id: null,
+  name: patch.name || 'patched',
+  activity_type: patch.activityType || 'walk',
+  purpose_code: patch.purposeCode || null,
+  privacy_level: patch.privacyLevel || 'private',
+  start_time: null,
+  end_time: null,
+  stats: patch.stats || {},
+  meta: patch.meta || {},
+  photos: patch.photos || [],
+  weather: null,
+  created_at: new Date(),
+  updated_at: new Date(),
+  deleted_at: null,
+});
 routeModel.softDeleteRoute = async () => false;
 routeModel.addLike = async () => ({});
 routeModel.removeLike = async () => ({});
@@ -52,6 +94,9 @@ test('GET /api/routes requires auth', async () => {
 });
 
 test('GET /api/routes returns empty list for valid token', async () => {
+  mockRoutesByUserId = [];
+  mockPointsByRoute = {};
+
   const response = await request
     .get('/api/routes')
     .set('Authorization', `Bearer ${signUserToken('user-42')}`);
@@ -64,6 +109,68 @@ test('POST /api/upload returns 400 when file is missing', async () => {
   const response = await request.post('/api/upload');
   assert.equal(response.status, 400);
   assert.equal(response.body.error, 'No file uploaded');
+});
+
+test('POST /api/routes/sync returns sync payload', async () => {
+  const now = Date.now();
+  mockRoutesByUserId = [
+    {
+      id: 'route-sync-1',
+      user_id: 42,
+      client_id: 'local-1',
+      name: 'Sync Route',
+      activity_type: 'walk',
+      purpose_code: null,
+      privacy_level: 'private',
+      start_time: new Date(now - 60 * 1000),
+      end_time: new Date(now - 30 * 1000),
+      stats: { distance: 120 },
+      meta: { activityType: 'walk' },
+      photos: [],
+      weather: null,
+      created_at: new Date(now - 60 * 1000),
+      updated_at: new Date(now + 10 * 1000),
+      deleted_at: null,
+    },
+  ];
+  mockPointsByRoute = {
+    'route-sync-1': [{ latitude: 31.2, longitude: 121.5, altitude: null, timestamp: new Date(now - 50 * 1000) }],
+  };
+
+  const response = await request
+    .post('/api/routes/sync')
+    .set('Authorization', `Bearer ${signUserToken('42')}`)
+    .send({ lastSyncAt: now - 3600 * 1000, knownRemoteIds: ['route-sync-1', 'route-missing-2'] });
+
+  assert.equal(response.status, 200);
+  assert.ok(Array.isArray(response.body.items));
+  assert.equal(response.body.items.length, 1);
+  assert.equal(response.body.items[0].id, 'route-sync-1');
+  assert.ok(Array.isArray(response.body.missingRemoteIds));
+  assert.equal(response.body.missingRemoteIds.includes('route-missing-2'), true);
+});
+
+test('PUT /api/routes/:id upserts route and returns payload', async () => {
+  mockRouteById = null;
+
+  const response = await request
+    .put('/api/routes/route-upsert-1')
+    .set('Authorization', `Bearer ${signUserToken('88')}`)
+    .send({
+      id: 'route-upsert-1',
+      title: 'Upsert Route',
+      activityType: 'walk',
+      privacyLevel: 'private',
+      points: [{ latitude: 31.2, longitude: 121.5, timestamp: Date.now() }],
+      stats: { distance: 50 },
+      meta: { activityType: 'walk' },
+      photos: [],
+    });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.body.upserted, 'created');
+  assert.ok(response.body.route);
+  assert.equal(response.body.route.id, 'route-upsert-1');
 });
 
 test('POST /api/upload returns file metadata', async () => {
