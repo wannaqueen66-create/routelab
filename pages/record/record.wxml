@@ -222,6 +222,7 @@
           <text class="finish-field__hint">💡 拍照打卡可获得双倍积分！</text>
           <view class="finish-photo__actions">
             <button class="btn btn--camera" bindtap="handleAddPhoto">📷 拍摄</button>
+            <button class="btn btn--ghost finish-photo__retry-all" bindtap="handleRetryAllPhotos">🔁 重传失败图片</button>
           </view>
           <view class="finish-photo__grid" wx:if="{{photos.length}}">
             <block wx:for="{{photos}}" wx:key="path">

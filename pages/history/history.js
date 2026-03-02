@@ -28,6 +28,7 @@ function normalizeRoute(route) {
   const startLabel = route.meta?.startLabel || route.campusZone || '起点未识别';
   const endLabel = route.meta?.endLabel || startLabel;
   const synced = route.synced === true;
+  const previewPhoto = photos[0]?.path || photos[0] || '';
   return {
     id: route.id,
     title: route.title,
@@ -43,6 +44,7 @@ function normalizeRoute(route) {
     activityLabel: activityMeta.label,
     activityType,
     photosCount: photos.length,
+    previewPhoto,
     synced,
     syncPending: !synced,
     syncStatusLabel: synced ? '已同步' : '待同步',
@@ -72,6 +74,7 @@ Page({
     routes: [],
     empty: true,
     syncing: false,
+    historyLoading: true,
     syncSummaryText: '待同步 0 · 已同步 0 · 上次同步 --',
     hasMore: false,
   },
@@ -126,6 +129,7 @@ Page({
       }
       return route.privacyLevel === filterKey;
     });
+    this.setData({ historyLoading: true });
     this.filteredRoutes = filtered.map(normalizeRoute);
     this.renderCount = HISTORY_PAGE_SIZE;
     this.applyRenderedRoutes();
@@ -139,6 +143,7 @@ Page({
       routes: visible,
       empty: visible.length === 0,
       hasMore,
+      historyLoading: false,
     });
     this.resolveRoutePlaceNames(visible);
   },

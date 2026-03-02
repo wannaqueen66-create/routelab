@@ -529,6 +529,15 @@
 
 .finish-photo__actions {
   margin-top: 8rpx;
+  display: flex;
+  gap: 12rpx;
+}
+
+.finish-photo__actions .btn--camera,
+.finish-photo__retry-all {
+  flex: 1;
+  width: auto;
+  min-width: 0;
 }
 
 .finish-photo__grid {

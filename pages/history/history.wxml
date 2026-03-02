@@ -29,7 +29,14 @@
     lower-threshold="180"
     bindscrolltolower="handleLoadMore"
   >
-    <view wx:if="{{empty}}" class="empty">
+    <view wx:if="{{historyLoading}}" class="history-skeleton">
+      <view class="history-skeleton__card" wx:for="{{[1,2,3]}}" wx:key="*this">
+        <view class="history-skeleton__line history-skeleton__line--title"></view>
+        <view class="history-skeleton__line history-skeleton__line--meta"></view>
+        <view class="history-skeleton__line history-skeleton__line--path"></view>
+      </view>
+    </view>
+    <view wx:elif="{{empty}}" class="empty">
       <text class="empty__title">暂无轨迹记录</text>
       <text class="empty__desc">开启一次记录，RouteLab 会自动识别起点终点并生成统计。</text>
       <button class="btn btn--primary" open-type="navigateTo" url="/pages/record/record">马上开始</button>
@@ -69,6 +76,13 @@
             <text>{{item.timeRange}}</text>
           </view>
           <view class="route-card__extra" wx:if="{{item.photosCount}}">
+            <image
+              class="route-card__photo-thumb"
+              src="{{item.previewPhoto || ''}}"
+              mode="aspectFill"
+              lazy-load="true"
+              wx:if="{{item.previewPhoto}}"
+            />
             <text>{{item.photosCount}} 张打卡照片</text>
           </view>
           <view class="route-card__date">

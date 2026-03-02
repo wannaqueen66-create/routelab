@@ -1083,16 +1083,17 @@ Page({
   },
 
   handleRetryPhoto(event) {
-    const { index } = event.currentTarget.dataset || {};
+    const { index, silent } = event.currentTarget.dataset || {};
     const targetIndex = Number(index);
+    const silentMode = silent === true || silent === 'true';
     if (!Number.isFinite(targetIndex) || targetIndex < 0) {
-      return;
+      return Promise.resolve(false);
     }
 
     const photos = normalizePhotos(this.data.photos);
     const target = photos[targetIndex];
     if (!target || !target.path) {
-      return;
+      return Promise.resolve(false);
     }
 
     const nextPhotos = photos.map((item, i) => {
@@ -1107,7 +1108,7 @@ Page({
     });
     this.setData({ photos: nextPhotos, syncHintText: getSyncHintText() });
 
-    media
+    return media
       .uploadSinglePhoto({ path: target.path, note: target.note || '' })
       .then((uploaded) => {
         const afterSuccess = normalizePhotos(this.data.photos).map((item, i) => {
@@ -1122,7 +1123,10 @@ Page({
           };
         });
         this.setData({ photos: afterSuccess, syncHintText: getSyncHintText() });
-        wx.showToast({ title: '图片重传成功', icon: 'success' });
+        if (!silentMode) {
+          wx.showToast({ title: '图片重传成功', icon: 'success' });
+        }
+        return true;
       })
       .catch((error) => {
         const message = error?.message || error?.errMsg || '重传失败';
@@ -1137,8 +1141,49 @@ Page({
           };
         });
         this.setData({ photos: afterFail, syncHintText: getSyncHintText() });
-        wx.showToast({ title: '图片重传失败', icon: 'none' });
+        if (!silentMode) {
+          wx.showToast({ title: '图片重传失败', icon: 'none' });
+        }
+        return false;
       });
+  },
+
+  handleRetryAllPhotos() {
+    if (this._batchRetrying) {
+      return;
+    }
+    const photos = normalizePhotos(this.data.photos);
+    const failedIndices = [];
+    photos.forEach((item, index) => {
+      if (item && item.uploadError) {
+        failedIndices.push(index);
+      }
+    });
+    if (!failedIndices.length) {
+      wx.showToast({ title: '没有需要重传的图片', icon: 'none' });
+      return;
+    }
+
+    this._batchRetrying = true;
+
+    const retrySequentially = (cursor = 0, successCount = 0) => {
+      if (cursor >= failedIndices.length) {
+        this._batchRetrying = false;
+        wx.showToast({ title: `批量重传完成(${successCount}/${failedIndices.length})`, icon: 'none' });
+        return;
+      }
+
+      this
+        .handleRetryPhoto({ currentTarget: { dataset: { index: failedIndices[cursor], silent: true } } })
+        .then((ok) => {
+          setTimeout(() => retrySequentially(cursor + 1, successCount + (ok ? 1 : 0)), 120);
+        })
+        .catch(() => {
+          setTimeout(() => retrySequentially(cursor + 1, successCount), 120);
+        });
+    };
+
+    retrySequentially(0, 0);
   },
 
   handlePreviewPhoto(event) {
