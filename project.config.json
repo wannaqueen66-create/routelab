@@ -26,7 +26,36 @@
     "compileType": "miniprogram",
     "simulatorPluginLibVersion": {},
     "packOptions": {
-        "ignore": [],
+        "ignore": [
+            {
+                "type": "folder",
+                "value": "cloud"
+            },
+            {
+                "type": "folder",
+                "value": ".github"
+            },
+            {
+                "type": "folder",
+                "value": "scripts"
+            },
+            {
+                "type": "folder",
+                "value": ".agent"
+            },
+            {
+                "type": "file",
+                "value": "README.md"
+            },
+            {
+                "type": "file",
+                "value": "README_zh.md"
+            },
+            {
+                "type": "file",
+                "value": "LICENSE"
+            }
+        ],
         "include": []
     },
     "appid": "wxe9796de56cb4b795",
