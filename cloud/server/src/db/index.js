@@ -177,8 +177,10 @@ async function assertDatabaseEncoding() {
     }
 }
 
-// Perform initial check
-assertDatabaseEncoding();
+// Perform initial check (skip during tests)
+if (process.env.NODE_ENV !== 'test') {
+    assertDatabaseEncoding();
+}
 
 module.exports = {
     pool,
