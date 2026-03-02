@@ -532,12 +532,18 @@ Page({
     });
   },
 
-  syncHistoryFromCloud(showToast = false) {
+  syncHistoryFromCloud(showToast = false, options = {}) {
     if (this.data.historySyncing) {
       return Promise.resolve();
     }
+    const { forceUploadFirst = false, forceFull = false } = options || {};
     this.setData({ historySyncing: true });
-    return syncRoutesFromCloud()
+
+    const runner = forceUploadFirst
+      ? syncRoutesToCloud().then(() => syncRoutesFromCloud({ forceFull }))
+      : syncRoutesFromCloud({ forceFull });
+
+    return runner
       .then(() => {
         if (showToast) {
           wx.showToast({ title: '已同步云端', icon: 'success' });
@@ -555,6 +561,10 @@ Page({
 
   handleHistorySync() {
     return this.syncHistoryFromCloud(true);
+  },
+
+  handleHistoryForceSync() {
+    return this.syncHistoryFromCloud(true, { forceUploadFirst: true, forceFull: true });
   },
 
   handleHistoryFilterChange(event) {

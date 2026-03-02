@@ -121,9 +121,14 @@
       <view class="card card--history">
         <view class="history__header">
           <text class="card__title">历史轨迹</text>
-          <button class="pill-button" size="mini" loading="{{historySyncing}}" bindtap="handleHistorySync">
-            {{historySyncing ? '同步中' : '同步云端'}}
-          </button>
+          <view class="history__sync-actions">
+            <button class="pill-button" size="mini" loading="{{historySyncing}}" bindtap="handleHistorySync">
+              {{historySyncing ? '同步中' : '同步云端'}}
+            </button>
+            <button class="pill-button pill-button--warn" size="mini" loading="{{historySyncing}}" bindtap="handleHistoryForceSync">
+              强制同步
+            </button>
+          </view>
         </view>
         <scroll-view scroll-x class="history__filters">
           <view class="history__filters-inner">

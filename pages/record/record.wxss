@@ -540,6 +540,12 @@
   min-width: 0;
 }
 
+.finish-photo__batch-progress {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #64748b;
+}
+
 .finish-photo__grid {
   margin-top: 16rpx;
   display: grid;

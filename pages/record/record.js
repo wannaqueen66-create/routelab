@@ -168,6 +168,8 @@ Page({
     uploading: false,
     finishSheetVisible: false,
     finishAutoPaused: false,
+    batchRetrying: false,
+    batchRetryProgressText: '',
     locateAnimationActive: false,
     signalQualityLabel: '定位良好',
     syncHintText: '同步状态暂不可用',
@@ -1165,10 +1167,18 @@ Page({
     }
 
     this._batchRetrying = true;
+    this.setData({
+      batchRetrying: true,
+      batchRetryProgressText: `重传中 0/${failedIndices.length}`,
+    });
 
     const retrySequentially = (cursor = 0, successCount = 0) => {
       if (cursor >= failedIndices.length) {
         this._batchRetrying = false;
+        this.setData({
+          batchRetrying: false,
+          batchRetryProgressText: `已完成 ${successCount}/${failedIndices.length}`,
+        });
         wx.showToast({ title: `批量重传完成(${successCount}/${failedIndices.length})`, icon: 'none' });
         return;
       }
@@ -1176,10 +1186,19 @@ Page({
       this
         .handleRetryPhoto({ currentTarget: { dataset: { index: failedIndices[cursor], silent: true } } })
         .then((ok) => {
-          setTimeout(() => retrySequentially(cursor + 1, successCount + (ok ? 1 : 0)), 120);
+          const nextCursor = cursor + 1;
+          const nextSuccess = successCount + (ok ? 1 : 0);
+          this.setData({
+            batchRetryProgressText: `重传中 ${nextCursor}/${failedIndices.length}（成功 ${nextSuccess}）`,
+          });
+          setTimeout(() => retrySequentially(nextCursor, nextSuccess), 120);
         })
         .catch(() => {
-          setTimeout(() => retrySequentially(cursor + 1, successCount), 120);
+          const nextCursor = cursor + 1;
+          this.setData({
+            batchRetryProgressText: `重传中 ${nextCursor}/${failedIndices.length}（成功 ${successCount}）`,
+          });
+          setTimeout(() => retrySequentially(nextCursor, successCount), 120);
         });
     };
 
