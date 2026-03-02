@@ -120,6 +120,14 @@ function buildProgressFromOverview(overview = {}) {
 function buildHomeSyncBanner(syncInfo = {}) {
   const pending = Number(syncInfo.pending) || 0;
   const lastSyncText = syncInfo.lastSyncText || '尚未同步';
+  const errorMessage = syncInfo.lastErrorMessage || '';
+  if (errorMessage) {
+    return {
+      tone: 'danger',
+      title: '最近一次同步失败',
+      desc: `${errorMessage} · 上次成功同步：${lastSyncText}`,
+    };
+  }
   if (pending > 0) {
     return {
       tone: 'warn',

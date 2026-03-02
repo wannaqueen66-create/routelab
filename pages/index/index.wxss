@@ -119,6 +119,11 @@
   color: #92400e;
 }
 
+.home-sync-banner--danger {
+  background: rgba(239, 68, 68, 0.18);
+  color: #991b1b;
+}
+
 .home-sync-banner--ok {
   background: rgba(34, 197, 94, 0.15);
   color: #166534;
@@ -132,6 +137,23 @@
 .home-sync-banner__desc {
   font-size: 22rpx;
   line-height: 1.45;
+}
+
+.home-sync-banner__retry {
+  margin-top: 8rpx;
+  align-self: flex-start;
+  padding: 0 20rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  background: rgba(255, 255, 255, 0.75);
+  color: currentColor;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+
+.home-sync-banner__retry::after {
+  display: none;
 }
 
 .hero__eyebrow {

@@ -18,6 +18,34 @@
     font-size: 24rpx;
   }
 
+  .sync-status-error {
+    margin-top: 10rpx;
+    padding: 10rpx 12rpx;
+    border-radius: 12rpx;
+    background: rgba(220, 38, 38, 0.12);
+    color: #991b1b;
+    font-size: 22rpx;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12rpx;
+  }
+
+  .sync-status-error__retry {
+    margin: 0;
+    padding: 0 16rpx;
+    height: 48rpx;
+    line-height: 48rpx;
+    font-size: 22rpx;
+    border-radius: 999rpx;
+    background: rgba(255, 255, 255, 0.72);
+    color: #991b1b;
+  }
+
+  .sync-status-error__retry::after {
+    display: none;
+  }
+
   .filter {
     display: flex;
     align-items: center;

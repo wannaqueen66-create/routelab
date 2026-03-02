@@ -5,6 +5,7 @@ const {
   updateRoutePrivacy,
   deleteRoute,
   syncRoutesFromCloud,
+  syncRoutesToCloud,
 } = require('../../services/route-store');
 const { PRIVACY_LEVELS, PRIVACY_LEVEL_MAP } = require('../../constants/privacy');
 const { ACTIVITY_TYPE_MAP, DEFAULT_ACTIVITY_TYPE } = require('../../constants/activity');
@@ -63,8 +64,12 @@ function formatSyncSummary(status = {}) {
   const pending = Number(status.pending) || 0;
   const synced = Number(status.synced) || 0;
   const ts = Number(status.lastSyncAt) || 0;
+  const errorMessage = status?.lastError?.message || '';
   const lastSyncText = ts > 0 ? formatClock(ts) : '--';
-  return `待同步 ${pending} · 已同步 ${synced} · 上次同步 ${lastSyncText}`;
+  return {
+    text: `待同步 ${pending} · 已同步 ${synced} · 上次同步 ${lastSyncText}`,
+    errorMessage,
+  };
 }
 
 Page({
@@ -76,6 +81,7 @@ Page({
     syncing: false,
     historyLoading: true,
     syncSummaryText: '待同步 0 · 已同步 0 · 上次同步 --',
+    syncErrorText: '',
     hasMore: false,
   },
   onLoad() {
@@ -91,12 +97,17 @@ Page({
       this.unsubscribe();
     }
   },
-  syncFromCloud(showToast = false) {
+  syncFromCloud(showToast = false, forceUploadFirst = false) {
     if (this.data.syncing) {
       return;
     }
     this.setData({ syncing: true });
-    syncRoutesFromCloud()
+
+    const runner = forceUploadFirst
+      ? syncRoutesToCloud().then(() => syncRoutesFromCloud())
+      : syncRoutesFromCloud();
+
+    runner
       .then((routes) => {
         this.refresh(routes);
         if (showToast) {
@@ -104,6 +115,7 @@ Page({
         }
       })
       .catch(() => {
+        this.refresh(getRoutes());
         if (showToast) {
           wx.showToast({ title: '同步失败，请检查网络', icon: 'none' });
         }
@@ -114,7 +126,11 @@ Page({
   },
   refresh(routes) {
     this.rawRoutes = routes || [];
-    this.setData({ syncSummaryText: formatSyncSummary(getSyncStatus()) });
+    const syncSummary = formatSyncSummary(getSyncStatus());
+    this.setData({
+      syncSummaryText: syncSummary.text,
+      syncErrorText: syncSummary.errorMessage || '',
+    });
     this.applyFilter(this.data.activeFilter);
   },
   applyFilter(filterKey) {
@@ -237,5 +253,9 @@ Page({
   },
   handleSyncTap() {
     this.syncFromCloud(true);
+  },
+
+  handleForceSyncTap() {
+    this.syncFromCloud(true, true);
   },
 });

@@ -78,6 +78,14 @@
         <view class="home-sync-banner home-sync-banner--{{homeSyncBanner.tone}}">
           <text class="home-sync-banner__title">{{homeSyncBanner.title}}</text>
           <text class="home-sync-banner__desc">{{homeSyncBanner.desc}}</text>
+          <button
+            class="home-sync-banner__retry"
+            wx:if="{{homeSyncBanner.tone === 'danger' || homeSyncBanner.tone === 'warn'}}"
+            loading="{{syncBusy}}"
+            bindtap="handleManualSync"
+          >
+            立即重试同步
+          </button>
         </view>
         <view class="hero__top">
           <view class="hero__titles">

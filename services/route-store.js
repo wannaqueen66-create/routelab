@@ -20,6 +20,23 @@ const { ensureRemotePhotos } = require('./media');
 const logger = require('../utils/logger');
 
 const subscribers = new Set();
+let lastSyncError = null;
+
+function setLastSyncError(error, fallbackMessage = '同步失败，请稍后重试') {
+  const message =
+    (typeof error === 'string' && error) ||
+    error?.errMsg ||
+    error?.message ||
+    fallbackMessage;
+  lastSyncError = {
+    message,
+    at: Date.now(),
+  };
+}
+
+function clearLastSyncError() {
+  lastSyncError = null;
+}
 
 function normalizeRouteMetadata(route = {}, overrides = {}) {
   if (!route || typeof route !== 'object' || !route.id) {
@@ -834,12 +851,14 @@ function syncRouteToCloud(route) {
 function syncRoutesToCloud() {
   const routes = getRoutes();
   if (!routes.length) {
+    clearLastSyncError();
     return Promise.resolve([]);
   }
   const pending = routes.filter(
     (route) => route && route.pendingUpload !== false && route.deleted !== true && !route.deletedAt
   );
   if (!pending.length) {
+    clearLastSyncError();
     return Promise.resolve(routes);
   }
   return Promise.allSettled(
@@ -890,7 +909,10 @@ function syncRoutesToCloud() {
   ).then((results) => {
     const failed = results.filter((item) => item.status === 'rejected').length;
     if (failed) {
+      setLastSyncError('部分轨迹同步失败，请检查网络后重试');
       logger.warn('Some routes failed to sync', { failed, total: pending.length });
+    } else {
+      clearLastSyncError();
     }
     const fulfilled = results
       .filter((item) => item.status === 'fulfilled')
@@ -1128,6 +1150,7 @@ function syncRoutesFromCloud(options = {}) {
         : Math.max(lastSync, metaMax);
       setLastSyncTimestamp(nextSyncPoint || Date.now());
 
+      clearLastSyncError();
       logger.info('Route sync from cloud finished', {
         pagesFetched: aggregated.pagesFetched,
         remoteCount: remote.length,
@@ -1138,6 +1161,7 @@ function syncRoutesFromCloud(options = {}) {
       return merged;
     })
     .catch((err) => {
+      setLastSyncError(err, '从云端拉取轨迹失败');
       logger.warn('Fetch routes from cloud failed', err?.errMsg || err?.message || err);
       return getRoutes();
     });
@@ -1312,6 +1336,7 @@ function getSyncStatus() {
     deleted,
     total: allRoutes.filter((route) => route && !route.deleted).length,
     lastSyncAt: getLastSyncTimestamp(),
+    lastError: lastSyncError,
   };
 }
 

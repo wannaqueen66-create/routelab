@@ -5,6 +5,10 @@
 
   <view class="sync-status-bar">
     <text>{{syncSummaryText}}</text>
+    <view class="sync-status-error" wx:if="{{syncErrorText}}">
+      <text>{{syncErrorText}}</text>
+      <button class="sync-status-error__retry" loading="{{syncing}}" bindtap="handleForceSyncTap">重试同步</button>
+    </view>
   </view>
 
   <view class="filter">

@@ -93,12 +93,15 @@ function filterHistoryRoutes(routes = [], filterKey = 'all') {
 function formatSyncInfo(status = {}) {
     const timestamp = Number(status.lastSyncAt);
     const hasTimestamp = Number.isFinite(timestamp) && timestamp > 0;
+    const lastError = status.lastError && typeof status.lastError === 'object' ? status.lastError : null;
     return {
         pending: status.pending || 0,
         synced: status.synced || 0,
         deleted: status.deleted || 0,
         total: status.total || 0,
         lastSyncText: hasTimestamp ? `${formatDate(timestamp)} ${formatClock(timestamp)}` : '尚未同步',
+        lastErrorMessage: lastError?.message || '',
+        lastErrorAt: Number(lastError?.at) || 0,
     };
 }
 
