@@ -31,8 +31,8 @@ function normalizeRouteMetadata(route = {}, overrides = {}) {
     deleted
       ? false
       : overrides.synced !== undefined
-      ? !!overrides.synced
-      : base.synced === true || base.pendingUpload === false;
+        ? !!overrides.synced
+        : base.synced === true || base.pendingUpload === false;
   const remoteIdCandidate =
     typeof base.remoteId === 'string' && base.remoteId.trim() ? base.remoteId.trim() : null;
   const resolvedRemoteId = synced ? remoteIdCandidate || base.id : remoteIdCandidate;
@@ -40,8 +40,8 @@ function normalizeRouteMetadata(route = {}, overrides = {}) {
     deleted
       ? false
       : overrides.pendingUpload !== undefined
-      ? !!overrides.pendingUpload
-      : !synced;
+        ? !!overrides.pendingUpload
+        : !synced;
   const uploadError =
     overrides.uploadError !== undefined ? overrides.uploadError : base.uploadError || null;
   return {
@@ -150,7 +150,7 @@ function notify() {
 
 function subscribe(callback) {
   if (typeof callback !== 'function') {
-    return () => {};
+    return () => { };
   }
   subscribers.add(callback);
   try {
@@ -299,18 +299,54 @@ function isRemotePhotoPath(path) {
 }
 
 function ensureRoutePhotosAreRemote(route) {
+  console.log('[ROUTE-STORE ensureRoutePhotosAreRemote called', { routeId: route?.id, hasPhotos: !!route?.photos });
+
   if (!route?.photos || !route.photos.length) {
+    console.log('[ROUTE-STORE] No photos in route, skipping upload');
     return Promise.resolve(route);
   }
   const normalizedPhotos = normalizePhotoList(route.photos);
   const hasLocalPhotos = normalizedPhotos.some((item) => !isRemotePhotoPath(extractPhotoPath(item)));
+
+  console.log('[ROUTE-STORE] Photo check', { hasLocalPhotos, photoCount: normalizedPhotos.length });
+
   if (!hasLocalPhotos) {
+    console.log('[ROUTE-STORE] All photos already remote, skipping upload');
     return Promise.resolve({ ...route, photos: normalizedPhotos });
   }
+
+  console.log('[ROUTE-STORE] Starting photo upload for route sync', { routeId: route.id, photoCount: normalizedPhotos.length });
+  logger.info('Starting photo upload for route sync', {
+    routeId: route.id,
+    photoCount: normalizedPhotos.length
+  });
+
   return ensureRemotePhotos(normalizedPhotos)
     .then((uploaded) => {
+      console.log('[ROUTE-STORE] Photos uploaded, processing result', { uploadedCount: uploaded?.length });
+
       const sanitized = normalizePhotoList(uploaded || normalizedPhotos);
+
+      // Check if any photos failed to upload (still local)
+      const stillHasLocal = sanitized.some((item) => !isRemotePhotoPath(extractPhotoPath(item)));
+      if (stillHasLocal) {
+        const localCount = sanitized.filter((item) => !isRemotePhotoPath(extractPhotoPath(item))).length;
+        const error = new Error(`Photo upload incomplete: ${localCount} of ${sanitized.length} photos still have local paths`);
+        error.code = 'PHOTO_UPLOAD_INCOMPLETE';
+        error.localCount = localCount;
+        error.totalCount = sanitized.length;
+        console.error('[ROUTE-STORE] Photo upload incomplete!', { localCount, totalCount: sanitized.length });
+        throw error;
+      }
+
+      console.log('[ROUTE-STORE] All photos uploaded successfully!', { photoCount: sanitized.length });
+      logger.info('All photos uploaded successfully for route', {
+        routeId: route.id,
+        photoCount: sanitized.length
+      });
+
       const patched = updateRoute(route.id, { photos: sanitized });
+      console.log('[ROUTE-STORE] Route updated with remote photos', { patched: !!patched });
       if (patched) {
         notify();
         return patched;
@@ -318,11 +354,22 @@ function ensureRoutePhotosAreRemote(route) {
       return { ...route, photos: sanitized };
     })
     .catch((error) => {
+      const errorMessage = error?.message || error?.errMsg || error;
+      const errorCode = error?.code || 'UNKNOWN_ERROR';
+
       logger.warn('Upload photos before route sync failed', {
         id: route.id,
-        error: error?.errMsg || error?.message || error,
+        error: errorMessage,
+        code: errorCode,
+        attempts: error?.attempts,
       });
-      return route;
+
+      // Re-throw with enhanced error information
+      const enhancedError = new Error(`Failed to upload photos for route sync: ${errorMessage}`);
+      enhancedError.code = errorCode;
+      enhancedError.routeId = route.id;
+      enhancedError.originalError = error;
+      throw enhancedError;
     });
 }
 
@@ -700,10 +747,19 @@ function sanitizeRouteForUpload(route) {
 }
 
 function syncRouteToCloud(route) {
+  console.log('[ROUTE-STORE] ========== syncRouteToCloud CALLED ==========');
+  console.log('[ROUTE-STORE] Route ID:', route?.id);
+  console.log('[ROUTE-STORE] Has photos:', route?.photos?.length || 0);
+
   if (!route?.id) {
+    console.log('[ROUTE-STORE] No route ID, skipping sync');
     return Promise.resolve();
   }
+
+  console.log('[ROUTE-STORE] Calling ensureRoutePhotosAreRemote...');
   return ensureRoutePhotosAreRemote(route).then((preparedRoute) => {
+    console.log('[ROUTE-STORE] Photos ensured, preparing route for upload');
+
     const target = preparedRoute || route;
     const remoteId = target.remoteId || target.id;
     const payload = sanitizeRouteForUpload({
@@ -711,36 +767,67 @@ function syncRouteToCloud(route) {
       id: remoteId,
       clientId: route.id,
     });
+
+    console.log('[ROUTE-STORE] Payload created', { hasPayload: !!payload, remoteId });
+    console.log('[ROUTE-STORE] Payload details:', {
+      id: payload?.id,
+      clientId: payload?.clientId,
+      title: payload?.title,
+      photoCount: payload?.photos?.length,
+      photos: payload?.photos,
+      pointsCount: payload?.points?.length,
+      hasStats: !!payload?.stats,
+      hasMeta: !!payload?.meta
+    });
+
     if (!payload) {
+      console.error('[ROUTE-STORE] Invalid payload, cannot sync!');
       logger.warn('Route sync skipped (invalid payload)', {
         id: route?.id,
       });
       return Promise.resolve();
     }
+
     const request = target.remoteId ? api.upsertRoute(payload) : api.createRoute(payload);
+    console.log('[ROUTE-STORE] Calling API', { method: target.remoteId ? 'upsert' : 'create' });
     return request
-    .then((response) => {
-      if (response && typeof response === 'object') {
-        const syncAt = Number(response.lastSyncAt);
-        if (Number.isFinite(syncAt) && syncAt > 0) {
-          setLastSyncTimestamp(syncAt);
+      .then((response) => {
+        console.log('[ROUTE-STORE] API call SUCCESS!', { hasResponse: !!response });
+
+        if (response && typeof response === 'object') {
+          const syncAt = Number(response.lastSyncAt);
+          if (Number.isFinite(syncAt) && syncAt > 0) {
+            setLastSyncTimestamp(syncAt);
+          }
         }
-      }
-      logger.info('Route synced to cloud', { id: route.id });
-      if (response && typeof response === 'object' && response.route) {
-        return { ...response.route };
-      }
-      return { ...route, remoteId };
-    })
-    .catch((err) => {
-      logger.warn('Route sync failed', {
-        id: route.id,
-        error: err?.errMsg || err?.message || err,
-        statusCode: err?.statusCode,
-        response: err?.response,
+
+        console.log('[ROUTE-STORE] ✅ Route synced to cloud successfully!', { routeId: route.id });
+        logger.info('Route synced to cloud', { id: route.id });
+
+        if (response && typeof response === 'object' && response.route) {
+          return { ...response.route };
+        }
+        return { ...route, remoteId };
+      })
+      .catch((err) => {
+        console.error('[ROUTE-STORE] ❌ API call FAILED!', {
+          error: err?.errMsg || err?.message || err,
+          statusCode: err?.statusCode
+        });
+        logger.warn('Route sync failed', {
+          id: route.id,
+          error: err?.errMsg || err?.message || err,
+          statusCode: err?.statusCode,
+          response: err?.response,
+        });
+        throw err;
       });
-      throw err;
+  }).catch((err) => {
+    console.error('[ROUTE-STORE] ❌ syncRouteToCloud failed!', {
+      error: err?.message || err?.errMsg,
+      code: err?.code
     });
+    throw err;
   });
 }
 
@@ -948,8 +1035,8 @@ function syncRoutesFromCloud(options = {}) {
       const list = Array.isArray(result?.items)
         ? result.items
         : Array.isArray(result)
-        ? result
-        : [];
+          ? result
+          : [];
       const remote = list.filter((item) => item && item.id);
       const deletedIds = Array.isArray(result?.deletedIds) ? result.deletedIds : [];
       const missingRemoteIds = Array.isArray(result?.missingRemoteIds) ? result.missingRemoteIds : [];
@@ -959,9 +1046,9 @@ function syncRoutesFromCloud(options = {}) {
       const metaMax =
         Number(
           result?.latestSyncAt ||
-            result?.lastSyncAt ||
-            result?.maxUpdatedAt ||
-            result?.cursorUpdatedAt
+          result?.lastSyncAt ||
+          result?.maxUpdatedAt ||
+          result?.cursorUpdatedAt
         ) || 0;
       const hasChanges =
         nonDeletedRemote.length > 0 || deletedIds.length > 0 || missingRemoteIds.length > 0 || forceFull;

@@ -75,8 +75,8 @@ function normalizeWeatherPayload(weatherNow = {}, airNow = null) {
     airNow && airNow.us_aqi !== undefined && airNow.us_aqi !== null
       ? Number(airNow.us_aqi)
       : airNow && airNow.european_aqi !== undefined && airNow.european_aqi !== null
-      ? Number(airNow.european_aqi)
-      : null;
+        ? Number(airNow.european_aqi)
+        : null;
 
   let airLevel = '';
   if (Number.isFinite(aqi)) {
@@ -200,7 +200,179 @@ async function getLocalWeatherSnapshot({ latitude, longitude } = {}) {
   };
 }
 
+// === UI 格式化相关常量和函数 ===
+
+const WEATHER_TEXT_MAP = {
+  sunny: '晴',
+  clear: '晴',
+  cloudy: '多云',
+  overcast: '阴',
+  rain: '雨',
+  rainy: '雨',
+  shower: '阵雨',
+  snow: '雪',
+  windy: '有风',
+  fog: '雾',
+};
+
+const WEATHER_SUGGESTION_MAP = {
+  'weather looks good. maintain your planned outdoor training.': '天气不错，可以按计划进行户外训练。',
+  'take a rest day or choose indoor workouts due to harsh weather.': '天气较差，建议休息一天或选择室内运动。',
+  'light rain. consider waterproof gear if you head outside.': '有小雨，外出运动请注意雨具和防水装备。',
+  'hot and humid. stay hydrated and avoid noon training.': '天气炎热潮湿，注意补水，避免在中午时段训练。',
+};
+
+/**
+ * 创建默认天气状态
+ */
+function createWeatherState(overrides = {}) {
+  return {
+    loading: false,
+    ready: false,
+    temperature: '--',
+    apparentTemperature: null,
+    weatherText: '等待获取天气',
+    humidityText: '--',
+    windText: '--',
+    airQualityText: '--',
+    airQualityLevel: '',
+    suggestion: '保持联网可获取实时运动建议',
+    fetchedAt: null,
+    error: '',
+    cityText: '',
+    sportAdviceLevel: 'neutral',
+    sportAdviceLabel: '关注实时天气',
+    sportAdviceColor: '#60a5fa',
+    ...overrides,
+  };
+}
+
+/**
+ * 格式化空气质量
+ */
+function formatAirQuality(airQuality = {}) {
+  const toNonNegativeNumber = (val) => {
+    if (val === null || val === undefined || val === '') {
+      return null;
+    }
+    const numeric = Number(val);
+    return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
+  };
+  const value = toNonNegativeNumber(airQuality.value) ?? toNonNegativeNumber(airQuality.aqi);
+  const level = airQuality.level || airQuality.category || '';
+  if (value === null) {
+    return level || '--';
+  }
+  const label = level || '良好';
+  return `${label} · ${value.toFixed(0)}`;
+}
+
+/**
+ * 分析运动建议等级
+ */
+function analyzeSportAdvice(payload = {}) {
+  const airLevelText = payload.airQuality?.level || payload.airQuality?.category || '';
+  const text = `${payload.suggestion || ''}${payload.weatherText || ''}${airLevelText}`;
+  const cautionKeywords = /(降温|雨|雾霾|谨慎|注意)/;
+  const goodKeywords = /(晴|适宜|清爽|凉爽)/;
+  let level = 'neutral';
+  if (cautionKeywords.test(text)) {
+    level = 'caution';
+  }
+  if (goodKeywords.test(text)) {
+    level = 'good';
+  }
+  return {
+    neutral: { label: '关注实时天气', color: '#60a5fa' },
+    caution: { label: '注意补给与安全', color: '#f97316' },
+    good: { label: '非常适合户外', color: '#34d399' },
+  }[level];
+}
+
+/**
+ * 检查文本是否包含中文
+ */
+function containsChinese(text = '') {
+  return /[\u4e00-\u9fa5]/.test(text);
+}
+
+/**
+ * 确保文本为中文
+ */
+function ensureChineseText(text, fallback, dictionary = WEATHER_TEXT_MAP) {
+  if (!text || typeof text !== 'string') {
+    return fallback;
+  }
+  if (containsChinese(text)) {
+    return text.trim();
+  }
+  const normalized = text.trim().toLowerCase();
+  if (dictionary && dictionary[normalized]) {
+    return dictionary[normalized];
+  }
+  return fallback;
+}
+
+/**
+ * 格式化风速
+ */
+function formatWindSpeed(windSpeed) {
+  if (!Number.isFinite(windSpeed)) {
+    return '--';
+  }
+  if (windSpeed < 0.3) {
+    return '无风';
+  }
+  if (windSpeed < 1.6) {
+    return '微风';
+  }
+  if (windSpeed < 5.5) {
+    return `${windSpeed.toFixed(1)} m/s`;
+  }
+  return `${windSpeed.toFixed(1)} m/s 较大`;
+}
+
+/**
+ * 格式化天气数据为 UI 展示格式
+ */
+function formatWeatherPayload(payload = {}) {
+  const advice = analyzeSportAdvice(payload);
+  const weatherText = ensureChineseText(payload.weatherText, advice.label);
+  const suggestion = ensureChineseText(payload.suggestion, advice.label, WEATHER_SUGGESTION_MAP);
+  const apparent = Number(payload.apparentTemperature);
+  const humidity = Number(payload.humidity);
+  const windSpeed = Number(payload.windSpeed);
+  return {
+    loading: false,
+    ready: true,
+    temperature: Number.isFinite(payload.temperature)
+      ? `${Number(payload.temperature).toFixed(1)}℃`
+      : '--',
+    apparentTemperature: Number.isFinite(apparent) ? `${apparent.toFixed(1)}℃` : null,
+    weatherText,
+    humidityText: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : '--',
+    windText: formatWindSpeed(windSpeed),
+    airQualityText: formatAirQuality(payload.airQuality),
+    airQualityLevel: payload.airQuality?.level || payload.airQuality?.category || '',
+    suggestion,
+    fetchedAt: payload.fetchedAt || Date.now(),
+    error: '',
+    cityText: payload.cityName || '',
+    sportAdviceLevel: advice.label,
+    sportAdviceLabel: suggestion,
+    sportAdviceColor: advice.color,
+  };
+}
+
 module.exports = {
+  // 数据获取
   getLocalWeatherSnapshot,
   WEATHER_CODE_TEXT,
+  // UI 格式化
+  createWeatherState,
+  formatAirQuality,
+  analyzeSportAdvice,
+  formatWeatherPayload,
+  WEATHER_TEXT_MAP,
+  WEATHER_SUGGESTION_MAP,
 };

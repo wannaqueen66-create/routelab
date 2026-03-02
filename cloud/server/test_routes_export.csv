@@ -1,3 +1,0 @@
-id,userId,title,startTime,endTime,distance,duration,calories,pointCount,purposeType,privacyLevel,createdAt,updatedAt,deletedAt,points
-rt_1,24,有结束时间,2025-11-19T15:11:03.475Z,2025-11-19T15:11:13.475Z,0,12.322,0,1,walk,public,2025-11-19T15:11:18.475Z,2025-11-19T15:11:20.475Z,,"113.4057,23.12345"
-rt_2,10,无结束时间,2025-11-19T15:10:43.475Z,,491.08,455.44,22,41,walk,public,2025-11-19T15:11:17.475Z,2025-11-19T15:11:22.475Z,,"113.34285,23.11111 ; 113.3429,23.11122"

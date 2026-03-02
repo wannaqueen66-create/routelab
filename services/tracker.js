@@ -4,7 +4,7 @@ const { formatDuration } = require('../utils/time');
 const { calculateSegmentDistance, calculateTotalDistance } = require('../utils/geo');
 const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../constants/activity');
 const { PURPOSE_MAP } = require('../constants/purpose');
-const { inferActivityType } = require('../utils/activity');
+// NOTE: inferActivityType 已迁移到 activity-inference.js 内部使用
 const logger = require('../utils/logger');
 const {
   getKeepScreenPreference: loadKeepScreenPreference,
@@ -16,14 +16,36 @@ const {
   guideBackgroundLocationAuthorization,
 } = require('../utils/permissions');
 
+// 传感器模块导入（包含常量和函数）
+const {
+  startMotionSensors,
+  stopMotionSensors,
+  clearMotionBuffers,
+  getMotionFeatureSnapshot,
+  SENSOR_WINDOW_MS,
+} = require('./motion-sensor');
+const {
+  updateDetectedActivityType: inferDetectedActivityType,
+  resetActivityState,
+  STILL_SPEED_THRESHOLD_MPS,
+  WALK_SPEED_MAX_MPS,
+  ACTIVITY_UPGRADE_DURATION_MS,
+  ACTIVITY_DOWNGRADE_DURATION_MS,
+} = require('./activity-inference');
+
+// 导入地理位置解析模块
+const {
+  resolveEndpoint,
+  resolveLocationLabel,
+} = require('./building-resolver');
+
 const MIN_DISTANCE_METERS = 3;
 const MAX_SPEED_MPS = 10; // ~36 km/h, reject abnormal spikes
 const SPEED_CLAMP_THRESHOLD_MPS = 8; // clamp path before hard rejection
 const MAX_DISTANCE_JUMP_METERS = 250;
 const BACKGROUND_RETRY_DELAY_MS = 60 * 1000;
 
-const STILL_SPEED_THRESHOLD_MPS = 0.5;
-const WALK_SPEED_MAX_MPS = 1.8;
+// NOTE: STILL_SPEED_THRESHOLD_MPS 和 WALK_SPEED_MAX_MPS 已从 activity-inference.js 导入
 const WALK_INTERVAL_MS = 5500;
 const WALK_DISTANCE_THRESHOLD_METERS = 10;
 const RUN_INTERVAL_MS = 2500;
@@ -39,57 +61,14 @@ const WEAK_INTERVAL_THRESHOLD_MS = 12 * 1000;
 const WEAK_INTERVAL_STREAK_LIMIT = 2;
 const SUSPENSION_GAP_THRESHOLD_MS = 20 * 1000;
 
-const SENSOR_WINDOW_MS = 3000;
-const SENSOR_MAX_SAMPLES = 200;
-const SENSOR_ZERO_CROSSING_GAP_MS = 80;
-const ACTIVITY_UPGRADE_DURATION_MS = 3000;
-const ACTIVITY_DOWNGRADE_DURATION_MS = 5000;
-const ACTIVITY_RIDE_DOWNGRADE_DURATION_MS = 7000;
+// NOTE: Sensor and activity constants moved to motion-sensor.js and activity-inference.js
 
 const BATCH_MIN_POINTS = 5;
 const BATCH_MAX_POINTS = 8;
 const BATCH_FLUSH_TIMEOUT_MS = 8000;
 const DEFAULT_UPLOAD_INTERVAL_MS = 5000;
 
-const REPRESENTATIVE_SAMPLE_COUNT = 12;
-const REPRESENTATIVE_MIN_SAMPLES = 8;
-const REPRESENTATIVE_ACCURACY_THRESHOLD = 25;
-const MAP_MATCHING_SEGMENT_METERS = 80;
-const BUILDING_DISTANCE_TOLERANCE_METERS = 35;
-const BUILDING_NAME_WHITELIST = [
-  /教学楼/i,
-  /ʵ��¥/i,
-  /�ۺ�¥/i,
-  /ѧԺ/i,
-  /����/i,
-  /��Ԣ/i,
-  /ѧ����Ԣ/i,
-  /��Ժ/i,
-  /ͼ���/i,
-  /ͼ����Ѷ����/i,
-  /ͼ����Ϣ����/i,
-  /ʳ��/i,
-  /����/i,
-  /�͹�/i,
-  /����/i,
-  /����¥/i,
-  /�칫¥/i,
-  /����/i,
-  /������/i,
-  /�˶�����/i,
-  /auditorium/i,
-  /library/i,
-  /dining/i,
-  /canteen/i,
-  /administration/i,
-  /office/i,
-  /laboratory/i,
-  /lab/i,
-  /dormitory/i,
-];
-const FALLBACK_BUILDING_NAME_PRIORITY = ['building', 'poi', 'road', 'district', 'city'];
-const AMAP_CAMPUS_PLACE_TYPES = '141200|141201|141202|141203|141204|050100|050300|120201|120202|120203|120302';
-const AMAP_CAMPUS_PLACE_KEYWORDS = '��ѧ¥|����|ͼ���|��Ϣ����|ʳ��|����|����¥|ʵ��¥|ѧԺ|������|�˶�|�칫¥';
+// NOTE: 建筑物识别相关常量已迁移到 building-resolver.js
 const ALLOWED_INTERP_METHODS = new Set(['linear', 'snap_road', 'spline', 'gap_fill']);
 
 let locationChangeHandler = null;
@@ -105,18 +84,8 @@ let samplingSuspendedForStillness = false;
 let stillStateStartedAt = null;
 let movementResumeCandidateAt = null;
 let lastAcceptedPointTimestamp = 0;
-let accelerometerHandler = null;
-let gyroscopeHandler = null;
-let accelerometerActive = false;
-let gyroscopeActive = false;
-let accelerometerSamples = [];
-let gyroscopeSamples = [];
-let activityStabilizer = {
-  current: DEFAULT_ACTIVITY_TYPE,
-  candidate: DEFAULT_ACTIVITY_TYPE,
-  candidateSince: 0,
-  lastChangeAt: 0,
-};
+// NOTE: 传感器状态变量已迁移到 motion-sensor.js
+// NOTE: activityStabilizer 已迁移到 activity-inference.js
 let pendingUploadBatch = [];
 let lastBatchFlushAt = 0;
 let nextUploadAllowedAt = 0;
@@ -262,195 +231,10 @@ function resetStillnessState() {
   movementResumeCandidateAt = null;
 }
 
-function trimSensorSamples(buffer, windowMs = SENSOR_WINDOW_MS) {
-  if (!Array.isArray(buffer) || !buffer.length) {
-    return;
-  }
-  const cutoff = Date.now() - windowMs;
-  while (buffer.length && buffer[0].ts < cutoff) {
-    buffer.shift();
-  }
-  if (buffer.length > SENSOR_MAX_SAMPLES) {
-    buffer.splice(0, buffer.length - SENSOR_MAX_SAMPLES);
-  }
-}
-
-function clearMotionBuffers() {
-  accelerometerSamples = [];
-  gyroscopeSamples = [];
-}
-
-function handleAccelerometerReading({ x = 0, y = 0, z = 0 } = {}) {
-  const ts = Date.now();
-  const magnitude = Math.sqrt(x * x + y * y + z * z);
-  accelerometerSamples.push({ ts, magnitude });
-  trimSensorSamples(accelerometerSamples);
-}
-
-function handleGyroscopeReading({ x = 0, y = 0, z = 0 } = {}) {
-  const ts = Date.now();
-  const magnitude = Math.sqrt(x * x + y * y + z * z);
-  gyroscopeSamples.push({ ts, magnitude });
-  trimSensorSamples(gyroscopeSamples);
-}
-
-function attachMotionListeners() {
-  if (typeof wx.onAccelerometerChange === 'function' && !accelerometerHandler) {
-    accelerometerHandler = (reading) => handleAccelerometerReading(reading || {});
-    wx.onAccelerometerChange(accelerometerHandler);
-  }
-  if (typeof wx.onGyroscopeChange === 'function' && !gyroscopeHandler) {
-    gyroscopeHandler = (reading) => handleGyroscopeReading(reading || {});
-    wx.onGyroscopeChange(gyroscopeHandler);
-  }
-}
-
-function detachMotionListeners() {
-  if (accelerometerHandler && typeof wx.offAccelerometerChange === 'function') {
-    wx.offAccelerometerChange(accelerometerHandler);
-  }
-  if (gyroscopeHandler && typeof wx.offGyroscopeChange === 'function') {
-    wx.offGyroscopeChange(gyroscopeHandler);
-  }
-  accelerometerHandler = null;
-  gyroscopeHandler = null;
-}
-
-function startMotionSensors() {
-  attachMotionListeners();
-  const tasks = [];
-  if (typeof wx.startAccelerometer === 'function' && !accelerometerActive) {
-    tasks.push(
-      new Promise((resolve) => {
-        wx.startAccelerometer({
-          interval: 'game',
-          success: () => {
-            accelerometerActive = true;
-            resolve(true);
-          },
-          fail: (err) => {
-            accelerometerActive = false;
-            logger.warn('startAccelerometer failed', err?.errMsg || err?.message || err);
-            resolve(false);
-          },
-        });
-      })
-    );
-  }
-  if (typeof wx.startGyroscope === 'function' && !gyroscopeActive) {
-    tasks.push(
-      new Promise((resolve) => {
-        wx.startGyroscope({
-          interval: 'game',
-          success: () => {
-            gyroscopeActive = true;
-            resolve(true);
-          },
-          fail: (err) => {
-            gyroscopeActive = false;
-            logger.warn('startGyroscope failed', err?.errMsg || err?.message || err);
-            resolve(false);
-          },
-        });
-      })
-    );
-  }
-  if (!tasks.length) {
-    return Promise.resolve(false);
-  }
-  return Promise.all(tasks)
-    .then((results) => results.some(Boolean))
-    .catch(() => false);
-}
-
-function stopMotionSensors({ clearBuffers = false } = {}) {
-  detachMotionListeners();
-  if (typeof wx.stopAccelerometer === 'function' && accelerometerActive) {
-    try {
-      wx.stopAccelerometer({ complete: () => {} });
-    } catch (_) {
-      // swallow
-    }
-  }
-  if (typeof wx.stopGyroscope === 'function' && gyroscopeActive) {
-    try {
-      wx.stopGyroscope({ complete: () => {} });
-    } catch (_) {
-      // swallow
-    }
-  }
-  accelerometerActive = false;
-  gyroscopeActive = false;
-  if (clearBuffers) {
-    clearMotionBuffers();
-  }
-}
-
-function computeVariance(values = []) {
-  if (!Array.isArray(values) || values.length < 2) {
-    return null;
-  }
-  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-  const variance =
-    values.reduce((sum, value) => {
-      const delta = value - mean;
-      return sum + delta * delta;
-    }, 0) / values.length;
-  return Number.isFinite(variance) ? variance : null;
-}
-
-function computeZeroCrossings(samples = [], mean = 0) {
-  if (!Array.isArray(samples) || samples.length < 2) {
-    return 0;
-  }
-  let lastSign = null;
-  let lastTimestamp = 0;
-  let crossings = 0;
-  samples.forEach((item) => {
-    if (!item) {
-      return;
-    }
-    const centered = item.magnitude - mean;
-    const sign = centered >= 0 ? 1 : -1;
-    if (lastSign !== null && sign !== lastSign) {
-      if (!lastTimestamp || item.ts - lastTimestamp >= SENSOR_ZERO_CROSSING_GAP_MS) {
-        crossings += 1;
-        lastTimestamp = item.ts;
-      }
-    }
-    lastSign = sign;
-  });
-  return crossings;
-}
-
-function getMotionFeatureSnapshot() {
-  trimSensorSamples(accelerometerSamples);
-  trimSensorSamples(gyroscopeSamples);
-  const now = Date.now();
-  const accWindow = accelerometerSamples.filter((item) => item && now - item.ts <= SENSOR_WINDOW_MS);
-  const gyroWindow = gyroscopeSamples.filter((item) => item && now - item.ts <= SENSOR_WINDOW_MS);
-  const accValues = accWindow.map((item) => item.magnitude);
-  const gyroValues = gyroWindow.map((item) => item.magnitude);
-  const accVar = computeVariance(accValues);
-  const gyroVar = computeVariance(gyroValues);
-  const accMean = accValues.length
-    ? accValues.reduce((sum, value) => sum + value, 0) / accValues.length
-    : 0;
-  const accZeroCrossings = accValues.length ? computeZeroCrossings(accWindow, accMean) : 0;
-  const windowStartCandidate = Math.min(
-    accWindow.length ? accWindow[0].ts : now,
-    gyroWindow.length ? gyroWindow[0].ts : now
-  );
-  const windowMs = windowStartCandidate ? Math.max(0, now - windowStartCandidate) : 0;
-  return {
-    accVar: accVar !== null ? accVar : null,
-    gyroVar: gyroVar !== null ? gyroVar : null,
-    accZeroCrossings,
-    accSampleCount: accWindow.length,
-    gyroSampleCount: gyroWindow.length,
-    windowMs,
-  };
-}
+// NOTE: 以下传感器处理函数已迁移到 motion-sensor.js，通过模块导入使用：
+// - trimSensorSamples, clearMotionBuffers, handleAccelerometerReading, handleGyroscopeReading
+// - attachMotionListeners, detachMotionListeners, startMotionSensors, stopMotionSensors
+// - computeVariance, computeZeroCrossings, getMotionFeatureSnapshot
 
 function resetIntervalWeakSignal() {
   intervalWeakSignalStreak = 0;
@@ -548,7 +332,7 @@ function triggerBackgroundPermissionGuide() {
         backgroundPermissionPrompted = false;
       }
     })
-    .catch(() => {});
+    .catch(() => { });
 }
 
 function clearSuspensionMonitor() {
@@ -937,70 +721,18 @@ function logSessionQualitySummary(points = [], pausePoints = []) {
 
 function updateDetectedActivityType() {
   const override = trackerState.options?.activityType;
-  const now = Date.now();
-  if (override && ACTIVITY_TYPE_MAP[override]) {
-    trackerState.detectedActivityType = override;
-    activityStabilizer = {
-      current: override,
-      candidate: override,
-      candidateSince: now,
-      lastChangeAt: now,
-    };
-    return trackerState.detectedActivityType;
-  }
   const sensorStats = getMotionFeatureSnapshot();
-  const detected = inferActivityType({
-    distance: trackerState.stats.distance || 0,
-    duration: trackerState.stats.duration || 0,
-    speed: trackerState.stats.speed || 0,
-    points: trackerState.points || [],
+  const detected = inferDetectedActivityType({
+    trackerState,
     sensorStats,
+    override,
   });
-  const stabilized = applyActivityHysteresis(detected || DEFAULT_ACTIVITY_TYPE, { now });
-  trackerState.detectedActivityType = stabilized;
+  trackerState.detectedActivityType = detected;
   return trackerState.detectedActivityType;
 }
 
-function getActivityPriority(activityType) {
-  if (activityType === 'ride') {
-    return 3;
-  }
-  if (activityType === 'run') {
-    return 2;
-  }
-  return 1;
-}
-
-function applyActivityHysteresis(candidateType, { now = Date.now() } = {}) {
-  const normalized = ACTIVITY_TYPE_MAP[candidateType] ? candidateType : DEFAULT_ACTIVITY_TYPE;
-  const current = trackerState.detectedActivityType || activityStabilizer.current || DEFAULT_ACTIVITY_TYPE;
-  if (!ACTIVITY_TYPE_MAP[current]) {
-    activityStabilizer.current = DEFAULT_ACTIVITY_TYPE;
-  }
-  if (activityStabilizer.candidate !== normalized) {
-    activityStabilizer.candidate = normalized;
-    activityStabilizer.candidateSince = now;
-  }
-  const currentPriority = getActivityPriority(current);
-  const candidatePriority = getActivityPriority(normalized);
-  const isUpgrade = candidatePriority > currentPriority;
-  const isDowngrade = candidatePriority < currentPriority;
-  const requiredDuration = isUpgrade
-    ? ACTIVITY_UPGRADE_DURATION_MS
-    : current === 'ride' && isDowngrade
-    ? ACTIVITY_RIDE_DOWNGRADE_DURATION_MS
-    : isDowngrade
-    ? ACTIVITY_DOWNGRADE_DURATION_MS
-    : 0;
-  const elapsed = now - (activityStabilizer.candidateSince || now);
-  if (!requiredDuration || elapsed >= requiredDuration) {
-    activityStabilizer.current = normalized;
-    activityStabilizer.lastChangeAt = now;
-    activityStabilizer.candidateSince = now;
-    return normalized;
-  }
-  return activityStabilizer.current || normalized;
-}
+// NOTE: getActivityPriority 和 applyActivityHysteresis 已迁移到 activity-inference.js
+// 通过模块导入使用
 
 function notifyTracker() {
   updateDetectedActivityType();
@@ -1040,12 +772,8 @@ function stopDurationTicker() {
 function resetState() {
   stopDurationTicker();
   stopMotionSensors({ clearBuffers: true });
-  activityStabilizer = {
-    current: DEFAULT_ACTIVITY_TYPE,
-    candidate: DEFAULT_ACTIVITY_TYPE,
-    candidateSince: 0,
-    lastChangeAt: 0,
-  };
+  // 使用 activity-inference.js 的状态重置函数
+  resetActivityState();
   clearMotionBuffers();
   flushPendingBatch({ force: true });
   pendingUploadBatch = [];
@@ -1103,7 +831,7 @@ function resetState() {
 
 function subscribe(callback) {
   if (typeof callback !== 'function') {
-    return () => {};
+    return () => { };
   }
   trackerSubscribers.add(callback);
   updateDetectedActivityType();
@@ -1200,7 +928,7 @@ function startLocationStream({ mode = 'foreground', force = false } = {}) {
   const startMethod = isBackground ? wx.startLocationUpdateBackground : wx.startLocationUpdate;
   if (typeof startMethod !== 'function') {
     const error = new Error(
-      isBackground ? '��ǰ�����ⲻ֧�ֺ�̨������λ' : '��ǰ�����ⲻ֧�ֳ�����λ'
+      isBackground ? '当前设备不支持后台持续定位' : '当前设备不支持持续定位'
     );
     logger.warn(
       isBackground ? 'startLocationUpdateBackground unavailable' : 'startLocationUpdate unavailable',
@@ -1253,7 +981,7 @@ function startLocationStream({ mode = 'foreground', force = false } = {}) {
     });
 
   const needsRestart = force || (locationStreamActive && locationStreamMode !== targetMode);
-  const prelude = needsRestart ? stopLocationStream().catch(() => {}) : Promise.resolve();
+  const prelude = needsRestart ? stopLocationStream().catch(() => { }) : Promise.resolve();
   return prelude.then(initiate);
 }
 
@@ -1337,8 +1065,8 @@ function addPoint(rawPoint, { applyFilters = true, notify = true } = {}) {
     typeof rawPoint.source_detail === 'string'
       ? rawPoint.source_detail
       : typeof rawPoint.sourceDetail === 'string'
-      ? rawPoint.sourceDetail
-      : null;
+        ? rawPoint.sourceDetail
+        : null;
   const sourceDetail = typeof rawSourceDetail === 'string' && rawSourceDetail.trim().length
     ? rawSourceDetail
     : null;
@@ -1459,7 +1187,7 @@ function startTracking(options = {}) {
   backgroundVisibilityReason = 'background';
   pendingBackgroundPermissionGuide = false;
   backgroundPermissionPrompted = false;
-  applyKeepScreenState({ force: true }).catch(() => {});
+  applyKeepScreenState({ force: true }).catch(() => { });
 
   trackerState.options = {
     privacyLevel: options.privacyLevel || trackerState.options.privacyLevel || 'private',
@@ -1477,7 +1205,7 @@ function startTracking(options = {}) {
 
   notifyTracker();
 
-  startMotionSensors().catch(() => {});
+  startMotionSensors().catch(() => { });
 
   return ensureLocationPermission()
     .then(() => ensureLocationStream({ force: true }))
@@ -1497,7 +1225,7 @@ function startTracking(options = {}) {
       trackerState.startTime = null;
       trackerState.pausedAt = null;
       trackerState.pauseReason = null;
-      stopLocationStream().catch(() => {});
+      stopLocationStream().catch(() => { });
       detachLocationListener();
       stopMotionSensors({ clearBuffers: true });
       notifyTracker();
@@ -1556,7 +1284,7 @@ function resumeTracking(options = {}) {
   trackerState.startTime = resumeAt;
   trackerState.paused = false;
   startDurationTicker();
-  startMotionSensors().catch(() => {});
+  startMotionSensors().catch(() => { });
   notifyTracker();
   ensureLocationStream({ force: true })
     .then(() => scheduleSuspensionMonitor())
@@ -1573,7 +1301,7 @@ function handleAppHide(options = {}) {
     reason: backgroundVisibilityReason,
     tracking: trackerState.active,
   });
-  applyKeepScreenState({ force: true }).catch(() => {});
+  applyKeepScreenState({ force: true }).catch(() => { });
   if (!trackerState.active) {
     return stopLocationStream();
   }
@@ -1589,7 +1317,7 @@ function handleAppShow(options = {}) {
   logger.info('Tracker app restored to foreground', {
     tracking: trackerState.active,
   });
-  applyKeepScreenState({ force: true }).catch(() => {});
+  applyKeepScreenState({ force: true }).catch(() => { });
   if (!trackerState.active) {
     return Promise.resolve();
   }
@@ -1604,553 +1332,16 @@ function handleAppShow(options = {}) {
     });
 }
 
-function matchesBuildingWhitelistText(text = '') {
-  if (!text) {
-    return false;
-  }
-  return BUILDING_NAME_WHITELIST.some((regex) => regex.test(text));
-}
+// NOTE: 端点解析逻辑（如 collectEndpointSamples, precisionWeight, weightedMedian, computePrecisionWeightedMedianPoint, refineRepresentativePoint, evaluateCandidate, pickBestCandidate, extractRoadName, extractDistrictName, extractCityName, resolveBuildingLocation 等）已迁移到 building-resolver.js
 
-function collectSegmentWindow(points = [], { fromStart = true, maxDistance = MAP_MATCHING_SEGMENT_METERS } = {}) {
-  if (!Array.isArray(points) || !points.length) {
-    return [];
-  }
-  const windowPoints = [];
-  const length = points.length;
-  const step = fromStart ? 1 : -1;
-  let index = fromStart ? 0 : length - 1;
-  let accumulated = 0;
-  let previous = null;
-  while (index >= 0 && index < length) {
-    const current = points[index];
-    if (!current) {
-      index += step;
-      continue;
-    }
-    if (!previous) {
-      windowPoints.push(current);
-      previous = current;
-      index += step;
-      continue;
-    }
-    const segment = calculateSegmentDistance(previous, current);
-    accumulated += segment;
-    windowPoints.push(current);
-    previous = current;
-    if (accumulated >= maxDistance) {
-      break;
-    }
-    index += step;
-  }
-  if (!fromStart) {
-    windowPoints.reverse();
-  }
-  return windowPoints;
-}
-
-function collectEndpointSamples(points = [], { fromStart = true } = {}) {
-  if (!Array.isArray(points) || !points.length) {
-    return [];
-  }
-  const strictThreshold = REPRESENTATIVE_ACCURACY_THRESHOLD;
-  const relaxedThreshold = 40;
-  const maxSamples = REPRESENTATIVE_SAMPLE_COUNT;
-  const traverse = fromStart ? points : [...points].reverse();
-  const collected = [];
-
-  const pushSample = (sample) => {
-    if (
-      !sample ||
-      typeof sample.latitude !== 'number' ||
-      typeof sample.longitude !== 'number' ||
-      collected.includes(sample)
-    ) {
-      return false;
-    }
-    collected.push(sample);
-    return collected.length >= maxSamples;
-  };
-
-  for (let idx = 0; idx < traverse.length; idx += 1) {
-    const sample = traverse[idx];
-    const accuracy = isFiniteNumber(sample?.accuracy) ? sample.accuracy : null;
-    if (accuracy !== null && accuracy > strictThreshold) {
-      continue;
-    }
-    if (pushSample(sample)) {
-      break;
-    }
-  }
-
-  if (collected.length < REPRESENTATIVE_MIN_SAMPLES) {
-    for (let idx = 0; idx < traverse.length; idx += 1) {
-      const sample = traverse[idx];
-      if (!sample || collected.includes(sample)) {
-        continue;
-      }
-      const accuracy = isFiniteNumber(sample?.accuracy) ? sample.accuracy : null;
-      if (accuracy !== null && accuracy > relaxedThreshold) {
-        continue;
-      }
-      if (pushSample(sample)) {
-        break;
-      }
-    }
-  }
-
-  if (!collected.length && traverse.length) {
-    collected.push(traverse[0]);
-  }
-
-  if (!fromStart) {
-    collected.reverse();
-  }
-  return collected;
-}
-
-function precisionWeight(accuracy) {
-  if (!isFiniteNumber(accuracy) || accuracy <= 0) {
-    return 1;
-  }
-  return 1 / Math.max(accuracy, 1);
-}
-
-function weightedMedian(items = []) {
-  if (!Array.isArray(items) || !items.length) {
-    return null;
-  }
-  const filtered = items
-    .filter(
-      (item) =>
-        item &&
-        isFiniteNumber(item.value) &&
-        isFiniteNumber(item.weight) &&
-        item.weight > 0
-    )
-    .sort((a, b) => a.value - b.value);
-  if (!filtered.length) {
-    return null;
-  }
-  const totalWeight = filtered.reduce((sum, item) => sum + item.weight, 0);
-  let cumulative = 0;
-  for (let idx = 0; idx < filtered.length; idx += 1) {
-    cumulative += filtered[idx].weight;
-    if (cumulative >= totalWeight / 2) {
-      return filtered[idx].value;
-    }
-  }
-  return filtered[filtered.length - 1].value;
-}
-
-function computePrecisionWeightedMedianPoint(samples = []) {
-  if (!Array.isArray(samples) || !samples.length) {
-    return null;
-  }
-  const latMedian = weightedMedian(
-    samples.map((sample) => ({
-      value: sample.latitude,
-      weight: precisionWeight(sample.accuracy),
-    }))
-  );
-  const lonMedian = weightedMedian(
-    samples.map((sample) => ({
-      value: sample.longitude,
-      weight: precisionWeight(sample.accuracy),
-    }))
-  );
-  if (!isFiniteNumber(latMedian) || !isFiniteNumber(lonMedian)) {
-    return null;
-  }
-  const accuracyMedian = weightedMedian(
-    samples.map((sample) => ({
-      value: isFiniteNumber(sample.accuracy) ? sample.accuracy : REPRESENTATIVE_ACCURACY_THRESHOLD,
-      weight: precisionWeight(sample.accuracy),
-    }))
-  );
-  const timestampMedian = weightedMedian(
-    samples.map((sample) => ({
-      value: Number.isFinite(sample.timestamp) ? Number(sample.timestamp) : 0,
-      weight: precisionWeight(sample.accuracy),
-    }))
-  );
-  return {
-    latitude: latMedian,
-    longitude: lonMedian,
-    accuracy: isFiniteNumber(accuracyMedian) ? accuracyMedian : REPRESENTATIVE_ACCURACY_THRESHOLD,
-    timestamp: Number.isFinite(timestampMedian) ? timestampMedian : Date.now(),
-  };
-}
-
-function refineRepresentativePoint(points = [], basePoint = null, { fromStart = true } = {}) {
-  if (!basePoint) {
-    return null;
-  }
-  const segmentPoints = collectSegmentWindow(points, { fromStart, maxDistance: MAP_MATCHING_SEGMENT_METERS });
-  if (!segmentPoints.length) {
-    return basePoint;
-  }
-  const sortedByAccuracy = segmentPoints
-    .filter((item) => item && isFiniteNumber(item.accuracy))
-    .sort((a, b) => a.accuracy - b.accuracy);
-  const bestCandidate = sortedByAccuracy[0] || segmentPoints[segmentPoints.length - 1];
-  if (!bestCandidate) {
-    return basePoint;
-  }
-  const baseWeight = precisionWeight(basePoint.accuracy);
-  const candidateWeight = precisionWeight(bestCandidate.accuracy);
-  const totalWeight = baseWeight + candidateWeight || 1;
-  const latitude =
-    (basePoint.latitude * baseWeight + bestCandidate.latitude * candidateWeight) / totalWeight;
-  const longitude =
-    (basePoint.longitude * baseWeight + bestCandidate.longitude * candidateWeight) / totalWeight;
-  const refinedAccuracy = Math.min(
-    isFiniteNumber(basePoint.accuracy) ? basePoint.accuracy : REPRESENTATIVE_ACCURACY_THRESHOLD,
-    isFiniteNumber(bestCandidate.accuracy) ? bestCandidate.accuracy : REPRESENTATIVE_ACCURACY_THRESHOLD
-  );
-  const segmentTimestamp = fromStart
-    ? segmentPoints[0]?.timestamp
-    : segmentPoints[segmentPoints.length - 1]?.timestamp;
-  return {
-    latitude,
-    longitude,
-    accuracy: refinedAccuracy,
-    timestamp: Number.isFinite(segmentTimestamp) ? segmentTimestamp : basePoint.timestamp,
-  };
-}
-
-function evaluateCandidate(candidate, basePoint) {
-  if (!candidate) {
-    return null;
-  }
-  const latitude = Number(candidate.latitude);
-  const longitude = Number(candidate.longitude);
-  if (!isFiniteNumber(latitude) || !isFiniteNumber(longitude)) {
-    return null;
-  }
-  let distance = Number(candidate.distance);
-  if (!isFiniteNumber(distance) || distance < 0) {
-    distance =
-      basePoint && isFiniteNumber(basePoint.latitude) && isFiniteNumber(basePoint.longitude)
-        ? calculateSegmentDistance(basePoint, { latitude, longitude })
-        : null;
-  }
-  return {
-    name: candidate.name || '',
-    type: candidate.type || '',
-    typecode: candidate.typecode || '',
-    latitude,
-    longitude,
-    distance,
-    address: candidate.address || '',
-    raw: candidate.raw || candidate,
-    whitelist:
-      matchesBuildingWhitelistText(candidate.name || '') ||
-      matchesBuildingWhitelistText(candidate.type || ''),
-    source: candidate.source || (candidate.raw && candidate.raw.source) || '',
-  };
-}
-
-function pickBestCandidate(candidates = [], basePoint, { requireWhitelist = false, radius = 80, source = '' } = {}) {
-  if (!Array.isArray(candidates) || !candidates.length) {
-    return null;
-  }
-  let best = null;
-  candidates.forEach((candidate) => {
-    const normalized = evaluateCandidate(candidate, basePoint);
-    if (!normalized) {
-      return;
-    }
-    if (requireWhitelist && !normalized.whitelist) {
-      return;
-    }
-    if (Number.isFinite(radius) && normalized.distance !== null && normalized.distance > radius) {
-      return;
-    }
-    const distanceScore = normalized.distance !== null ? normalized.distance : 100000;
-    const whitelistScore = normalized.whitelist ? 0 : 10000;
-    const score = whitelistScore + distanceScore;
-    if (!best || score < best.score) {
-      best = {
-        ...normalized,
-        score,
-        source: source || normalized.source || 'amap',
-      };
-    }
-  });
-  return best;
-}
-
-function extractRoadName(regeo) {
-  if (!regeo) {
-    return '';
-  }
-  if (Array.isArray(regeo.roads) && regeo.roads.length) {
-    return regeo.roads[0]?.name || '';
-  }
-  const rawRoads = regeo?.raw?.regeocode?.roads;
-  if (Array.isArray(rawRoads) && rawRoads.length) {
-    return rawRoads[0]?.name || '';
-  }
-  const street = regeo?.raw?.regeocode?.addressComponent?.streetNumber?.street;
-  return street || '';
-}
-
-function extractDistrictName(regeo) {
-  if (!regeo) {
-    return '';
-  }
-  const component = regeo?.raw?.regeocode?.addressComponent || {};
-  return regeo.district || component.district || component.township || regeo.name || '';
-}
-
-function extractCityName(regeo) {
-  if (!regeo) {
-    return '';
-  }
-  const component = regeo?.raw?.regeocode?.addressComponent || {};
-  const cityField = component.city ?? regeo.city;
-  if (typeof cityField === 'string' && cityField) {
-    return cityField;
-  }
-  if (Array.isArray(cityField) && cityField.length) {
-    return cityField[0];
-  }
-  return component.province || regeo.province || '';
-}
-
-function resolveBuildingLocation(basePoint, { direction = 'start' } = {}) {
-  if (!basePoint || !isFiniteNumber(basePoint.latitude) || !isFiniteNumber(basePoint.longitude)) {
-    return Promise.resolve(null);
-  }
-  let detailed = null;
-  let buildingCandidate = null;
-  let fallbackPoiCandidate = null;
-
-  const radius = direction === 'start' ? 60 : 65;
-
-  return geocodeLocal
-    .reverseGeocodeDetailed({
-      latitude: basePoint.latitude,
-      longitude: basePoint.longitude,
-      radius,
-    })
-    .then((response) => {
-      detailed = response || null;
-      if (detailed) {
-        const combinedCandidates = [
-          ...(Array.isArray(detailed.aois) ? detailed.aois : []),
-          ...(Array.isArray(detailed.pois) ? detailed.pois : []),
-        ];
-        buildingCandidate =
-          pickBestCandidate(combinedCandidates, basePoint, {
-            requireWhitelist: true,
-            radius,
-            source: 'amap-regeo',
-          }) || null;
-        if (!buildingCandidate) {
-          fallbackPoiCandidate =
-            pickBestCandidate(detailed.pois || [], basePoint, {
-              requireWhitelist: false,
-              radius: Math.max(radius, 70),
-              source: 'amap-regeo',
-            }) || null;
-        }
-      }
-      return null;
-    })
-    .catch((error) => {
-      logger.warn('Detailed reverse geocode failed', {
-        endpoint: direction,
-        message: error?.errMsg || error?.message || error,
-      });
-      detailed = null;
-    })
-    .then(() =>
-      geocodeLocal
-        .searchAmapPlaceAround({
-          latitude: basePoint.latitude,
-          longitude: basePoint.longitude,
-          radius: 80,
-          types: AMAP_CAMPUS_PLACE_TYPES,
-          keywords: AMAP_CAMPUS_PLACE_KEYWORDS,
-        })
-        .then((pois) => {
-          const normalizedPois = Array.isArray(pois) ? pois : [];
-          if (!buildingCandidate) {
-            buildingCandidate =
-              pickBestCandidate(normalizedPois, basePoint, {
-                requireWhitelist: true,
-                radius: 80,
-                source: 'amap-place',
-              }) || null;
-          }
-          if (!fallbackPoiCandidate) {
-            fallbackPoiCandidate =
-              pickBestCandidate(normalizedPois, basePoint, {
-                requireWhitelist: false,
-                radius: 80,
-                source: 'amap-place',
-              }) || null;
-          }
-          return null;
-        })
-        .catch((error) => {
-          logger.warn('Nearby place search failed', {
-            endpoint: direction,
-            message: error?.errMsg || error?.message || error,
-          });
-        })
-    )
-    .then(() => {
-      const withinTolerance =
-        buildingCandidate &&
-        (buildingCandidate.distance === null || buildingCandidate.distance <= BUILDING_DISTANCE_TOLERANCE_METERS);
-
-      const hierarchy = {
-        building: withinTolerance ? buildingCandidate?.name || '' : '',
-        poi: '',
-        road: extractRoadName(detailed),
-        district: extractDistrictName(detailed),
-        city: extractCityName(detailed),
-      };
-
-      if (!withinTolerance && (buildingCandidate?.name || fallbackPoiCandidate?.name)) {
-        hierarchy.poi = buildingCandidate?.name || fallbackPoiCandidate?.name || '';
-      } else if (fallbackPoiCandidate?.name) {
-        hierarchy.poi = fallbackPoiCandidate.name;
-      }
-
-      const level = hierarchy.building
-        ? 'building'
-        : hierarchy.poi
-        ? 'poi'
-        : hierarchy.road
-        ? 'road'
-        : hierarchy.district
-        ? 'district'
-        : hierarchy.city
-        ? 'city'
-        : 'unknown';
-
-      const preferredName =
-        hierarchy[level] ||
-        buildingCandidate?.name ||
-        fallbackPoiCandidate?.name ||
-        detailed?.displayName ||
-        detailed?.name ||
-        '';
-
-      return {
-        name: preferredName,
-        displayName: preferredName || detailed?.displayName || '',
-        address: detailed?.address || null,
-        raw: {
-          regeo: detailed?.raw || null,
-          candidate: buildingCandidate?.raw || buildingCandidate || null,
-          fallbackPoi: fallbackPoiCandidate?.raw || fallbackPoiCandidate || null,
-        },
-        source: hierarchy.building
-          ? buildingCandidate?.source || 'amap-regeo'
-          : hierarchy.poi
-          ? (buildingCandidate?.source || fallbackPoiCandidate?.source || 'amap-place')
-          : detailed
-          ? 'amap-regeo'
-          : 'amap-place',
-        level,
-        distance: hierarchy.building
-          ? buildingCandidate?.distance ?? null
-          : fallbackPoiCandidate?.distance ?? buildingCandidate?.distance ?? null,
-        coordinate: {
-          latitude: basePoint.latitude,
-          longitude: basePoint.longitude,
-        },
-        hierarchy,
-        accuracy: basePoint.accuracy,
-      };
-    });
-}
-
-function resolveLocationLabel(location) {
-  if (!location) {
-    return '';
-  }
-  const hierarchy = location.hierarchy || {};
-  for (let idx = 0; idx < FALLBACK_BUILDING_NAME_PRIORITY.length; idx += 1) {
-    const key = FALLBACK_BUILDING_NAME_PRIORITY[idx];
-    if (hierarchy[key]) {
-      return hierarchy[key];
-    }
-  }
-  return location.name || location.displayName || '';
-}
-
-function logEndpointResolution(direction, representative, location) {
-  logger.info('Tracker endpoint resolved', {
-    endpoint: direction,
-    representative: representative
-      ? {
-          latitude: Number.isFinite(representative.latitude)
-            ? Number(representative.latitude.toFixed(6))
-            : null,
-          longitude: Number.isFinite(representative.longitude)
-            ? Number(representative.longitude.toFixed(6))
-            : null,
-          accuracy: representative.accuracy,
-        }
-      : null,
-    location: location
-      ? {
-          name: location.name,
-          level: location.level,
-          source: location.source,
-          distance: location.distance,
-        }
-      : null,
-    signalQuality: trackerState.signalQuality,
-  });
-}
-
-function resolveEndpoint(points = [], { fromStart = true } = {}) {
-  if (!Array.isArray(points) || !points.length) {
-    return Promise.resolve({ point: null, location: null });
-  }
-  const samples = collectEndpointSamples(points, { fromStart });
-  let representative = computePrecisionWeightedMedianPoint(samples);
-  if (!representative) {
-    const fallback = fromStart ? points[0] : points[points.length - 1];
-    if (fallback) {
-      representative = {
-        latitude: fallback.latitude,
-        longitude: fallback.longitude,
-        accuracy: fallback.accuracy,
-        timestamp: fallback.timestamp,
-      };
-    }
-  }
-  if (!representative) {
-    return Promise.resolve({ point: null, location: null });
-  }
-  const refined = refineRepresentativePoint(points, representative, { fromStart }) || representative;
-  return resolveBuildingLocation(refined, { direction: fromStart ? 'start' : 'end' })
-    .then((location) => {
-      logEndpointResolution(fromStart ? 'start' : 'end', refined, location);
-      return { point: refined, location };
-    })
-    .catch((error) => {
-      logger.warn('Resolve endpoint failed', {
-        endpoint: fromStart ? 'start' : 'end',
-        message: error?.errMsg || error?.message || error,
-      });
-      return { point: refined, location: null };
-    });
-}
+// NOTE: resolveLocationLabel 和 logEndpointResolution 已迁移到 building-resolver.js
 
 function stopTracking(meta = {}) {
   if (!trackerState.active) {
     return Promise.resolve(null);
   }
   clearSuspensionMonitor();
-  applyKeepScreenState({ force: true }).catch(() => {});
+  applyKeepScreenState({ force: true }).catch(() => { });
   stopDurationTicker();
   const endTime = Date.now();
   const options = {
@@ -2159,7 +1350,7 @@ function stopTracking(meta = {}) {
   };
   detachLocationListener();
 
-  stopLocationStream().catch(() => {});
+  stopLocationStream().catch(() => { });
   stopMotionSensors({ clearBuffers: true });
 
   flushPendingBatch({ force: true });
@@ -2232,9 +1423,10 @@ function stopTracking(meta = {}) {
         end: { point: null, location: null },
       });
     }
+    // 使用新的 resolveEndpoint 从 building-resolver.js
     return Promise.all([
-      resolveEndpoint(capturedPoints, { fromStart: true }),
-      resolveEndpoint(capturedPoints, { fromStart: false }),
+      resolveEndpoint(capturedPoints, { fromStart: true, signalQuality: trackerState.signalQuality }),
+      resolveEndpoint(capturedPoints, { fromStart: false, signalQuality: trackerState.signalQuality }),
     ]).then(([start, end]) => ({
       start,
       end,
@@ -2274,10 +1466,10 @@ function cancelTracking() {
     return Promise.resolve(null);
   }
   clearSuspensionMonitor();
-  applyKeepScreenState({ force: true }).catch(() => {});
+  applyKeepScreenState({ force: true }).catch(() => { });
   stopDurationTicker();
   detachLocationListener();
-  stopLocationStream().catch(() => {});
+  stopLocationStream().catch(() => { });
   stopMotionSensors({ clearBuffers: true });
   flushPendingBatch({ force: true });
   // 丢弃离线片段，不生成轨迹记录

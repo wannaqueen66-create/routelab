@@ -15,13 +15,11 @@ const {
   getSyncStatus,
 } = require('../../services/route-store');
 const { summarizeRoutes } = require('../../services/analytics');
-const { formatDuration, formatDate, formatClock, getWeekday } = require('../../utils/time');
+const { formatDuration } = require('../../utils/time');
 const { formatDistance, formatCalories } = require('../../utils/format');
 const { PRIVACY_LEVELS, PRIVACY_LEVEL_MAP } = require('../../constants/privacy');
-const { ACTIVITY_TYPE_MAP, DEFAULT_ACTIVITY_TYPE } = require('../../constants/activity');
 const api = require('../../services/api');
 const geocodeLocal = require('../../services/geocode-local');
-const { formatWind } = require('../../utils/wind');
 const {
   getRecentSettings,
   getUserProfile,
@@ -30,9 +28,21 @@ const {
   getLatestSeenAnnouncement,
   setLatestSeenAnnouncement,
 } = require('../../utils/storage');
-const { STORAGE_KEYS } = require('../../constants/storage');
-const { getDefaultNickname, getAvatarColor, getInitialFromName } = require('../../utils/profile-meta');
-const rewards = require('../../services/rewards');
+
+// 使用模块化的 UI 格式化逻辑
+const {
+  createWeatherState,
+  formatWeatherPayload,
+} = require('../../services/weather-local');
+const { buildUserCard, createProfileCard } = require('../../services/user-card');
+const {
+  HISTORY_FILTERS,
+  formatHistoryRoute,
+  filterHistoryRoutes,
+  formatSyncInfo,
+  shouldFixPlaceName,
+} = require('../../services/history-formatter');
+
 
 const app = typeof getApp === 'function' ? getApp() : null;
 
@@ -43,38 +53,6 @@ const TAB_META = [
 ];
 
 
-const HISTORY_FILTERS = [
-  { key: 'all', label: '全部' },
-  { key: 'recent', label: '最近一周' },
-  { key: 'walk', label: '步行' },
-  { key: 'ride', label: '骑行' },
-  { key: 'public', label: '公开' },
-  { key: 'private', label: '仅自己' },
-];
-
-
-const WEATHER_TEXT_MAP = {
-  sunny: '晴',
-  clear: '晴',
-  cloudy: '多云',
-  overcast: '阴',
-  rain: '雨',
-  rainy: '雨',
-  shower: '阵雨',
-  snow: '雪',
-  windy: '有风',
-  fog: '雾',
-};
-
-const WEATHER_SUGGESTION_MAP = {
-  'weather looks good. maintain your planned outdoor training.': '天气不错，可以按计划进行户外训练。',
-  'take a rest day or choose indoor workouts due to harsh weather.': '天气较差，建议休息一天或选择室内运动。',
-  'light rain. consider waterproof gear if you head outside.': '有小雨，外出运动请注意雨具和防水装备。',
-  'hot and humid. stay hydrated and avoid noon training.': '天气炎热潮湿，注意补水，避免在中午时段训练。',
-};
-
-
-const HISTORY_RECENT_DAYS = 7;
 const ACTIVITY_GOALS = {
   distance: 50000,
   count: 40,
@@ -137,296 +115,6 @@ function buildProgressFromOverview(overview = {}) {
     count: toPercent(overview.totalCountValue, ACTIVITY_GOALS.count),
     calories: toPercent(overview.totalCaloriesValue, ACTIVITY_GOALS.calories),
   };
-}
-
-function createWeatherState(overrides = {}) {
-  return {
-    loading: false,
-    ready: false,
-    temperature: '--',
-    apparentTemperature: null,
-    weatherText: '等待获取天气',
-    humidityText: '--',
-    windText: '--',
-    airQualityText: '--',
-    airQualityLevel: '',
-    suggestion: '保持联网可获取实时运动建议',
-    fetchedAt: null,
-    error: '',
-    cityText: '',
-    sportAdviceLevel: 'neutral',
-    sportAdviceLabel: '关注实时天气',
-    sportAdviceColor: '#60a5fa',
-    ...overrides,
-  };
-}
-
-function formatAirQuality(airQuality = {}) {
-  const toNonNegativeNumber = (val) => {
-    if (val === null || val === undefined || val === '') {
-      return null;
-    }
-    const numeric = Number(val);
-    return Number.isFinite(numeric) && numeric >= 0 ? numeric : null;
-  };
-  const value = toNonNegativeNumber(airQuality.value) ?? toNonNegativeNumber(airQuality.aqi);
-  const level = airQuality.level || airQuality.category || '';
-  if (value === null) {
-    return level || '--';
-  }
-  const label = level || '良好';
-  return `${label} · ${value.toFixed(0)}`;
-}
-
-function analyzeSportAdvice(payload = {}) {
-  const airLevelText = payload.airQuality?.level || payload.airQuality?.category || '';
-  const text = `${payload.suggestion || ''}${payload.weatherText || ''}${airLevelText}`;
-  const cautionKeywords = /(降温|雨|雾霾|谨慎|注意)/;
-  const goodKeywords = /(晴|适宜|清爽|凉爽)/;
-  let level = 'neutral';
-  if (cautionKeywords.test(text)) level = 'caution';
-  if (goodKeywords.test(text)) level = 'good';
-  return {
-    neutral: { label: '关注实时天气', color: '#60a5fa' },
-    caution: { label: '注意补给与安全', color: '#f97316' },
-    good: { label: '非常适合户外', color: '#34d399' },
-  }[level];
-}
-
-function containsChinese(text = '') {
-  return /[\u4e00-\u9fa5]/.test(text);
-}
-
-function ensureChineseText(text, fallback, dictionary = WEATHER_TEXT_MAP) {
-  if (!text || typeof text !== 'string') {
-    return fallback;
-  }
-  if (containsChinese(text)) {
-    return text.trim();
-  }
-  const normalized = text.trim().toLowerCase();
-  if (dictionary && dictionary[normalized]) {
-    return dictionary[normalized];
-  }
-  return fallback;
-}
-
-function formatWeatherPayload(payload = {}) {
-  const advice = analyzeSportAdvice(payload);
-  const weatherText = ensureChineseText(payload.weatherText, advice.label);
-  const suggestion = ensureChineseText(payload.suggestion, advice.label, WEATHER_SUGGESTION_MAP);
-  const apparent = Number(payload.apparentTemperature);
-  const humidity = Number(payload.humidity);
-  const windSpeed = Number(payload.windSpeed);
-  return {
-    loading: false,
-    ready: true,
-    temperature: Number.isFinite(payload.temperature)
-      ? `${Number(payload.temperature).toFixed(1)}℃`
-      : '--',
-    apparentTemperature: Number.isFinite(apparent) ? `${apparent.toFixed(1)}℃` : null,
-    weatherText,
-    humidityText: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : '--',
-    windText: Number.isFinite(windSpeed) ? formatWind(windSpeed) : '--',
-    airQualityText: formatAirQuality(payload.airQuality),
-    airQualityLevel: payload.airQuality?.level || payload.airQuality?.category || '',
-    suggestion,
-    fetchedAt: payload.fetchedAt || Date.now(),
-    error: '',
-    cityText: payload.cityName || '',
-    sportAdviceLevel: advice.label,
-    sportAdviceLabel: suggestion,
-    sportAdviceColor: advice.color,
-  };
-}
-
-function formatHistoryRoute(route) {
-  if (!route || typeof route !== 'object') {
-    return null;
-  }
-  const activityType = route.meta?.activityType || route.activityType || DEFAULT_ACTIVITY_TYPE;
-  const activityMeta = ACTIVITY_TYPE_MAP[activityType] || ACTIVITY_TYPE_MAP[DEFAULT_ACTIVITY_TYPE];
-  const synced = route.synced === true;
-  return {
-    id: route.id,
-    title: route.title || '未命名路线',
-    distanceText: formatDistance(route.stats?.distance),
-    durationText: formatDuration(route.stats?.duration),
-    caloriesText: formatCalories(route.stats?.calories),
-    privacyLevel: route.privacyLevel,
-    privacyLabel: PRIVACY_LEVEL_MAP[route.privacyLevel]?.label || '未知',
-    startDate: formatDate(route.startTime),
-    weekLabel: getWeekday(route.startTime),
-    startLabel: route.meta?.startLabel || route.campusZone || '起点待识别',
-    endLabel: route.meta?.endLabel || '终点待识别',
-    activityLabel: activityMeta.label,
-    activityType,
-    timeRange: `${formatClock(route.startTime)} - ${formatClock(route.endTime)}`,
-    photosCount: Array.isArray(route.photos) ? route.photos.length : 0,
-    synced,
-    syncPending: !synced,
-    syncStatusLabel: synced ? '已同步' : '待同步',
-  };
-}
-
-function filterHistoryRoutes(routes = [], filterKey = 'all') {
-  const list = Array.isArray(routes) ? routes.filter(Boolean) : [];
-  if (filterKey === 'recent') {
-    const threshold = Date.now() - HISTORY_RECENT_DAYS * 24 * 60 * 60 * 1000;
-    return list.filter((route) => route.startTime >= threshold);
-  }
-  if (filterKey === 'walk') {
-    return list.filter(
-      (route) => (route.meta?.activityType || route.activityType || DEFAULT_ACTIVITY_TYPE) === 'walk'
-    );
-  }
-  if (filterKey === 'ride') {
-    return list.filter(
-      (route) => (route.meta?.activityType || route.activityType || DEFAULT_ACTIVITY_TYPE) === 'ride'
-    );
-  }
-  if (filterKey === 'public') {
-    return list.filter((route) => route.privacyLevel === 'public');
-  }
-  if (filterKey === 'private') {
-    return list.filter((route) => route.privacyLevel === 'private');
-  }
-  return list;
-}
-
-function formatSyncInfo(status = {}) {
-  const timestamp = Number(status.lastSyncAt);
-  const hasTimestamp = Number.isFinite(timestamp) && timestamp > 0;
-  return {
-    pending: status.pending || 0,
-    synced: status.synced || 0,
-    deleted: status.deleted || 0,
-    total: status.total || 0,
-    lastSyncText: hasTimestamp ? `${formatDate(timestamp)} ${formatClock(timestamp)}` : '尚未同步',
-  };
-}
-
-function formatGenderLabel(value) {
-  if (value === 'male') {
-    return '男';
-  }
-  if (value === 'female') {
-    return '女';
-  }
-  return '未填写';
-}
-
-const AGE_RANGE_LABELS = {
-  under18: '18岁以下',
-  '18_24': '18-24岁',
-  '25_34': '25-34岁',
-  '35_44': '35-44岁',
-  '45_54': '45-54岁',
-  '55_plus': '55岁及以上',
-};
-
-const IDENTITY_LABELS = {
-  minor: '未成年',
-  undergrad: '本科生',
-  postgrad: '研究生',
-  staff: '教职工',
-  resident: '居民',
-  other: '其他',
-};
-
-function formatAgeRangeLabel(value) {
-  return AGE_RANGE_LABELS[value] || '未填写';
-}
-
-function formatIdentityLabel(value) {
-  return IDENTITY_LABELS[value] || '未填写';
-}
-
-function resolveProfileNickname(profile, account) {
-  const fallback = getDefaultNickname(account);
-  return (
-    profile?.nickname ||
-    account?.nickname ||
-    account?.username ||
-    account?.displayName ||
-    fallback
-  );
-}
-
-function createProfileCard({ settings, profile, account }) {
-  const nickname = resolveProfileNickname(profile, account);
-  const avatarUrl = profile?.avatarUrl || account?.avatar || '';
-  const avatarSeed = avatarUrl || account?.id || nickname;
-  const avatarColor = getAvatarColor(avatarSeed);
-  const initial = getInitialFromName(nickname || avatarSeed);
-  const privacyLevel = settings?.privacyLevel || 'private';
-  const defaultPublic = privacyLevel === 'public';
-  const weightSource =
-    profile?.weight !== undefined && profile?.weight !== null && profile?.weight !== ''
-      ? Number(profile.weight)
-      : settings?.weight;
-  const weightText =
-    Number.isFinite(Number(weightSource)) && Number(weightSource) > 0
-      ? `${Number(weightSource).toFixed(1).replace(/\.0$/, '')} kg`
-      : '未填写';
-  const heightSource =
-    profile?.height !== undefined && profile?.height !== null && profile?.height !== ''
-      ? Number(profile.height)
-      : null;
-  const heightText =
-    Number.isFinite(heightSource) && heightSource > 0
-      ? `${heightSource.toFixed(1).replace(/\.0$/, '')} cm`
-      : '未填写';
-  const birthdayText = profile?.birthday || '未填写';
-  const personalInfo = [
-    { key: 'name', label: '姓名', value: nickname || '未填写' },
-    { key: 'gender', label: '性别', value: formatGenderLabel(profile?.gender || account?.gender) },
-    { key: 'ageRange', label: '年龄段', value: formatAgeRangeLabel(profile?.ageRange || account?.ageRange) },
-    { key: 'identity', label: '身份标签', value: formatIdentityLabel(profile?.identity || account?.identity) },
-    { key: 'birthday', label: '生日', value: birthdayText },
-    { key: 'weight', label: '体重', value: weightText },
-    { key: 'height', label: '身高', value: heightText },
-  ];
-  return {
-    nickname,
-    avatarUrl,
-    avatarColor,
-    privacyLevel,
-    privacyLabel: PRIVACY_LEVEL_MAP[privacyLevel]?.label || '仅自己可见',
-    privacyDescription:
-      privacyLevel === 'public'
-        ? '默认将新轨迹同步到公共社区'
-        : '仅自己可见，需要时可手动公开',
-    initial,
-    shareStatus: defaultPublic ? '公开分享' : '私密记录',
-    userIdLabel: account?.id ? `User ID: ${account.id}` : 'User ID: --',
-    personalInfo,
-    defaultPublic,
-  };
-}
-
-function buildUserCard({ settings, profile, account, overview }) {
-  const base = createProfileCard({ settings, profile, account, overview });
-  const achievementSnapshot = rewards.getAchievementSnapshot();
-  const unlockedText = `已获勋章：${achievementSnapshot.unlockedCount}/${achievementSnapshot.badgeCount}`;
-  const nextHint = achievementSnapshot.nextBadge
-    ? `${achievementSnapshot.nextBadge.icon} ${achievementSnapshot.nextBadge.label} 还差 ${achievementSnapshot.remainingToNext} 分`
-    : '已解锁全部勋章';
-  return {
-    ...base,
-    totalPoints: achievementSnapshot.totalPoints,
-    badgeIcon: achievementSnapshot.badgeIcon,
-    badgeLabel: achievementSnapshot.badgeLabel,
-    badgeUnlockedText: unlockedText,
-    badgeNextHint: nextHint,
-  };
-}
-function shouldFixPlaceName(name = '') {
-  if (!name || typeof name !== 'string') return true;
-  const value = name.trim();
-  if (!value) return true;
-  if (/^\d+(\.\d+)?\s*,\s*\d+(\.\d+)?$/.test(value)) return true;
-  return value.includes('待') || value.includes('未') || value.includes('坐标');
 }
 
 const EMPTY_OVERVIEW = createOverview([]);
@@ -534,7 +222,7 @@ Page({
       tasks.push(this.syncHistoryFromCloud(true));
     }
     return Promise.all(tasks)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         if (typeof wx.stopPullDownRefresh === 'function') {
           wx.stopPullDownRefresh();
@@ -804,7 +492,7 @@ Page({
             [`historyRoutes[${index}].endLabel`]: endLabel,
           });
         })
-        .catch(() => {});
+        .catch(() => { });
     });
   },
 

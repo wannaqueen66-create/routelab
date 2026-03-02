@@ -9,23 +9,37 @@ module.exports = {
     browser: true,
     node: true,
   },
-  ecmaFeatures: {
-    modules: true,
-  },
   parserOptions: {
-    ecmaVersion: 2018,
+    ecmaVersion: 2020,
     sourceType: 'module',
   },
   globals: {
-    wx: true,
-    App: true,
-    Page: true,
-    getCurrentPages: true,
-    getApp: true,
-    Component: true,
-    requirePlugin: true,
-    requireMiniProgram: true,
+    wx: 'readonly',
+    App: 'readonly',
+    Page: 'readonly',
+    Component: 'readonly',
+    getApp: 'readonly',
+    getCurrentPages: 'readonly',
+    requirePlugin: 'readonly',
+    requireMiniProgram: 'readonly',
   },
-  // extends: 'eslint:recommended',
-  rules: {},
-}
+  extends: 'eslint:recommended',
+  rules: {
+    // 强制规则
+    'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    'no-console': 'off', // 小程序调试需要
+    'eqeqeq': ['error', 'always', { null: 'ignore' }],
+    'curly': ['error', 'all'],
+    'no-var': 'error',
+    'prefer-const': 'warn',
+
+    // 风格规则（建议）
+    'semi': ['warn', 'always'],
+    'quotes': ['warn', 'single', { avoidEscape: true }],
+    'comma-dangle': ['warn', 'always-multiline'],
+    'no-trailing-spaces': 'warn',
+
+    // 禁用部分严格规则
+    'no-empty': ['error', { allowEmptyCatch: true }],
+  },
+};

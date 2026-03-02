@@ -37,6 +37,15 @@
   font-size: 32rpx;
   font-weight: 600;
   color: var(--color-text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.section__label-meta {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #8c8c8c;
 }
 
 .section__hint {

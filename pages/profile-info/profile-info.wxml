@@ -37,7 +37,10 @@
       </view>
 
       <view class="section">
-        <view class="section__label">昵称</view>
+      <view class="section__label">
+        昵称
+        <text class="section__label-meta">(必填)</text>
+      </view>
         <input
           class="nickname-input"
           type="nickname"
@@ -66,7 +69,9 @@
       </view>
 
       <view class="section">
-        <view class="section__label">年龄段</view>
+          <view class="section__label">
+            年龄段 <text class="section__label-meta">(必填)</text>
+          </view>
         <picker
           class="picker"
           mode="selector"
@@ -82,7 +87,9 @@
       </view>
 
       <view class="section">
-        <view class="section__label">身份标签</view>
+          <view class="section__label">
+            身份标签 <text class="section__label-meta">(必填)</text>
+          </view>
         <picker
           class="picker"
           mode="selector"
@@ -97,48 +104,7 @@
         <view wx:if="{{identityError}}" class="section__error">{{identityError}}</view>
       </view>
 
-      <view class="section">
-        <view class="section__label">生日</view>
-        <picker
-          class="picker"
-          mode="date"
-          value="{{birthday}}"
-          end="{{maxBirthday}}"
-          bindchange="handleBirthdayChange"
-        >
-          <view class="picker__display {{birthday ? '' : 'picker__display--placeholder'}}">
-            {{birthday || '请选择生日'}}
-          </view>
-        </picker>
-        <view class="section__hint">填写生日可帮助获得更准确的年龄段判断。</view>
-      </view>
 
-      <view class="section section--metrics">
-        <view class="section__label">身体数据</view>
-        <view class="field">
-          <text class="field__label">身高 (cm)</text>
-          <input
-            class="field__input"
-            type="digit"
-            placeholder="170"
-            value="{{height}}"
-            bindinput="handleHeightInput"
-          />
-          <view wx:if="{{heightError}}" class="section__error">{{heightError}}</view>
-        </view>
-        <view class="field">
-          <text class="field__label">体重 (kg)</text>
-          <input
-            class="field__input"
-            type="digit"
-            placeholder="60"
-            value="{{weight}}"
-            bindinput="handleWeightInput"
-          />
-          <view wx:if="{{weightError}}" class="section__error">{{weightError}}</view>
-        </view>
-        <view class="section__hint">补充身高体重可以生成更精准的运动统计。</view>
-      </view>
 
       <button
         class="save-button"

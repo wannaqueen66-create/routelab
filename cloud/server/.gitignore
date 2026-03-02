@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment files (use .env.example as template)
+.env
+.env.local
+.env.*.local
+
+# Data directories (mounted as volumes in production)
+data/
+uploads/
+backups/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test files
+*.test.js
+*.spec.js
+test/
+tests/
+__tests__/
+coverage/
+
+# Build artifacts
+dist/
+build/
