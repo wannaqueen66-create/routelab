@@ -1,0 +1,13 @@
+.venv/
+.venv_task6/
+.openclaw/
+
+eeg/
+eeg_fix/
+eeg_repo_tmp/
+spss/
+projects/
+
+*.log
+__pycache__/
+.DS_Store
