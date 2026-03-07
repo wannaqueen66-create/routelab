@@ -343,7 +343,7 @@ def upsert_paper(
             url, doi, source, title, english_abstract, chinese_summary, published_date, query_name, authors,
             primary_category, categories, analysis_json, related_score, analysis_status, meets_threshold,
             eligible_for_pending, first_seen_at, last_seen_at, displayed_at, display_count, reported_at, report_count, content_hash, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(url) DO UPDATE SET
             doi=excluded.doi,
             source=excluded.source,
