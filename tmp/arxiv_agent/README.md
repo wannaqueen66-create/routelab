@@ -166,6 +166,7 @@ EMAIL_PASSWORD=your_brevo_smtp_password
 EMAIL_FROM=you@example.com
 EMAIL_TO=you@example.com
 EMAIL_USE_TLS=true
+REPORT_TOP_N=10
 EMAIL_TOP_N=5
 ```
 
@@ -198,6 +199,8 @@ python test_email.py
 - `MAX_RESULTS_PER_QUERY`：每个 query 每个源最多抓多少条
 - `MIN_RELEVANCE_SCORE`：最低相关性分数阈值
 - `FORCE_REFRESH`：是否忽略缓存强制重跑
+- `REPORT_TOP_N`：Markdown 简报里展示多少条重点论文
+- `EMAIL_TOP_N`：邮件正文里展示多少条重点论文
   - `false`：优先复用数据库里的历史分析结果（更快、更省 token）
   - `true`：忽略缓存，重新分析已抓到的论文（适合刚改 prompt、评分逻辑、字段结构后测试）
 

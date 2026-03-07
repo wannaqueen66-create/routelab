@@ -51,6 +51,7 @@ def load_env() -> tuple[OpenAI, dict]:
         "email_from": os.getenv("EMAIL_FROM", ""),
         "email_to": os.getenv("EMAIL_TO", ""),
         "email_use_tls": parse_bool(os.getenv("EMAIL_USE_TLS"), True),
+        "report_top_n": int(os.getenv("REPORT_TOP_N", "10")),
         "email_top_n": int(os.getenv("EMAIL_TOP_N", "5")),
     }
 
@@ -553,7 +554,7 @@ def send_email_via_brevo(runtime: dict, subject: str, body: str, attachments: li
         server.send_message(msg)
 
 
-def write_markdown(md_path: str, df: pd.DataFrame, today_str: str):
+def write_markdown(md_path: str, df: pd.DataFrame, today_str: str, report_top_n: int = 10):
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(f"# 文献简报（{today_str}）\n\n")
 
@@ -573,8 +574,8 @@ def write_markdown(md_path: str, df: pd.DataFrame, today_str: str):
         f.write(f"- 中高相关（>=60分）：{len(df[df['相关性分数'] >= 60])} 篇\n")
         f.write(f"- 数据源：{', '.join(sorted(df['source'].dropna().unique()))}\n\n")
 
-        top_df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False]).head(5)
-        f.write("## TOP 5 优先关注\n\n")
+        top_df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False]).head(report_top_n)
+        f.write(f"## TOP {report_top_n} 优先关注\n\n")
         for idx, (_, row) in enumerate(top_df.iterrows(), start=1):
             f.write(f"### {idx}. {row['title']}\n\n")
             f.write(f"- 分数：{row['相关性分数']}\n")
@@ -753,7 +754,7 @@ def main():
         df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False])
         df.to_excel(excel_path, index=False)
 
-    write_markdown(md_path, df, today_str)
+    write_markdown(md_path, df, today_str, runtime.get("report_top_n", 10))
 
     with open(stats_path, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
