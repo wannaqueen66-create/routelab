@@ -1,0 +1,7 @@
+arxiv
+pandas
+pyyaml
+python-dotenv
+openai
+openpyxl
+requests

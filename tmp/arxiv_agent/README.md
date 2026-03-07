@@ -1,19 +1,25 @@
 # arxiv_agent
 
-一个面向**建筑学 / 体育空间 / VR环境 / 行为轨迹**研究的多源文献自动检索与 AI 结构化分析脚本。
+一个面向 **建筑学 / 体育空间 / VR 环境 / 行为轨迹** 研究的**多源文献自动检索与 AI 结构化分析工具**。
 
-## 当前版本已完成的关键优化
+它会从多个学术来源抓取最近的新论文，自动完成中文摘要与结构化信息提取，并输出为日报文件；同时支持 SQLite 缓存与 Brevo 邮件推送，适合做日常文献监测。
 
-### 1. 建筑/空间行为研究专用 prompt
-分析 prompt 已针对以下方向优化：
-- 建筑学
-- 体育空间
-- VR环境
-- 行为轨迹
-- 空间感知 / 生理指标 / 行为指标
+---
 
-### 2. 增加专用结构化字段
-输出字段包括：
+## 这个项目现在能做什么
+
+### 1. 多源抓取文献
+当前支持以下来源：
+- arXiv
+- OpenAlex
+- Crossref
+- Semantic Scholar
+
+你可以通过 `config.yaml` 中的 `sources` 配置来控制启用哪些来源。
+
+### 2. 自动生成中文结构化分析
+程序会调用 OpenAI，对每篇论文输出适合空间研究者使用的结构化信息，包括：
+
 - 中文摘要
 - 研究主题
 - 空间/场景类型
@@ -29,40 +35,63 @@
 - 相关性分数（0-100）
 - 可借鉴启发
 
-### 3. 缓存 + 失败重试
-- SQLite 缓存：`papers.db`
-- 已分析过的论文直接复用
-- LLM 分析失败自动重试
+### 3. 保留英文原文摘要
+除中文摘要外，系统会同时保留英文摘要，方便快速浏览与回溯原文信息。
 
-### 4. 历史数据库
-数据库中会保留：
-- 来源
-- 标题
-- 英文摘要
-- 中文摘要
-- 日期
-- 作者
-- 分类
-- 分析结果
-- 相关性分数
+### 4. 缓存与历史数据库
+程序使用 SQLite 数据库 `papers.db` 作为缓存与历史库：
+- 避免重复分析同一篇论文
+- 节省 token 成本
+- 逐步积累自己的文献库
 
-### 5. 多文献源支持
-当前支持：
-- arXiv
-- OpenAlex
-- Crossref
-- Semantic Scholar
+### 5. 自动输出日报
+每次运行后，默认会生成：
+- `output/arxiv_daily_YYYY-MM-DD.xlsx`
+- `output/arxiv_daily_YYYY-MM-DD.md`
+- `output/arxiv_daily_YYYY-MM-DD_stats.json`
 
-### 6. 中文摘要输出 + 英文原文保留
-- `english_abstract` 字段保留英文摘要
-- `中文摘要` 字段保存模型生成的中文摘要
-- Markdown / Excel 会同时输出这两部分
+### 6. 支持 Brevo 邮件推送
+如果配置了 Brevo SMTP，程序运行后可以自动把日报发到邮箱：
+- 邮件正文：TOP N 论文摘要
+- 邮件附件：Markdown / Excel / stats.json
 
 ---
 
-## 依赖安装
+## 目录结构
 
-建议 Python 3.10+
+典型目录如下：
+
+```bash
+arxiv_agent/
+├── arxiv_agent.py
+├── config.yaml
+├── requirements.txt
+├── .env.example
+├── .env                # 你自己创建
+├── README.md
+└── output/
+```
+
+> 注意：`.env` 需要与 `arxiv_agent.py` 放在同一级目录。
+
+---
+
+## 安装方式
+
+建议使用 Python 3.10+。
+
+### 1. 创建虚拟环境（可选但推荐）
+```bash
+python3 -m venv openai_env
+source openai_env/bin/activate
+```
+
+### 2. 安装依赖
+```bash
+pip install -r requirements.txt
+```
+
+如果你不想用 requirements，也可以手动安装：
 
 ```bash
 pip install arxiv pandas pyyaml python-dotenv openai openpyxl requests
@@ -70,9 +99,9 @@ pip install arxiv pandas pyyaml python-dotenv openai openpyxl requests
 
 ---
 
-## 环境变量
+## 环境变量配置
 
-可先复制 `.env.example` 为 `.env`，再填写你的 key：
+先复制示例文件：
 
 ```bash
 cp .env.example .env
@@ -81,74 +110,17 @@ cp .env.example .env
 然后编辑 `.env`：
 
 ```env
-OPENAI_API_KEY=your_key_here
+# OpenAI
+OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_MODEL=gpt-4.1-mini
+
+# Runtime fetch controls
 DAYS_BACK=2
 MAX_RESULTS_PER_QUERY=30
 FORCE_REFRESH=false
-```
 
-> 以后如果你想换模型、抓取天数、每个 query 的抓取量，或是否强制重跑，直接改 `.env`，不用改代码或 `config.yaml`。
-
----
-
-## 运行方式
-
-```bash
-python arxiv_agent.py
-```
-
----
-
-## 配置说明
-
-在 `config.yaml` 中可调：
-- `queries`：检索式
-- `sources`：数据源列表
-- `exclude_keywords`：排噪词
-- `must_have_keywords`：必须命中词
-- `analysis_retries`：分析失败重试次数
-- `retry_delay_seconds`
-
-在 `.env` 中可调：
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `DAYS_BACK`
-- `MAX_RESULTS_PER_QUERY`
-- `FORCE_REFRESH`
-- `EMAIL_ENABLED`
-- `EMAIL_SMTP_HOST`
-- `EMAIL_SMTP_PORT`
-- `EMAIL_USERNAME`
-- `EMAIL_PASSWORD`
-- `EMAIL_FROM`
-- `EMAIL_TO`
-- `EMAIL_USE_TLS`
-- `EMAIL_TOP_N`
-
----
-
-## 输出文件
-
-默认输出到 `output/`：
-
-- `arxiv_daily_YYYY-MM-DD.xlsx`
-- `arxiv_daily_YYYY-MM-DD.md`
-- `arxiv_daily_YYYY-MM-DD_stats.json`
-
-缓存数据库：
-- `papers.db`
-
----
-
-## Brevo 邮件推送
-
-当前版本已支持通过 Brevo SMTP 发送日报。
-
-在 `.env` 中配置：
-
-```env
-EMAIL_ENABLED=true
+# Brevo email push
+EMAIL_ENABLED=false
 EMAIL_SMTP_HOST=smtp-relay.brevo.com
 EMAIL_SMTP_PORT=587
 EMAIL_USERNAME=your_brevo_smtp_username
@@ -159,14 +131,143 @@ EMAIL_USE_TLS=true
 EMAIL_TOP_N=5
 ```
 
-程序运行后会自动发送：
-- 邮件正文：TOP N 论文摘要
-- 附件：Markdown 日报 / Excel / stats.json
+### 说明
+这些运行时参数都放在 `.env` 里，方便你直接改：
 
-## 下一步还值得做的增强
+- `OPENAI_MODEL`：使用的模型
+- `DAYS_BACK`：抓最近几天的论文
+- `MAX_RESULTS_PER_QUERY`：每个 query 每个源最多抓多少条
+- `FORCE_REFRESH`：是否忽略缓存重新分析
+
+---
+
+## config.yaml 配置说明
+
+`config.yaml` 用于放相对稳定的项目配置，例如：
+
+- `queries`：检索式
+- `sources`：文献源列表
+- `exclude_keywords`：排噪词
+- `must_have_keywords`：必须命中词
+- `db_path`：SQLite 数据库路径
+- `analysis_retries`：分析失败重试次数
+- `retry_delay_seconds`：重试间隔
+
+### 当前 sources 示例
+```yaml
+sources:
+  - arxiv
+  - openalex
+  - crossref
+  - semantic_scholar
+```
+
+---
+
+## 运行方式
+
+在项目目录执行：
+
+```bash
+python arxiv_agent.py
+```
+
+运行成功后，会在 `output/` 下生成日报文件。
+
+---
+
+## 输出结果说明
+
+### 1. Excel 文件
+适合筛选、排序、人工复核。
+
+### 2. Markdown 文件
+适合快速阅读和汇报，包含：
+- 今日统计
+- TOP 5
+- 分组详情
+- 中文摘要 + 英文摘要
+- 结构化分析结果
+
+### 3. stats.json
+记录运行统计，例如：
+- 抓了多少条
+- 过滤掉多少条
+- 缓存命中多少条
+- 实际分析多少条
+
+---
+
+## Brevo 邮件推送
+
+如果要开启邮件推送，把 `.env` 中的：
+
+```env
+EMAIL_ENABLED=true
+```
+
+并正确填写以下参数：
+
+```env
+EMAIL_SMTP_HOST=smtp-relay.brevo.com
+EMAIL_SMTP_PORT=587
+EMAIL_USERNAME=your_brevo_smtp_username
+EMAIL_PASSWORD=your_brevo_smtp_password
+EMAIL_FROM=you@example.com
+EMAIL_TO=you@example.com
+EMAIL_USE_TLS=true
+EMAIL_TOP_N=5
+```
+
+程序运行完成后会自动发送：
+- 邮件正文：TOP N 论文摘要
+- 附件：Markdown / Excel / stats.json
+
+---
+
+## 常见问题
+
+### 1. 报错：`ModuleNotFoundError: No module named 'arxiv'`
+说明依赖还没装，执行：
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 报错：没有读取到 `OPENAI_API_KEY`
+说明 `.env` 没创建，或者没填 key。
+
+### 3. 邮件发送失败
+优先检查：
+- Brevo SMTP 用户名/密码是否正确
+- 发件邮箱是否是已配置发件人
+- 服务器是否允许出站 SMTP
+
+---
+
+## 当前版本已经完成的优化
+
+- 建筑/空间行为研究专用 prompt
+- 增加空间类型 / 研究场景 / 行为指标 / 生理指标字段
+- SQLite 缓存与历史数据库
+- 自动重试
+- 多文献源支持
+- 中文摘要输出 + 英文原文保留
+- Brevo 邮件推送
+- 运行时参数改由 `.env` 控制
+
+---
+
+## 后续还值得继续做的增强
 
 1. PDF 全文二级分析
 2. Telegram 推送
 3. 人工复核字段
 4. 研究标签系统
 5. 长期知识库视图
+
+---
+
+## 一句话总结
+
+这是一个适合 **建筑学 / 体育空间 / VR / 行为轨迹** 研究者使用的**多源文献监测与结构化分析工具原型**，已经可以直接跑，并适合继续扩展成长期使用的研究工作流工具。
