@@ -189,6 +189,8 @@ python arxiv_agent.py
 - `MAX_RESULTS_PER_QUERY`：每个 query 每个源最多抓多少条
 - `MIN_RELEVANCE_SCORE`：最低相关性分数阈值
 - `FORCE_REFRESH`：是否忽略缓存强制重跑
+  - `false`：优先复用数据库里的历史分析结果（更快、更省 token）
+  - `true`：忽略缓存，重新分析已抓到的论文（适合刚改 prompt、评分逻辑、字段结构后测试）
 
 邮件相关：
 - `EMAIL_ENABLED`
