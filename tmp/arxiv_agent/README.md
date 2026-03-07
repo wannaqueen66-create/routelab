@@ -72,7 +72,13 @@ pip install arxiv pandas pyyaml python-dotenv openai openpyxl requests
 
 ## 环境变量
 
-在项目目录创建 `.env`：
+可先复制 `.env.example` 为 `.env`，再填写你的 key：
+
+```bash
+cp .env.example .env
+```
+
+然后编辑 `.env`：
 
 ```env
 OPENAI_API_KEY=your_key_here
