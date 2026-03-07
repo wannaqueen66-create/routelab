@@ -17,7 +17,8 @@ pool.on('connect', (client) => {
 });
 
 // Legacy init.sql path (deprecated)
-const INIT_SQL_PATH = path.resolve(__dirname, '../../..', 'scripts', 'init.sql');
+// In container: __dirname is /app/src/db, scripts would be /app/scripts
+const INIT_SQL_PATH = path.resolve(__dirname, '..', '..', 'scripts', 'init.sql');
 const REQUIRED_SOCIAL_TABLES = [
     'route_likes',
     'route_comments',
@@ -144,7 +145,7 @@ function ensureDatabaseReady() {
         databaseReadyPromise = (async () => {
             // New path: apply SQL migrations (idempotent, versioned)
             await migrateDatabase(pool, {
-                migrationsDir: path.resolve(__dirname, '../../..', 'migrations'),
+                migrationsDir: path.resolve(__dirname, '..', '..', 'migrations'),
             });
 
             // Legacy path (dev only)

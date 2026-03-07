@@ -43,8 +43,10 @@ async function applyMigration(client, { version, sql }) {
 }
 
 async function migrateDatabase(pool, options = {}) {
+  // In the container: __dirname is /app/src/db
+  // Migrations are copied to /app/migrations
   const migrationsDir =
-    options.migrationsDir || path.resolve(__dirname, '../../..', 'migrations');
+    options.migrationsDir || path.resolve(__dirname, '..', '..', 'migrations');
 
   const files = listMigrationFiles(migrationsDir);
   if (!files.length) {
