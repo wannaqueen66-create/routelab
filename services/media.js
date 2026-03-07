@@ -69,8 +69,9 @@ function uploadSinglePhoto(photo, attempt = 1, maxAttempts = 3) {
     return Promise.reject(error);
   }
 
-  return auth
-    .ensureLogin()
+  // Upload endpoint does not require auth. We should not block uploads when WeChat login is not configured.
+  // If a token exists we still attach it.
+  return Promise.resolve()
     .then(() =>
       new Promise((resolve, reject) => {
         const headers = {};
