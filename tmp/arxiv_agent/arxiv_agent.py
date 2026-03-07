@@ -489,31 +489,31 @@ def result_to_row(query_name: str, item: dict, analysis: dict) -> dict:
 
 def build_email_body(df: pd.DataFrame, today_str: str, top_n: int = 5) -> str:
     lines = []
-    lines.append(f"每日文献简报（{today_str}）")
+    lines.append(f"arxiv_agent 文献简报｜{today_str}")
     lines.append("")
 
     if df.empty:
-        lines.append("今天没有抓到符合条件的新论文。")
+        lines.append("今天没有符合条件的新论文进入最终收录。")
+        lines.append("可检查抓取窗口、相关性阈值、数据源配置或 API 调用情况。")
         return "\n".join(lines)
 
-    lines.append(f"今日入选论文数：{len(df)}")
-    lines.append(f"高相关（>=80分）：{len(df[df['相关性分数'] >= 80])}")
+    lines.append(f"今日最终收录：{len(df)} 篇")
+    lines.append(f"高相关（>=80分）：{len(df[df['相关性分数'] >= 80])} 篇")
     lines.append(f"数据源：{', '.join(sorted(df['source'].dropna().unique()))}")
     lines.append("")
-    lines.append(f"TOP {top_n}")
-    lines.append("")
+    lines.append(f"TOP {top_n} 论文概览")
+    lines.append("-" * 24)
 
     top_df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False]).head(top_n)
     for idx, (_, row) in enumerate(top_df.iterrows(), start=1):
         lines.append(f"{idx}. {row['title']}")
-        lines.append(f"   来源：{row['source']}")
-        lines.append(f"   日期：{row['published_date']}")
-        lines.append(f"   分数：{row['相关性分数']}")
+        lines.append(f"   来源：{row['source']}｜日期：{row['published_date']}｜分数：{row['相关性分数']}")
         lines.append(f"   链接：{row['url']}")
         lines.append(f"   中文摘要：{row['中文摘要']}")
         lines.append(f"   启发：{row['可借鉴启发']}")
         lines.append("")
 
+    lines.append("附件中包含完整 Markdown、Excel 和运行统计。")
     return "\n".join(lines)
 
 
@@ -555,27 +555,34 @@ def send_email_via_brevo(runtime: dict, subject: str, body: str, attachments: li
 
 def write_markdown(md_path: str, df: pd.DataFrame, today_str: str):
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write(f"# arXiv / 多源每日简报（{today_str}）\n\n")
+        f.write(f"# 文献简报（{today_str}）\n\n")
 
         if df.empty:
-            f.write("今天没有抓到符合条件的新论文。\n")
+            f.write("今天没有符合条件的新论文进入最终收录。\n")
+            f.write("\n")
+            f.write("建议检查：\n")
+            f.write("- 抓取窗口是否过窄\n")
+            f.write("- 相关性阈值是否过高\n")
+            f.write("- 数据源是否返回结果\n")
+            f.write("- AI 分析是否成功\n")
             return
 
-        f.write(f"- 今日入选论文数：{len(df)}\n")
-        f.write(f"- 高相关（>=80分）：{len(df[df['相关性分数'] >= 80])}\n")
-        f.write(f"- 中高相关（>=60分）：{len(df[df['相关性分数'] >= 60])}\n")
+        f.write("## 概览\n\n")
+        f.write(f"- 今日最终收录：{len(df)} 篇\n")
+        f.write(f"- 高相关（>=80分）：{len(df[df['相关性分数'] >= 80])} 篇\n")
+        f.write(f"- 中高相关（>=60分）：{len(df[df['相关性分数'] >= 60])} 篇\n")
         f.write(f"- 数据源：{', '.join(sorted(df['source'].dropna().unique()))}\n\n")
 
         top_df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False]).head(5)
-        f.write("## 今日最值得优先看的 TOP 5\n\n")
-        for _, row in top_df.iterrows():
-            f.write(f"- **{row['title']}**（{row['相关性分数']}分）\n")
-            f.write(f"  - 来源：{row['source']}\n")
-            f.write(f"  - 分组：{row['query_name']}\n")
-            f.write(f"  - 链接：{row['url']}\n")
-            f.write(f"  - 中文摘要：{row['中文摘要']}\n")
-            f.write(f"  - 启发：{row['可借鉴启发']}\n")
-        f.write("\n")
+        f.write("## TOP 5 优先关注\n\n")
+        for idx, (_, row) in enumerate(top_df.iterrows(), start=1):
+            f.write(f"### {idx}. {row['title']}\n\n")
+            f.write(f"- 分数：{row['相关性分数']}\n")
+            f.write(f"- 来源：{row['source']}\n")
+            f.write(f"- 分组：{row['query_name']}\n")
+            f.write(f"- 链接：{row['url']}\n")
+            f.write(f"- 中文摘要：{row['中文摘要']}\n")
+            f.write(f"- 可借鉴启发：{row['可借鉴启发']}\n\n")
 
         grouped = df.sort_values(by=["query_name", "相关性分数"], ascending=[True, False]).groupby("query_name")
         for group_name, sub_df in grouped:
@@ -588,7 +595,7 @@ def write_markdown(md_path: str, df: pd.DataFrame, today_str: str):
                 f.write(f"- 分类：{row['primary_category']}\n")
                 f.write(f"- 链接：{row['url']}\n")
                 f.write(f"- 中文摘要：{row['中文摘要']}\n")
-                f.write(f"- 英文摘要：{row['english_abstract']}\n")
+                f.write(f"- 英文摘要：{truncate_text(str(row['english_abstract']), 1200)}\n")
                 f.write(f"- 研究主题：{row['研究主题']}\n")
                 f.write(f"- 空间/场景类型：{row['空间/场景类型']}\n")
                 f.write(f"- 研究场景：{row['研究场景']}\n")
@@ -753,7 +760,7 @@ def main():
 
     if runtime.get("email_enabled"):
         try:
-            email_subject = f"文献简报｜{today_str}｜{len(df)}篇"
+            email_subject = f"[arxiv_agent] 文献简报 {today_str}｜收录 {len(df)} 篇"
             email_body = build_email_body(df, today_str, runtime.get("email_top_n", 5))
             send_email_via_brevo(
                 runtime=runtime,

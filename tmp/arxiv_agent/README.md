@@ -177,6 +177,13 @@ python arxiv_agent.py
 
 运行成功后，会在 `output/` 下生成日报文件。
 
+## 第 8 步（可选）：单独测试邮箱
+如果你只是想确认 Brevo SMTP 是否正常，不想重跑整套抓取流程，可以直接运行：
+
+```bash
+python test_email.py
+```
+
 ---
 
 # 四、配置说明

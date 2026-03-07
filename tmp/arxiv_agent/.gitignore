@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+openai_env/
+.venv/
+venv/
+
+# Local env
+.env
+
+# Runtime outputs
+output/
+papers.db
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
