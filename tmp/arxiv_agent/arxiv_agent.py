@@ -271,7 +271,9 @@ def analyze_paper(client: OpenAI, model: str, title: str, abstract: str, retries
         try:
             response = client.responses.create(model=model, input=prompt)
             text = response.output_text.strip()
-            return parse_analysis_text(text)
+            result = parse_analysis_text(text)
+            result["分析状态"] = "success"
+            return result
         except Exception as e:
             last_error = e
             if attempt < retries:
@@ -293,6 +295,7 @@ def analyze_paper(client: OpenAI, model: str, title: str, abstract: str, retries
         "相关性分数": 0,
         "可借鉴启发": "",
         "原始分析": f"分析失败：{last_error}",
+        "分析状态": "failed",
     }
 
 
@@ -633,7 +636,10 @@ def main():
         "must_have_filtered": 0,
         "cache_hit": 0,
         "analyzed": 0,
+        "analysis_success": 0,
+        "analysis_failed": 0,
         "below_min_relevance": 0,
+        "kept": 0,
     }
 
     for query_name, query_text in queries.items():
@@ -693,6 +699,11 @@ def main():
                     )
                     stats["analyzed"] += 1
 
+                if analysis.get("分析状态") == "failed" or str(analysis.get("原始分析", "")).startswith("分析失败"):
+                    stats["analysis_failed"] += 1
+                else:
+                    stats["analysis_success"] += 1
+
                 row = result_to_row(query_name, item, analysis)
                 if row["相关性分数"] < min_relevance_score:
                     stats["below_min_relevance"] += 1
@@ -714,6 +725,7 @@ def main():
                         analysis=analysis,
                     )
 
+                stats["kept"] += 1
                 all_rows.append(row)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
