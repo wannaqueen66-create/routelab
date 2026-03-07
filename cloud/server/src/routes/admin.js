@@ -11,7 +11,8 @@ const {
     JWT_SECRET,
     DEFAULT_PAGE_SIZE,
     ADMIN_EXPORT_LIMIT,
-    ACTIVITY_TYPE_VALUES
+    ACTIVITY_TYPE_VALUES,
+    PURPOSE_TYPE_DEFINITIONS
 } = require('../config/index');
 
 const {
@@ -33,6 +34,18 @@ const { sanitizeEnumValue } = require('../utils/format');
 
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
+
+function toBucketFormat(items = []) {
+    return items.map((row) => {
+        const key = row.purposeCode || row.activityType || row.key || '';
+        const def = PURPOSE_TYPE_DEFINITIONS?.[key] || null;
+        return {
+            key,
+            label: def?.label || key || '未设置',
+            count: Number(row.count) || 0,
+        };
+    });
+}
 
 // Middleware to ensure admin role
 function ensureAdminRequest(req, res) {
@@ -111,6 +124,45 @@ router.get('/analytics/distribution', ensureAuth, async (req, res) => {
     } catch (error) {
         console.error('GET /api/admin/analytics/distribution failed', error);
         res.status(500).json({ error: 'Failed to compute distribution' });
+    }
+});
+
+// GET /api/admin/analytics/purpose-distribution
+// Compatibility endpoint for web console.
+router.get('/analytics/purpose-distribution', ensureAuth, async (req, res) => {
+    if (!ensureAdminRequest(req, res)) return;
+    const rangeDays = Math.min(Math.max(Number(req.query.rangeDays || req.query.days) || 30, 1), 365);
+
+    try {
+        const items = await computePurposeDistribution(rangeDays);
+        const total = items.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
+        const buckets = toBucketFormat(items).map((bucket) => ({
+            ...bucket,
+            percentage: total > 0 ? Number(((bucket.count / total) * 100).toFixed(2)) : 0,
+        }));
+
+        res.json({ buckets, total, rangeDays });
+    } catch (error) {
+        console.error('GET /api/admin/analytics/purpose-distribution failed', error);
+        res.status(500).json({ error: 'Failed to compute purpose distribution' });
+    }
+});
+
+// GET /api/admin/analytics/quality
+// Compatibility endpoint for web console.
+// Note: detailed GPS quality metrics require client-side classification; currently returns an empty snapshot.
+router.get('/analytics/quality', ensureAuth, async (req, res) => {
+    if (!ensureAdminRequest(req, res)) return;
+    try {
+        res.json({
+            totalPoints: 0,
+            backgroundRatio: 0,
+            weakSignalRatio: 0,
+            interpRatio: 0,
+        });
+    } catch (error) {
+        console.error('GET /api/admin/analytics/quality failed', error);
+        res.status(500).json({ error: 'Failed to compute quality metrics' });
     }
 });
 
