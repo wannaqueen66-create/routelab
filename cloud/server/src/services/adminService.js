@@ -87,22 +87,59 @@ async function computeCollectionDistribution(rangeDays = 30) {
     }));
 }
 
+async function hasColumn({ tableName, columnName, schema = 'public' }) {
+    const result = await pool.query(
+        `SELECT 1
+       FROM information_schema.columns
+      WHERE table_schema = $1
+        AND table_name = $2
+        AND column_name = $3
+      LIMIT 1`,
+        [schema, tableName, columnName]
+    );
+    return result.rows.length > 0;
+}
+
 async function computePurposeDistribution(rangeDays = 30) {
     const cutoff = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
 
+    // Backwards-compatible: some deployments may not yet have routes.purpose_code.
+    const supportsPurposeCode = await hasColumn({ tableName: 'routes', columnName: 'purpose_code' });
+
+    if (supportsPurposeCode) {
+        const result = await pool.query(
+            `SELECT purpose_code, COUNT(*) as count
+       FROM routes
+       WHERE created_at >= $1 AND deleted_at IS NULL AND purpose_code IS NOT NULL
+       GROUP BY purpose_code
+       ORDER BY count DESC`,
+            [cutoff]
+        );
+
+        return result.rows.map((row) => ({
+            purposeCode: row.purpose_code,
+            count: parseInt(row.count || '0', 10),
+        }));
+    }
+
     const result = await pool.query(
-        `SELECT purpose_code, COUNT(*) as count
-     FROM routes
-     WHERE created_at >= $1 AND deleted_at IS NULL AND purpose_code IS NOT NULL
-     GROUP BY purpose_code
-     ORDER BY count DESC`,
+        `SELECT COALESCE(NULLIF(meta->>'purposeCode', ''), NULLIF(meta->>'purposeType', '')) as purpose_code,
+              COUNT(*) as count
+       FROM routes
+       WHERE created_at >= $1
+         AND deleted_at IS NULL
+         AND (meta->>'purposeCode' IS NOT NULL OR meta->>'purposeType' IS NOT NULL)
+       GROUP BY purpose_code
+       ORDER BY count DESC`,
         [cutoff]
     );
 
-    return result.rows.map((row) => ({
-        purposeCode: row.purpose_code,
-        count: parseInt(row.count || '0', 10),
-    }));
+    return result.rows
+        .map((row) => ({
+            purposeCode: row.purpose_code,
+            count: parseInt(row.count || '0', 10),
+        }))
+        .filter((row) => row.purposeCode);
 }
 
 // === Backup ===
