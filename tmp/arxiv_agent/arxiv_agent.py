@@ -692,6 +692,13 @@ def main():
                         retry_delay=retry_delay_seconds,
                     )
                     stats["analyzed"] += 1
+
+                row = result_to_row(query_name, item, analysis)
+                if row["相关性分数"] < min_relevance_score:
+                    stats["below_min_relevance"] += 1
+                    continue
+
+                if not cached:
                     upsert_paper(
                         conn=conn,
                         source=item["source"],
@@ -707,10 +714,6 @@ def main():
                         analysis=analysis,
                     )
 
-                row = result_to_row(query_name, item, analysis)
-                if row["相关性分数"] < min_relevance_score:
-                    stats["below_min_relevance"] += 1
-                    continue
                 all_rows.append(row)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
