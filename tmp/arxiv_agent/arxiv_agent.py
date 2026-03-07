@@ -39,6 +39,7 @@ def load_env() -> tuple[OpenAI, dict]:
         "openai_model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         "days_back": int(os.getenv("DAYS_BACK", "2")),
         "max_results_per_query": int(os.getenv("MAX_RESULTS_PER_QUERY", "30")),
+        "min_relevance_score": int(os.getenv("MIN_RELEVANCE_SCORE", "0")),
         "force_refresh": parse_bool(os.getenv("FORCE_REFRESH"), False),
         "email_enabled": parse_bool(os.getenv("EMAIL_ENABLED"), False),
         "email_smtp_host": os.getenv("EMAIL_SMTP_HOST", "smtp-relay.brevo.com"),
@@ -612,6 +613,7 @@ def main():
     db_path = config.get("db_path", DB_PATH)
     analysis_retries = config.get("analysis_retries", 3)
     retry_delay_seconds = config.get("retry_delay_seconds", 3)
+    min_relevance_score = runtime["min_relevance_score"]
     force_refresh = runtime["force_refresh"]
     sources = config.get("sources", ["arxiv"])
 
@@ -631,6 +633,7 @@ def main():
         "must_have_filtered": 0,
         "cache_hit": 0,
         "analyzed": 0,
+        "below_min_relevance": 0,
     }
 
     for query_name, query_text in queries.items():
@@ -704,7 +707,11 @@ def main():
                         analysis=analysis,
                     )
 
-                all_rows.append(result_to_row(query_name, item, analysis))
+                row = result_to_row(query_name, item, analysis)
+                if row["相关性分数"] < min_relevance_score:
+                    stats["below_min_relevance"] += 1
+                    continue
+                all_rows.append(row)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     excel_path = os.path.join(output_dir, f"{output_prefix}_{today_str}.xlsx")
