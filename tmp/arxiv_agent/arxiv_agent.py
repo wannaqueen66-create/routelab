@@ -101,6 +101,12 @@ def init_db(db_path: str) -> sqlite3.Connection:
             categories TEXT,
             analysis_json TEXT,
             related_score INTEGER,
+            analysis_status TEXT,
+            meets_threshold INTEGER,
+            first_seen_at TEXT,
+            last_seen_at TEXT,
+            reported_at TEXT,
+            report_count INTEGER,
             created_at TEXT,
             updated_at TEXT
         )
@@ -121,6 +127,12 @@ def migrate_db(conn: sqlite3.Connection):
     ensure_column(conn, "papers", "source", "source TEXT")
     ensure_column(conn, "papers", "english_abstract", "english_abstract TEXT")
     ensure_column(conn, "papers", "chinese_summary", "chinese_summary TEXT")
+    ensure_column(conn, "papers", "analysis_status", "analysis_status TEXT")
+    ensure_column(conn, "papers", "meets_threshold", "meets_threshold INTEGER")
+    ensure_column(conn, "papers", "first_seen_at", "first_seen_at TEXT")
+    ensure_column(conn, "papers", "last_seen_at", "last_seen_at TEXT")
+    ensure_column(conn, "papers", "reported_at", "reported_at TEXT")
+    ensure_column(conn, "papers", "report_count", "report_count INTEGER DEFAULT 0")
 
 
 def get_cached_analysis(conn: sqlite3.Connection, url: str) -> dict | None:
@@ -133,6 +145,31 @@ def get_cached_analysis(conn: sqlite3.Connection, url: str) -> dict | None:
         return json.loads(row[0])
     except Exception:
         return None
+
+
+def was_reported(conn: sqlite3.Connection, url: str) -> bool:
+    row = conn.execute(
+        "SELECT reported_at FROM papers WHERE url = ?", (url,)
+    ).fetchone()
+    return bool(row and row[0])
+
+
+def mark_reported(conn: sqlite3.Connection, urls: list[str]):
+    if not urls:
+        return
+    now = datetime.now().isoformat(timespec="seconds")
+    for url in urls:
+        conn.execute(
+            """
+            UPDATE papers
+            SET reported_at = ?,
+                report_count = COALESCE(report_count, 0) + 1,
+                updated_at = ?
+            WHERE url = ?
+            """,
+            (now, now, url),
+        )
+    conn.commit()
 
 
 def upsert_paper(
@@ -148,14 +185,21 @@ def upsert_paper(
     primary_category: str,
     categories: list[str],
     analysis: dict,
+    meets_threshold: bool,
 ):
     now = datetime.now().isoformat(timespec="seconds")
+    existing = conn.execute("SELECT first_seen_at, report_count, reported_at FROM papers WHERE url = ?", (url,)).fetchone()
+    first_seen_at = existing[0] if existing and existing[0] else now
+    report_count = existing[1] if existing and existing[1] is not None else 0
+    reported_at = existing[2] if existing else None
+
     conn.execute(
         """
         INSERT INTO papers (
             url, source, title, english_abstract, chinese_summary, published_date, query_name, authors,
-            primary_category, categories, analysis_json, related_score, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            primary_category, categories, analysis_json, related_score, analysis_status, meets_threshold,
+            first_seen_at, last_seen_at, reported_at, report_count, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(url) DO UPDATE SET
             source=excluded.source,
             title=excluded.title,
@@ -168,6 +212,9 @@ def upsert_paper(
             categories=excluded.categories,
             analysis_json=excluded.analysis_json,
             related_score=excluded.related_score,
+            analysis_status=excluded.analysis_status,
+            meets_threshold=excluded.meets_threshold,
+            last_seen_at=excluded.last_seen_at,
             updated_at=excluded.updated_at
         """,
         (
@@ -183,6 +230,12 @@ def upsert_paper(
             "; ".join(categories),
             json.dumps(analysis, ensure_ascii=False),
             analysis.get("相关性分数", 0),
+            analysis.get("分析状态", "unknown"),
+            1 if meets_threshold else 0,
+            first_seen_at,
+            now,
+            reported_at,
+            report_count,
             now,
             now,
         ),
@@ -654,6 +707,7 @@ def main():
         "analysis_success": 0,
         "analysis_failed": 0,
         "below_min_relevance": 0,
+        "already_reported": 0,
         "kept": 0,
     }
 
@@ -720,25 +774,31 @@ def main():
                     stats["analysis_success"] += 1
 
                 row = result_to_row(query_name, item, analysis)
-                if row["相关性分数"] < min_relevance_score:
+                meets_threshold = row["相关性分数"] >= min_relevance_score
+
+                upsert_paper(
+                    conn=conn,
+                    source=item["source"],
+                    url=url,
+                    title=title,
+                    english_abstract=abstract,
+                    chinese_summary=analysis.get("中文摘要", ""),
+                    published_date=published.strftime("%Y-%m-%d"),
+                    query_name=query_name,
+                    authors=item.get("authors", []),
+                    primary_category=item.get("primary_category", ""),
+                    categories=item.get("categories", []),
+                    analysis=analysis,
+                    meets_threshold=meets_threshold,
+                )
+
+                if not meets_threshold:
                     stats["below_min_relevance"] += 1
                     continue
 
-                if not cached:
-                    upsert_paper(
-                        conn=conn,
-                        source=item["source"],
-                        url=url,
-                        title=title,
-                        english_abstract=abstract,
-                        chinese_summary=analysis.get("中文摘要", ""),
-                        published_date=published.strftime("%Y-%m-%d"),
-                        query_name=query_name,
-                        authors=item.get("authors", []),
-                        primary_category=item.get("primary_category", ""),
-                        categories=item.get("categories", []),
-                        analysis=analysis,
-                    )
+                if was_reported(conn, url):
+                    stats["already_reported"] += 1
+                    continue
 
                 stats["kept"] += 1
                 all_rows.append(row)
@@ -772,6 +832,9 @@ def main():
             print("邮件推送已发送。")
         except Exception as e:
             print(f"邮件推送失败：{e}")
+
+    if not df.empty:
+        mark_reported(conn, df["url"].tolist())
 
     if df.empty:
         print("没有抓到符合条件的新论文。")
