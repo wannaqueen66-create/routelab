@@ -15,6 +15,7 @@
 - Sessions/rounds: Round 1 + Round 2 (counterbalanced orders)
 - Scenes: 6 scenes (same set across modalities)
 - Factors: WWR ∈ {15, 45, 75}, Complexity ∈ {Low, High}
+- Data acquisition: EEG and eye-tracking were collected in the same experiment pipeline and should be treated as alignable multimodal data whenever participant/trial/time mapping is available.
 
 ## 2) Core definitions (fill/confirm)
 ### Scene complexity
@@ -24,8 +25,15 @@
 
 ### Condition naming conventions
 - WWR: 15/45/75 (string/number normalization)
-- Complexity: Low/High
-- Grouping variables (if any): ____
+- Complexity: C0/C1 (or Low/High; keep one canonical label in analysis tables and map the other)
+- Block/Round: two blocks/rounds (often labeled group1/group2 in manifests). Canonical columns:
+  - `round` (1/2, numeric)
+  - `round_label` (group1/group2, optional)
+  Use **one term consistently in writeups** (recommend: “Round”, and in code allow alias `block`).
+- Grouping variables (between-subject):
+  - `Experience` (High/Low)
+  - `SportFreq` (High/Low)
+  - Optional combined 4-level group: `Group4 = SportFreq × Experience`
 
 ## 3) Shared IDs / mapping tables (recommended)
 - subject_id: ____
