@@ -35,6 +35,8 @@ def load_env() -> tuple[OpenAI, dict]:
     if not api_key:
         raise ValueError("没有读取到 OPENAI_API_KEY，请检查 .env 文件。")
 
+    base_url = os.getenv("OPENAI_BASE_URL", "").strip()
+
     runtime = {
         "openai_model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
         "days_back": int(os.getenv("DAYS_BACK", "2")),
@@ -51,7 +53,12 @@ def load_env() -> tuple[OpenAI, dict]:
         "email_use_tls": parse_bool(os.getenv("EMAIL_USE_TLS"), True),
         "email_top_n": int(os.getenv("EMAIL_TOP_N", "5")),
     }
-    return OpenAI(api_key=api_key), runtime
+
+    client_kwargs = {"api_key": api_key}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+
+    return OpenAI(**client_kwargs), runtime
 
 
 def ensure_output_dir(path: str) -> None:

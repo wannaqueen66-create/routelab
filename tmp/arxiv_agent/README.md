@@ -146,8 +146,9 @@ vim .env
 示例：
 
 ```env
-# OpenAI
+# OpenAI / OpenAI-compatible provider
 OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_BASE_URL=
 OPENAI_MODEL=gpt-4.1-mini
 
 # Runtime fetch controls
@@ -183,7 +184,8 @@ python arxiv_agent.py
 ## 1. `.env`：运行时参数
 这些是你平时最常改的参数：
 
-- `OPENAI_API_KEY`：OpenAI Key
+- `OPENAI_API_KEY`：OpenAI Key 或兼容提供商 Key
+- `OPENAI_BASE_URL`：兼容提供商的 API Base URL（如果用官方 OpenAI，可留空）
 - `OPENAI_MODEL`：模型名
 - `DAYS_BACK`：抓最近几天论文
 - `MAX_RESULTS_PER_QUERY`：每个 query 每个源最多抓多少条
@@ -285,6 +287,20 @@ EMAIL_TOP_N=5
 程序跑完后会自动发：
 - 邮件正文：TOP N 论文摘要
 - 附件：Markdown / Excel / stats.json
+
+## OpenAI 兼容提供商说明
+
+如果你使用的不是官方 OpenAI，而是 OpenAI 兼容提供商，请在 `.env` 中填写：
+
+```env
+OPENAI_BASE_URL=https://your-provider.example.com/v1
+OPENAI_MODEL=your-provider-model-name
+```
+
+说明：
+- `OPENAI_BASE_URL` 留空时，默认走官方 OpenAI
+- 如果你走兼容提供商，通常必须填写 `OPENAI_BASE_URL`
+- 模型名是否可用，取决于你的提供商，不一定与官方 OpenAI 完全一致
 
 ---
 
