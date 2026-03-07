@@ -145,7 +145,8 @@ EMAIL_TOP_N=5
 
 `config.yaml` 用于放相对稳定的项目配置，例如：
 
-- `queries`：检索式
+- `queries`：arXiv 专用检索式（保留 `cat:` 分类语法）
+- `generic_queries`：通用文献源检索式（供 OpenAlex / Crossref / Semantic Scholar 使用）
 - `sources`：文献源列表
 - `exclude_keywords`：排噪词
 - `must_have_keywords`：必须命中词
@@ -161,6 +162,12 @@ sources:
   - crossref
   - semantic_scholar
 ```
+
+### 当前检索逻辑
+- **arXiv**：使用 `queries` 中的原版检索式（保留 `cat:` 分类语法）
+- **OpenAlex / Crossref / Semantic Scholar**：使用 `generic_queries` 中的自然语言检索式（不使用 `cat:`）
+
+这样可以保持原版 arXiv 搜索词不变，同时让通用文献源使用更合适的关键词组合。
 
 ---
 

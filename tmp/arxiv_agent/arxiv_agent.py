@@ -441,6 +441,12 @@ def fetch_source_results(source_name: str, query_text: str, max_results: int) ->
     return []
 
 
+def resolve_query_for_source(source_name: str, query_name: str, queries: dict, generic_queries: dict) -> str:
+    if source_name == "arxiv":
+        return queries.get(query_name, "")
+    return generic_queries.get(query_name) or queries.get(query_name, "")
+
+
 def result_to_row(query_name: str, item: dict, analysis: dict) -> dict:
     return {
         "source": item["source"],
@@ -600,6 +606,7 @@ def main():
     days_back = runtime["days_back"]
     max_results_per_query = runtime["max_results_per_query"]
     queries = config.get("queries", {})
+    generic_queries = config.get("generic_queries", {})
     exclude_keywords = config.get("exclude_keywords", [])
     must_have_keywords = config.get("must_have_keywords", [])
     db_path = config.get("db_path", DB_PATH)
@@ -630,8 +637,10 @@ def main():
         print(f"正在抓取 query: {query_name}")
 
         for source_name in sources:
+            effective_query = resolve_query_for_source(source_name, query_name, queries, generic_queries)
             print(f"  来源: {source_name}")
-            source_items = fetch_source_results(source_name, query_text, max_results_per_query)
+            print(f"  使用检索式: {effective_query[:160]}{'...' if len(effective_query) > 160 else ''}")
+            source_items = fetch_source_results(source_name, effective_query, max_results_per_query)
 
             for item in source_items:
                 stats["fetched"] += 1
