@@ -192,6 +192,17 @@ python arxiv_agent.py
 python test_email.py
 ```
 
+## 第 9 步（可选）：使用管理脚本
+当前内置了几个管理脚本：
+
+```bash
+python inspect_db.py        # 查看数据库总览
+python show_pending_pool.py # 查看当前待展示池
+python reset_reported.py all
+python reset_reported.py displayed
+python reset_reported.py both
+```
+
 ---
 
 # 四、配置说明
