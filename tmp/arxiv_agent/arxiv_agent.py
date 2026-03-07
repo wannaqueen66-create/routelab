@@ -21,14 +21,25 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-def load_env() -> tuple[OpenAI, str]:
+def parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def load_env() -> tuple[OpenAI, dict]:
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("没有读取到 OPENAI_API_KEY，请检查 .env 文件。")
 
-    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
-    return OpenAI(api_key=api_key), model
+    runtime = {
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        "days_back": int(os.getenv("DAYS_BACK", "2")),
+        "max_results_per_query": int(os.getenv("MAX_RESULTS_PER_QUERY", "30")),
+        "force_refresh": parse_bool(os.getenv("FORCE_REFRESH"), False),
+    }
+    return OpenAI(api_key=api_key), runtime
 
 
 def ensure_output_dir(path: str) -> None:
@@ -503,20 +514,21 @@ def main():
     print("arxiv agent started")
 
     config = load_config("config.yaml")
-    client, openai_model = load_env()
+    client, runtime = load_env()
 
     output_dir = config.get("output_dir", "output")
     output_prefix = config.get("output_prefix", "arxiv_daily")
     max_chars_per_paper = config.get("max_chars_per_paper", 6000)
-    days_back = config.get("days_back", 2)
-    max_results_per_query = config.get("max_results_per_query", 10)
+    openai_model = runtime["openai_model"]
+    days_back = runtime["days_back"]
+    max_results_per_query = runtime["max_results_per_query"]
     queries = config.get("queries", {})
     exclude_keywords = config.get("exclude_keywords", [])
     must_have_keywords = config.get("must_have_keywords", [])
     db_path = config.get("db_path", DB_PATH)
     analysis_retries = config.get("analysis_retries", 3)
     retry_delay_seconds = config.get("retry_delay_seconds", 3)
-    force_refresh = config.get("force_refresh", False)
+    force_refresh = runtime["force_refresh"]
     sources = config.get("sources", ["arxiv"])
 
     ensure_output_dir(output_dir)

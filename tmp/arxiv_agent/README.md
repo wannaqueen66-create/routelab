@@ -77,9 +77,12 @@ pip install arxiv pandas pyyaml python-dotenv openai openpyxl requests
 ```env
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-4.1-mini
+DAYS_BACK=2
+MAX_RESULTS_PER_QUERY=30
+FORCE_REFRESH=false
 ```
 
-> 以后如果你想换模型，直接改 `.env` 里的 `OPENAI_MODEL`，不用改代码或 `config.yaml`。
+> 以后如果你想换模型、抓取天数、每个 query 的抓取量，或是否强制重跑，直接改 `.env`，不用改代码或 `config.yaml`。
 
 ---
 
@@ -96,16 +99,17 @@ python arxiv_agent.py
 在 `config.yaml` 中可调：
 - `queries`：检索式
 - `sources`：数据源列表
-- `days_back`：抓取最近几天
-- `max_results_per_query`：每个 query 每个源最多抓多少条
 - `exclude_keywords`：排噪词
 - `must_have_keywords`：必须命中词
 - `analysis_retries`：分析失败重试次数
-- `force_refresh`：是否忽略缓存
+- `retry_delay_seconds`
 
 在 `.env` 中可调：
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+- `DAYS_BACK`
+- `MAX_RESULTS_PER_QUERY`
+- `FORCE_REFRESH`
 
 ---
 
