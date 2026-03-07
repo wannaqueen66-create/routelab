@@ -207,13 +207,28 @@ Key fields / 关键字段：
 - `api.uploadEndpoint`: **use `/upload`** so the final request becomes `/api/upload`  
   使用 `/upload`，由统一请求构造函数拼成 `/api/upload`
 - `api.staticBase`: public base URL for uploaded files / 上传文件访问前缀
-- `map.amapWebKey`: AMap Web Service key / 高德 Web Service Key
-- `config/saaa-config.local.js`: local override file for secrets (not committed) / 本地私有覆盖配置（不入库）
+- `config/saaa-config.local.js`: local public override file (not committed) / 本地公开覆盖配置（不入库）
+
+Recommended minimum local config / 推荐最小本地配置：
+- `api.baseUrl`
+- `api.staticBase`
+
+Sensitive values such as database password, JWT secret, WeChat secret, and admin credentials must stay on the cloud side only.
+数据库密码、JWT 密钥、微信 Secret、管理员密码等敏感信息必须只放在云端。
 
 You can create the local file from:
 
 ```bash
 cp config/saaa-config.local.example.js config/saaa-config.local.js
+```
+
+The mini program only needs a public API address and static file base URL to start.
+小程序启动所需的前端本地配置，原则上只保留公开 API 地址和静态资源地址。
+
+Optional public config endpoint / 可选公共配置下发接口：
+
+```text
+GET /api/public/config
 ```
 
 ### Cloud env / 云端环境变量
@@ -256,6 +271,7 @@ Before deploying to production, verify the following:
 - [ ] Upload endpoint path is `/api/upload` through config composition / 上传链路最终落到 `/api/upload`
 - [ ] Admin account is configured securely / 管理员账户已安全配置
 - [ ] Map and weather provider keys are injected from environment / 地图与天气服务 key 已通过环境变量配置
+- [ ] Mini program local config only contains public URLs / 小程序本地配置仅包含公开 URL
 
 ## 8. Development Workflow / 开发流程
 

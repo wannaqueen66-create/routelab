@@ -159,15 +159,29 @@ npm run dev
 - `api.baseUrl`：统一 API 根地址
 - `api.uploadEndpoint`：推荐固定 `/upload`
 - `api.retries`：请求重试次数
-- `map.amapWebKey`：地图/地理服务 key
 
-敏感配置不要直接改主配置文件，建议使用本地覆盖文件：
+小程序端本地配置建议收敛为**最小公开配置**，不要把任何敏感信息放进前端：
 
 ```bash
 cp config/saaa-config.local.example.js config/saaa-config.local.js
 ```
 
-再把真实 key 放到 `config/saaa-config.local.js`（该文件已加入 `.gitignore`，不会提交）。
+最小示例：
+
+```js
+module.exports = {
+  apiBaseUrl: 'https://routelab.qzz.io/api',
+  api: {
+    baseUrl: 'https://routelab.qzz.io/api',
+    staticBase: 'https://routelab.qzz.io/static/uploads',
+  },
+};
+```
+
+说明：
+- 小程序端只保留公开 URL。
+- `JWT_SECRET`、数据库密码、微信 Secret、管理员密码等私密信息必须只放在云端。
+- 可选公共配置下发接口：`GET /api/public/config`
 
 ### 云端（`cloud/.env`）
 

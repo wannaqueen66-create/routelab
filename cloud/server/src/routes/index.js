@@ -12,6 +12,7 @@ const routeRoutes = require('./routes');
 const adminRoutes = require('./admin');
 const proxyRoutes = require('./proxy');
 const announcementRoutes = require('./announcements');
+const publicRoutes = require('./public');
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.use('/user', userRoutes);
 router.use('/routes', routeRoutes);
 router.use('/admin', adminRoutes);
 router.use('/announcements', announcementRoutes);
+router.use('/public', publicRoutes);
 router.use('/', proxyRoutes); // For /weather, /geocode
 
 module.exports = router;

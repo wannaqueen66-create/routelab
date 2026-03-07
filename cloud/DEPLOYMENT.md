@@ -193,22 +193,32 @@
 
 ## 5. 小程序端配置对接云端
 
-1. 修改小程序 `config/saaa-config.js`：
+1. 小程序本地仅保留**公开配置**，不要把任何私密信息放进仓库或本地覆盖文件。
+
+   推荐做法：复制模板并只填写公开 URL：
+
+   ```bash
+   cd /opt/routelab
+   # 本地开发机上执行，不是在云主机里执行
+   cp config/saaa-config.local.example.js config/saaa-config.local.js
+   ```
+
+   `config/saaa-config.local.js` 最小示例：
 
    ```js
    module.exports = {
      apiBaseUrl: 'https://routelab.qzz.io/api',
      api: {
        baseUrl: 'https://routelab.qzz.io/api',
-       timeout: 15000,
-       retries: 1,
-       token: '',
-       uploadEndpoint: '/upload',
        staticBase: 'https://routelab.qzz.io/static/uploads',
      },
-     // 其它配置按需调整
    };
    ```
+
+   说明：
+   - 小程序端必须在运行前知道公开 API 地址，所以前端本地仍需保留 **最小公开配置**。
+   - `JWT_SECRET`、`POSTGRES_PASSWORD`、`WECHAT_SECRET`、管理员密码等私密配置必须只放在云端 `.env`。
+   - 如需获取更多公开运行配置，可访问：`GET /api/public/config`
 
 2. 小程序云端接口说明（与后端保持一一对应）：
 
