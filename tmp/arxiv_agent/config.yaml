@@ -1,0 +1,113 @@
+# ============================================================
+# config.yaml  (arXiv 自动检索 + AI结构化分析：建筑学/体育空间/VR/轨迹)
+# 用途：每天自动抓 arXiv 新论文，并提取 IV/DV/方法/结论（可扩展到 EEG/眼动）
+#
+# YAML 注释用 #；你只需要改：queries 里的关键词/类别，或输出/模型参数
+# ============================================================
+
+# -----------------------------
+# 输出目录与文件名
+# -----------------------------
+output_dir: "output"          # 输出文件夹（不存在会自动创建）
+output_prefix: "arxiv_daily"  # 输出文件名前缀，程序会自动拼接日期（YYYY-MM-DD）
+
+# -----------------------------
+# OpenAI 模型设置
+# -----------------------------
+openai_model: "gpt-4.1-mini"  # 推荐：便宜/快；想更强可换 gpt-4.1（更贵）
+max_chars_per_paper: 6000     # 送入模型的最大字符数（title+abstract），控制成本
+
+# -----------------------------
+# 抓取范围与数量控制（建议保守，后续再调大）
+# -----------------------------
+days_back: 2                  # 只抓最近 N 天的论文，避免重复（建议 1~3）
+max_results_per_query: 30     # 每个 query 最多抓多少条（太大会很烧 token/费用）
+
+# -----------------------------
+# arXiv queries（核心：三条检索式）
+# 说明：
+# - arXiv 没有建筑学分类，因此用：HCI/社会物理/应用统计 等领域 + 建筑/空间/行为关键词
+# - 每个 query 是一个方向：空间行为 / VR实验（含EEG眼动）/ 轨迹mobility
+# - 想“更像建筑学”：就增加 built environment / architecture / indoor 等词
+# - 想“更像体育空间”：加 sports facility/gymnasium/stadium
+# -----------------------------
+queries:
+
+  # ----------------------------------------------------------
+  # 1) 空间行为 / 建筑环境中的使用者行为
+  # 适合：occupant behavior、空间选择、环境/布局对行为影响等
+  # ----------------------------------------------------------
+  spatial_behavior: >
+    (cat:cs.HC OR cat:physics.soc-ph OR cat:stat.AP)
+    AND
+    ("built environment" OR architecture OR indoor OR "indoor environment"
+     OR "spatial behavior" OR "occupant behavior" OR "space use"
+     OR "human behavior" OR "activity pattern" OR "space-time" OR spatiotemporal)
+
+  # ----------------------------------------------------------
+  # 2) VR + 生理测量（EEG/眼动）+ 建筑/空间感知/可供性
+  # 适合：VR实验、空间感知、affordance、presence、gaze/EEG指标等
+  # ----------------------------------------------------------
+  vr_environment: >
+    (cat:cs.HC OR cat:cs.AI OR cat:stat.ML)
+    AND
+    ("virtual reality" OR VR OR "immersive environment")
+    AND
+    ("EEG" OR electroencephalography OR "eye tracking" OR eyetracking OR gaze
+     OR "pupil dilation" OR fixation OR saccade
+     OR neural OR "brain activity")
+    AND
+    ("built environment" OR architecture OR indoor
+     OR "spatial perception" OR perception OR affordance OR presence OR "environmental perception")
+
+  # ----------------------------------------------------------
+  # 3) 时空轨迹 / mobility / movement pattern（可迁移到校园体育空间轨迹研究）
+  # 适合：轨迹聚类、路径模式、移动行为、时空模型等
+  # ----------------------------------------------------------
+  mobility_trajectory: >
+    (cat:physics.soc-ph OR cat:stat.AP OR cat:cs.SI)
+    AND
+    ("human mobility" OR trajectory OR "movement pattern" OR "spatiotemporal mobility"
+     OR "activity space" OR "time geography" OR "path choice" OR "movement ecology")
+
+  # ----------------------------------------------------------
+  # 4)（可选）体育空间专用：如果你希望更贴近“体育空间/场地”
+  # 提醒：arXiv 上体育设施论文并不多，但加上这一条可以捞到少量直接相关的
+  # 不想要就把这一段整块删除即可
+  # ----------------------------------------------------------
+  sports_space_optional: >
+    ("sports facility" OR "sport facility" OR "sports space" OR gymnasium OR stadium OR "sports field"
+     OR "campus sports" OR "recreational facility")
+    AND
+    (trajectory OR mobility OR spatiotemporal OR "space use" OR "occupant behavior"
+     OR "virtual reality" OR VR OR affordance OR "spatial perception")
+
+# -----------------------------
+# （可选）过滤设置：减少“纯算法论文”噪音
+# 说明：如果你发现抓到太多 CV/深度学习纯算法，可以加上 NOT 关键词
+# 注意：arXiv 的 query 语法对 NOT 的支持取决于你用的库/接口实现
+# 如果你的脚本不支持 NOT，可以在代码里做后过滤（title/abstract 关键词排除）
+# -----------------------------
+exclude_keywords:
+  - "segmentation"
+  - "object detection"
+  - "diffusion"
+  - "transformer"
+  - "benchmark"
+  - "large language model"
+  - "LLM"
+  - "GAN"
+
+# -----------------------------
+# （可选）你可以在这里写“必须包含”的关键词，提高相关性
+# 程序若支持，可用于二次过滤；不支持也没关系（留空即可）
+# -----------------------------
+must_have_keywords: []
+
+# -----------------------------
+# 运行与缓存设置
+# -----------------------------
+db_path: "papers.db"          # SQLite 历史库，用于缓存分析结果与去重
+analysis_retries: 3           # LLM 分析失败时的重试次数
+retry_delay_seconds: 3        # 每次重试前的基础等待秒数
+force_refresh: false          # true 时忽略缓存，强制重新分析
