@@ -172,6 +172,8 @@ EMAIL_USERNAME=your_brevo_smtp_username
 EMAIL_PASSWORD=your_brevo_smtp_password
 EMAIL_FROM=you@example.com
 EMAIL_TO=you@example.com
+# 多个收件人示例：
+# EMAIL_TO=you@example.com,another@example.com
 EMAIL_USE_TLS=true
 REPORT_TOP_N=10
 EMAIL_TOP_N=5
@@ -231,7 +233,7 @@ python reset_reported.py both
 - `EMAIL_USERNAME`
 - `EMAIL_PASSWORD`
 - `EMAIL_FROM`
-- `EMAIL_TO`
+- `EMAIL_TO`（支持多个收件人，英文逗号分隔）
 - `EMAIL_USE_TLS`
 - `EMAIL_TOP_N`
 

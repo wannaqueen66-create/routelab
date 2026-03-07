@@ -728,6 +728,13 @@ def build_email_body(df: pd.DataFrame, today_str: str, top_n: int = 5) -> str:
     return "\n".join(lines)
 
 
+def parse_recipients(value: str) -> list[str]:
+    if not value:
+        return []
+    parts = [v.strip() for v in value.split(",")]
+    return [p for p in parts if p]
+
+
 def send_email_via_brevo(runtime: dict, subject: str, body: str, attachments: list[str] | None = None):
     attachments = attachments or []
     required = ["email_username", "email_password", "email_from", "email_to"]
@@ -735,10 +742,14 @@ def send_email_via_brevo(runtime: dict, subject: str, body: str, attachments: li
     if missing:
         raise ValueError(f"邮件推送缺少必要环境变量：{', '.join(missing)}")
 
+    recipients = parse_recipients(runtime["email_to"])
+    if not recipients:
+        raise ValueError("EMAIL_TO 没有可用收件人")
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = runtime["email_from"]
-    msg["To"] = runtime["email_to"]
+    msg["To"] = ", ".join(recipients)
     msg.set_content(body)
 
     for file_path in attachments:
