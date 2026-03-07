@@ -1,8 +1,10 @@
 import json
 import os
+import smtplib
 import sqlite3
 import time
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 
 import arxiv
 import pandas as pd
@@ -38,6 +40,15 @@ def load_env() -> tuple[OpenAI, dict]:
         "days_back": int(os.getenv("DAYS_BACK", "2")),
         "max_results_per_query": int(os.getenv("MAX_RESULTS_PER_QUERY", "30")),
         "force_refresh": parse_bool(os.getenv("FORCE_REFRESH"), False),
+        "email_enabled": parse_bool(os.getenv("EMAIL_ENABLED"), False),
+        "email_smtp_host": os.getenv("EMAIL_SMTP_HOST", "smtp-relay.brevo.com"),
+        "email_smtp_port": int(os.getenv("EMAIL_SMTP_PORT", "587")),
+        "email_username": os.getenv("EMAIL_USERNAME", ""),
+        "email_password": os.getenv("EMAIL_PASSWORD", ""),
+        "email_from": os.getenv("EMAIL_FROM", ""),
+        "email_to": os.getenv("EMAIL_TO", ""),
+        "email_use_tls": parse_bool(os.getenv("EMAIL_USE_TLS"), True),
+        "email_top_n": int(os.getenv("EMAIL_TOP_N", "5")),
     }
     return OpenAI(api_key=api_key), runtime
 
@@ -459,6 +470,72 @@ def result_to_row(query_name: str, item: dict, analysis: dict) -> dict:
     }
 
 
+def build_email_body(df: pd.DataFrame, today_str: str, top_n: int = 5) -> str:
+    lines = []
+    lines.append(f"每日文献简报（{today_str}）")
+    lines.append("")
+
+    if df.empty:
+        lines.append("今天没有抓到符合条件的新论文。")
+        return "\n".join(lines)
+
+    lines.append(f"今日入选论文数：{len(df)}")
+    lines.append(f"高相关（>=80分）：{len(df[df['相关性分数'] >= 80])}")
+    lines.append(f"数据源：{', '.join(sorted(df['source'].dropna().unique()))}")
+    lines.append("")
+    lines.append(f"TOP {top_n}")
+    lines.append("")
+
+    top_df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False]).head(top_n)
+    for idx, (_, row) in enumerate(top_df.iterrows(), start=1):
+        lines.append(f"{idx}. {row['title']}")
+        lines.append(f"   来源：{row['source']}")
+        lines.append(f"   日期：{row['published_date']}")
+        lines.append(f"   分数：{row['相关性分数']}")
+        lines.append(f"   链接：{row['url']}")
+        lines.append(f"   中文摘要：{row['中文摘要']}")
+        lines.append(f"   启发：{row['可借鉴启发']}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def send_email_via_brevo(runtime: dict, subject: str, body: str, attachments: list[str] | None = None):
+    attachments = attachments or []
+    required = ["email_username", "email_password", "email_from", "email_to"]
+    missing = [k for k in required if not runtime.get(k)]
+    if missing:
+        raise ValueError(f"邮件推送缺少必要环境变量：{', '.join(missing)}")
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = runtime["email_from"]
+    msg["To"] = runtime["email_to"]
+    msg.set_content(body)
+
+    for file_path in attachments:
+        if not file_path or not os.path.exists(file_path):
+            continue
+        with open(file_path, "rb") as f:
+            data = f.read()
+        filename = os.path.basename(file_path)
+        maintype = "application"
+        subtype = "octet-stream"
+        if filename.endswith(".md"):
+            maintype, subtype = "text", "markdown"
+        elif filename.endswith(".xlsx"):
+            maintype, subtype = "application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        elif filename.endswith(".json"):
+            maintype, subtype = "application", "json"
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+
+    with smtplib.SMTP(runtime["email_smtp_host"], runtime["email_smtp_port"], timeout=30) as server:
+        if runtime.get("email_use_tls", True):
+            server.starttls()
+        server.login(runtime["email_username"], runtime["email_password"])
+        server.send_message(msg)
+
+
 def write_markdown(md_path: str, df: pd.DataFrame, today_str: str):
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(f"# arXiv / 多源每日简报（{today_str}）\n\n")
@@ -635,6 +712,20 @@ def main():
 
     with open(stats_path, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
+
+    if runtime.get("email_enabled"):
+        try:
+            email_subject = f"文献简报｜{today_str}｜{len(df)}篇"
+            email_body = build_email_body(df, today_str, runtime.get("email_top_n", 5))
+            send_email_via_brevo(
+                runtime=runtime,
+                subject=email_subject,
+                body=email_body,
+                attachments=[md_path, excel_path if not df.empty else "", stats_path],
+            )
+            print("邮件推送已发送。")
+        except Exception as e:
+            print(f"邮件推送失败：{e}")
 
     if df.empty:
         print("没有抓到符合条件的新论文。")

@@ -116,6 +116,15 @@ python arxiv_agent.py
 - `DAYS_BACK`
 - `MAX_RESULTS_PER_QUERY`
 - `FORCE_REFRESH`
+- `EMAIL_ENABLED`
+- `EMAIL_SMTP_HOST`
+- `EMAIL_SMTP_PORT`
+- `EMAIL_USERNAME`
+- `EMAIL_PASSWORD`
+- `EMAIL_FROM`
+- `EMAIL_TO`
+- `EMAIL_USE_TLS`
+- `EMAIL_TOP_N`
 
 ---
 
@@ -132,10 +141,32 @@ python arxiv_agent.py
 
 ---
 
+## Brevo 邮件推送
+
+当前版本已支持通过 Brevo SMTP 发送日报。
+
+在 `.env` 中配置：
+
+```env
+EMAIL_ENABLED=true
+EMAIL_SMTP_HOST=smtp-relay.brevo.com
+EMAIL_SMTP_PORT=587
+EMAIL_USERNAME=your_brevo_smtp_username
+EMAIL_PASSWORD=your_brevo_smtp_password
+EMAIL_FROM=you@example.com
+EMAIL_TO=you@example.com
+EMAIL_USE_TLS=true
+EMAIL_TOP_N=5
+```
+
+程序运行后会自动发送：
+- 邮件正文：TOP N 论文摘要
+- 附件：Markdown 日报 / Excel / stats.json
+
 ## 下一步还值得做的增强
 
 1. PDF 全文二级分析
-2. Telegram / 邮件推送
+2. Telegram 推送
 3. 人工复核字段
 4. 研究标签系统
 5. 长期知识库视图
