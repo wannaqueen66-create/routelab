@@ -203,6 +203,19 @@ def was_reported(conn: sqlite3.Connection, url: str, doi: str = "") -> bool:
     return bool(row and row[0])
 
 
+def was_displayed(conn: sqlite3.Connection, url: str, doi: str = "") -> bool:
+    if doi:
+        row = conn.execute(
+            "SELECT displayed_at FROM papers WHERE doi = ? AND displayed_at IS NOT NULL LIMIT 1", (doi,)
+        ).fetchone()
+        if row:
+            return True
+    row = conn.execute(
+        "SELECT displayed_at FROM papers WHERE url = ?", (url,)
+    ).fetchone()
+    return bool(row and row[0])
+
+
 def mark_reported(conn: sqlite3.Connection, urls: list[str], dois: list[str]):
     if not urls and not dois:
         return
@@ -332,7 +345,16 @@ def upsert_paper(
     content_hash: str,
 ):
     now = datetime.now().isoformat(timespec="seconds")
-    existing = conn.execute("SELECT first_seen_at, report_count, reported_at FROM papers WHERE url = ? OR doi = ? LIMIT 1", (url, doi)).fetchone()
+    if doi:
+        existing = conn.execute(
+            "SELECT first_seen_at, report_count, reported_at FROM papers WHERE url = ? OR doi = ? LIMIT 1",
+            (url, doi),
+        ).fetchone()
+    else:
+        existing = conn.execute(
+            "SELECT first_seen_at, report_count, reported_at FROM papers WHERE url = ? LIMIT 1",
+            (url,),
+        ).fetchone()
     first_seen_at = existing[0] if existing and existing[0] else now
     report_count = existing[1] if existing and existing[1] is not None else 0
     reported_at = existing[2] if existing else None
@@ -976,7 +998,7 @@ def main():
                     stats["below_min_relevance"] += 1
                     continue
 
-                if was_reported(conn, url, item.get("doi", "")):
+                if was_displayed(conn, url, item.get("doi", "")) or was_reported(conn, url, item.get("doi", "")):
                     stats["already_reported"] += 1
                     continue
 
