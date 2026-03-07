@@ -12,8 +12,8 @@
 
 ## 1) Experiment overview (fill/confirm)
 - Participants: ____
-- Sessions/rounds: Round 1 + Round 2 (counterbalanced orders)
-- Scenes: 6 scenes (same set across modalities)
+- Blocks: Block 1 + Block 2 (same 6 scenes repeated; order may be counterbalanced by `Order`)
+- Scenes: 6 scenes per block (same set across modalities)
 - Factors: WWR ∈ {15, 45, 75}, Complexity ∈ {Low, High}
 - Data acquisition: EEG and eye-tracking were collected in the same experiment pipeline and should be treated as alignable multimodal data whenever participant/trial/time mapping is available.
 
@@ -38,7 +38,10 @@
 ## 3) Shared IDs / mapping tables (recommended)
 - subject_id: ____
 - scene_id / scene_name: ____
-- trial_id / block_id / cycle_in_block: ____
+- trial_id: (optional) 1..12, equivalent to `scene_id`
+- block_id: 1..2 (Block 1 / Block 2)
+- cycle_in_block: 1..6 (position within a block)
+- scene_id: 1..12, canonical across modalities: `scene_id = (block_id-1)*6 + cycle_in_block`
 
 ## 4) Output/reporting standards
 - When adding new analyses, update both:
