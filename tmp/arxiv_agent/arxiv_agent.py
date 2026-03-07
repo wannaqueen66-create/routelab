@@ -3,6 +3,7 @@ import os
 import smtplib
 import sqlite3
 import time
+import hashlib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
@@ -16,6 +17,15 @@ from openai import OpenAI
 
 DB_PATH = "papers.db"
 REQUEST_HEADERS = {"User-Agent": "arxiv-agent/1.0"}
+
+
+def normalize_doi(value: str | None) -> str:
+    if not value:
+        return ""
+    doi = value.strip()
+    doi = doi.replace("https://doi.org/", "").replace("http://doi.org/", "")
+    doi = doi.replace("doi.org/", "")
+    return doi.lower()
 
 
 def load_config(config_path: str = "config.yaml") -> dict:
@@ -53,8 +63,8 @@ def load_env() -> tuple[OpenAI, dict]:
         "email_use_tls": parse_bool(os.getenv("EMAIL_USE_TLS"), True),
         "report_top_n": int(os.getenv("REPORT_TOP_N", "10")),
         "email_top_n": int(os.getenv("EMAIL_TOP_N", "5")),
-        "enable_fallback_unreported": parse_bool(os.getenv("ENABLE_FALLBACK_UNREPORTED"), True),
-        "fallback_unreported_days": int(os.getenv("FALLBACK_UNREPORTED_DAYS", "7")),
+        "pending_pool_days": int(os.getenv("PENDING_POOL_DAYS", "7")),
+        "empty_report_email": parse_bool(os.getenv("EMPTY_REPORT_EMAIL"), True),
     }
 
     client_kwargs = {"api_key": api_key}
@@ -92,6 +102,7 @@ def init_db(db_path: str) -> sqlite3.Connection:
         """
         CREATE TABLE IF NOT EXISTS papers (
             url TEXT PRIMARY KEY,
+            doi TEXT,
             source TEXT,
             title TEXT,
             english_abstract TEXT,
@@ -105,10 +116,14 @@ def init_db(db_path: str) -> sqlite3.Connection:
             related_score INTEGER,
             analysis_status TEXT,
             meets_threshold INTEGER,
+            eligible_for_pending INTEGER,
             first_seen_at TEXT,
             last_seen_at TEXT,
+            displayed_at TEXT,
+            display_count INTEGER,
             reported_at TEXT,
             report_count INTEGER,
+            content_hash TEXT,
             created_at TEXT,
             updated_at TEXT
         )
@@ -126,64 +141,130 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, ddl: str):
 
 
 def migrate_db(conn: sqlite3.Connection):
+    ensure_column(conn, "papers", "doi", "doi TEXT")
     ensure_column(conn, "papers", "source", "source TEXT")
     ensure_column(conn, "papers", "english_abstract", "english_abstract TEXT")
     ensure_column(conn, "papers", "chinese_summary", "chinese_summary TEXT")
     ensure_column(conn, "papers", "analysis_status", "analysis_status TEXT")
     ensure_column(conn, "papers", "meets_threshold", "meets_threshold INTEGER")
+    ensure_column(conn, "papers", "eligible_for_pending", "eligible_for_pending INTEGER")
     ensure_column(conn, "papers", "first_seen_at", "first_seen_at TEXT")
     ensure_column(conn, "papers", "last_seen_at", "last_seen_at TEXT")
+    ensure_column(conn, "papers", "displayed_at", "displayed_at TEXT")
+    ensure_column(conn, "papers", "display_count", "display_count INTEGER DEFAULT 0")
     ensure_column(conn, "papers", "reported_at", "reported_at TEXT")
     ensure_column(conn, "papers", "report_count", "report_count INTEGER DEFAULT 0")
+    ensure_column(conn, "papers", "content_hash", "content_hash TEXT")
 
 
-def get_cached_analysis(conn: sqlite3.Connection, url: str) -> dict | None:
+def get_paper_record(conn: sqlite3.Connection, url: str, doi: str = "") -> dict | None:
+    if doi:
+        row = conn.execute(
+            "SELECT url, doi, analysis_json, content_hash, reported_at, displayed_at FROM papers WHERE doi = ? LIMIT 1",
+            (doi,),
+        ).fetchone()
+        if row:
+            return {
+                "url": row[0], "doi": row[1], "analysis_json": row[2],
+                "content_hash": row[3], "reported_at": row[4], "displayed_at": row[5]
+            }
     row = conn.execute(
-        "SELECT analysis_json FROM papers WHERE url = ?", (url,)
+        "SELECT url, doi, analysis_json, content_hash, reported_at, displayed_at FROM papers WHERE url = ? LIMIT 1",
+        (url,),
     ).fetchone()
-    if not row or not row[0]:
+    if row:
+        return {
+            "url": row[0], "doi": row[1], "analysis_json": row[2],
+            "content_hash": row[3], "reported_at": row[4], "displayed_at": row[5]
+        }
+    return None
+
+
+def get_cached_analysis(conn: sqlite3.Connection, url: str, doi: str = "") -> dict | None:
+    record = get_paper_record(conn, url, doi)
+    if not record or not record.get("analysis_json"):
         return None
     try:
-        return json.loads(row[0])
+        return json.loads(record["analysis_json"])
     except Exception:
         return None
 
 
-def was_reported(conn: sqlite3.Connection, url: str) -> bool:
+def was_reported(conn: sqlite3.Connection, url: str, doi: str = "") -> bool:
+    if doi:
+        row = conn.execute(
+            "SELECT reported_at FROM papers WHERE doi = ? AND reported_at IS NOT NULL LIMIT 1", (doi,)
+        ).fetchone()
+        if row:
+            return True
     row = conn.execute(
         "SELECT reported_at FROM papers WHERE url = ?", (url,)
     ).fetchone()
     return bool(row and row[0])
 
 
-def mark_reported(conn: sqlite3.Connection, urls: list[str]):
-    if not urls:
+def mark_reported(conn: sqlite3.Connection, urls: list[str], dois: list[str]):
+    if not urls and not dois:
         return
     now = datetime.now().isoformat(timespec="seconds")
     for url in urls:
         conn.execute(
             """
             UPDATE papers
-            SET reported_at = ?,
-                report_count = COALESCE(report_count, 0) + 1,
-                updated_at = ?
+            SET reported_at = ?, report_count = COALESCE(report_count, 0) + 1, updated_at = ?
             WHERE url = ?
             """,
             (now, now, url),
         )
+    for doi in [d for d in dois if d]:
+        conn.execute(
+            """
+            UPDATE papers
+            SET reported_at = ?, report_count = COALESCE(report_count, 0) + 1, updated_at = ?
+            WHERE doi = ?
+            """,
+            (now, now, doi),
+        )
     conn.commit()
 
 
-def load_fallback_unreported(conn: sqlite3.Connection, days: int, limit: int) -> pd.DataFrame:
+def mark_displayed(conn: sqlite3.Connection, urls: list[str], dois: list[str]):
+    if not urls and not dois:
+        return
+    now = datetime.now().isoformat(timespec="seconds")
+    for url in urls:
+        conn.execute(
+            """
+            UPDATE papers
+            SET displayed_at = ?, display_count = COALESCE(display_count, 0) + 1, updated_at = ?
+            WHERE url = ?
+            """,
+            (now, now, url),
+        )
+    for doi in [d for d in dois if d]:
+        conn.execute(
+            """
+            UPDATE papers
+            SET displayed_at = ?, display_count = COALESCE(display_count, 0) + 1, updated_at = ?
+            WHERE doi = ?
+            """,
+            (now, now, doi),
+        )
+    conn.commit()
+
+
+def load_pending_pool(conn: sqlite3.Connection, days: int, limit: int) -> pd.DataFrame:
     cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
     rows = conn.execute(
         """
-        SELECT source, query_name, published_date, title, url, authors, primary_category, categories,
+        SELECT doi, source, query_name, published_date, title, url, authors, primary_category, categories,
                english_abstract, chinese_summary, analysis_json, related_score
         FROM papers
-        WHERE reported_at IS NULL
+        WHERE displayed_at IS NULL
           AND published_date >= ?
           AND COALESCE(meets_threshold, 0) = 1
+          AND COALESCE(eligible_for_pending, 0) = 1
+          AND analysis_status = 'success'
         ORDER BY related_score DESC, published_date DESC
         LIMIT ?
         """,
@@ -197,21 +278,22 @@ def load_fallback_unreported(conn: sqlite3.Connection, days: int, limit: int) ->
     for row in rows:
         analysis = {}
         try:
-            analysis = json.loads(row[10])
+            analysis = json.loads(row[11])
         except Exception:
             analysis = {}
         items.append(
             {
-                "source": row[0],
-                "query_name": row[1],
-                "published_date": row[2],
-                "title": row[3],
-                "url": row[4],
-                "authors": row[5],
-                "primary_category": row[6],
-                "categories": row[7],
-                "english_abstract": row[8],
-                "中文摘要": row[9],
+                "doi": row[0],
+                "source": row[1],
+                "query_name": row[2],
+                "published_date": row[3],
+                "title": row[4],
+                "url": row[5],
+                "authors": row[6],
+                "primary_category": row[7],
+                "categories": row[8],
+                "english_abstract": row[9],
+                "中文摘要": row[10],
                 "研究主题": analysis.get("研究主题", ""),
                 "空间/场景类型": analysis.get("空间/场景类型", ""),
                 "研究场景": analysis.get("研究场景", ""),
@@ -223,7 +305,7 @@ def load_fallback_unreported(conn: sqlite3.Connection, days: int, limit: int) ->
                 "数据/样本": analysis.get("数据/样本", ""),
                 "主要结论": analysis.get("主要结论", ""),
                 "与建筑/体育空间研究相关性": analysis.get("与建筑/体育空间研究相关性", ""),
-                "相关性分数": row[11],
+                "相关性分数": row[12],
                 "可借鉴启发": analysis.get("可借鉴启发", ""),
                 "原始分析": analysis.get("原始分析", ""),
             }
@@ -235,6 +317,7 @@ def upsert_paper(
     conn: sqlite3.Connection,
     source: str,
     url: str,
+    doi: str,
     title: str,
     english_abstract: str,
     chinese_summary: str,
@@ -245,9 +328,11 @@ def upsert_paper(
     categories: list[str],
     analysis: dict,
     meets_threshold: bool,
+    eligible_for_pending: bool,
+    content_hash: str,
 ):
     now = datetime.now().isoformat(timespec="seconds")
-    existing = conn.execute("SELECT first_seen_at, report_count, reported_at FROM papers WHERE url = ?", (url,)).fetchone()
+    existing = conn.execute("SELECT first_seen_at, report_count, reported_at FROM papers WHERE url = ? OR doi = ? LIMIT 1", (url, doi)).fetchone()
     first_seen_at = existing[0] if existing and existing[0] else now
     report_count = existing[1] if existing and existing[1] is not None else 0
     reported_at = existing[2] if existing else None
@@ -255,11 +340,12 @@ def upsert_paper(
     conn.execute(
         """
         INSERT INTO papers (
-            url, source, title, english_abstract, chinese_summary, published_date, query_name, authors,
+            url, doi, source, title, english_abstract, chinese_summary, published_date, query_name, authors,
             primary_category, categories, analysis_json, related_score, analysis_status, meets_threshold,
-            first_seen_at, last_seen_at, reported_at, report_count, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            eligible_for_pending, first_seen_at, last_seen_at, displayed_at, display_count, reported_at, report_count, content_hash, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(url) DO UPDATE SET
+            doi=excluded.doi,
             source=excluded.source,
             title=excluded.title,
             english_abstract=excluded.english_abstract,
@@ -273,11 +359,14 @@ def upsert_paper(
             related_score=excluded.related_score,
             analysis_status=excluded.analysis_status,
             meets_threshold=excluded.meets_threshold,
+            eligible_for_pending=excluded.eligible_for_pending,
             last_seen_at=excluded.last_seen_at,
+            content_hash=excluded.content_hash,
             updated_at=excluded.updated_at
         """,
         (
             url,
+            doi,
             source,
             title,
             english_abstract,
@@ -291,10 +380,14 @@ def upsert_paper(
             analysis.get("相关性分数", 0),
             analysis.get("分析状态", "unknown"),
             1 if meets_threshold else 0,
+            1 if eligible_for_pending else 0,
             first_seen_at,
             now,
+            None,
+            0,
             reported_at,
             report_count,
+            content_hash,
             now,
             now,
         ),
@@ -442,6 +535,7 @@ def fetch_arxiv_results(query_text: str, max_results: int) -> list[dict]:
         items.append(
             {
                 "source": "arxiv",
+                "doi": normalize_doi(getattr(result, 'doi', '') or ''),
                 "title": (result.title or "").strip(),
                 "abstract": (result.summary or "").strip(),
                 "url": result.entry_id,
@@ -478,6 +572,7 @@ def fetch_openalex_results(query_text: str, max_results: int) -> list[dict]:
             items.append(
                 {
                     "source": "openalex",
+                    "doi": normalize_doi(work.get("doi") or ""),
                     "title": work.get("title", "").strip(),
                     "abstract": abstract.strip(),
                     "url": work.get("primary_location", {}).get("landing_page_url")
@@ -510,6 +605,7 @@ def fetch_crossref_results(query_text: str, max_results: int) -> list[dict]:
             items.append(
                 {
                     "source": "crossref",
+                    "doi": normalize_doi(work.get("DOI") or work.get("doi") or ""),
                     "title": title.strip(),
                     "abstract": (abstract or title).strip(),
                     "url": work.get("URL", ""),
@@ -531,7 +627,7 @@ def fetch_semantic_scholar_results(query_text: str, max_results: int) -> list[di
         params = {
             "query": query_text,
             "limit": min(max_results, 20),
-            "fields": "title,abstract,url,year,authors,publicationDate,fieldsOfStudy",
+            "fields": "title,abstract,url,year,authors,publicationDate,fieldsOfStudy,externalIds",
         }
         data = requests.get(url, params=params, headers=REQUEST_HEADERS, timeout=30).json()
         for paper in data.get("data", []):
@@ -539,6 +635,7 @@ def fetch_semantic_scholar_results(query_text: str, max_results: int) -> list[di
             items.append(
                 {
                     "source": "semantic_scholar",
+                    "doi": normalize_doi(paper.get("externalIds", {}).get("DOI", "") if isinstance(paper.get("externalIds"), dict) else ""),
                     "title": (paper.get("title") or "").strip(),
                     "abstract": (paper.get("abstract") or paper.get("title") or "").strip(),
                     "url": paper.get("url") or f"https://www.semanticscholar.org/paper/{paper.get('paperId','')}",
@@ -573,6 +670,7 @@ def resolve_query_for_source(source_name: str, query_name: str, queries: dict, g
 
 def result_to_row(query_name: str, item: dict, analysis: dict) -> dict:
     return {
+        "doi": item.get("doi", ""),
         "source": item["source"],
         "query_name": query_name,
         "published_date": item["published"].strftime("%Y-%m-%d"),
@@ -754,7 +852,9 @@ def main():
     cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_back)
 
     all_rows = []
+    today_new_rows = []
     seen_urls = set()
+    seen_keys = set()
     stats = {
         "fetched": 0,
         "too_old": 0,
@@ -795,7 +895,8 @@ def main():
                     stats["too_old"] += 1
                     continue
 
-                if url in seen_urls:
+                dedupe_key = ("doi", item.get("doi")) if item.get("doi") else ("url", url)
+                if dedupe_key in seen_keys or url in seen_urls:
                     stats["duplicate"] += 1
                     continue
 
@@ -810,9 +911,14 @@ def main():
                     continue
 
                 seen_urls.add(url)
+                seen_keys.add(dedupe_key)
                 short_abstract = truncate_text(abstract, max_chars_per_paper)
+                content_hash = hashlib.sha256(f"{title}\n{short_abstract}".encode("utf-8", errors="ignore")).hexdigest()
 
-                cached = None if force_refresh else get_cached_analysis(conn, url)
+                record = None if force_refresh else get_paper_record(conn, url, item.get("doi", ""))
+                cached = None
+                if record and record.get("content_hash") == content_hash:
+                    cached = get_cached_analysis(conn, url, item.get("doi", ""))
                 if cached:
                     analysis = cached
                     stats["cache_hit"] += 1
@@ -834,11 +940,13 @@ def main():
 
                 row = result_to_row(query_name, item, analysis)
                 meets_threshold = row["相关性分数"] >= min_relevance_score
+                eligible_for_pending = analysis.get("分析状态") == "success" and meets_threshold
 
                 upsert_paper(
                     conn=conn,
                     source=item["source"],
                     url=url,
+                    doi=item.get("doi", ""),
                     title=title,
                     english_abstract=abstract,
                     chinese_summary=analysis.get("中文摘要", ""),
@@ -849,32 +957,42 @@ def main():
                     categories=item.get("categories", []),
                     analysis=analysis,
                     meets_threshold=meets_threshold,
+                    eligible_for_pending=eligible_for_pending,
+                    content_hash=content_hash,
                 )
 
                 if not meets_threshold:
                     stats["below_min_relevance"] += 1
                     continue
 
-                if was_reported(conn, url):
+                if was_reported(conn, url, item.get("doi", "")):
                     stats["already_reported"] += 1
                     continue
 
                 stats["kept"] += 1
-                all_rows.append(row)
+                today_new_rows.append(row)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
     excel_path = os.path.join(output_dir, f"{output_prefix}_{today_str}.xlsx")
     md_path = os.path.join(output_dir, f"{output_prefix}_{today_str}.md")
     stats_path = os.path.join(output_dir, f"{output_prefix}_{today_str}_stats.json")
 
-    df = pd.DataFrame(all_rows)
+    all_rows = list(today_new_rows)
+    target_size = max(runtime.get("report_top_n", 10), runtime.get("email_top_n", 5))
+    if len(all_rows) < target_size:
+        pending_df = load_pending_pool(conn, runtime.get("pending_pool_days", 7), target_size * 3)
+        if not pending_df.empty:
+            existing_keys = {(r.get('doi') or '', r.get('url')) for r in all_rows}
+            for _, prow in pending_df.iterrows():
+                key = (prow.get('doi') or '', prow.get('url'))
+                if key in existing_keys:
+                    continue
+                all_rows.append(prow.to_dict())
+                existing_keys.add(key)
+                if len(all_rows) >= target_size:
+                    break
 
-    if df.empty and runtime.get("enable_fallback_unreported", True):
-        fallback_limit = max(runtime.get("report_top_n", 10), runtime.get("email_top_n", 5))
-        fallback_df = load_fallback_unreported(conn, runtime.get("fallback_unreported_days", 7), fallback_limit)
-        if not fallback_df.empty:
-            print(f"启用补发机制：从最近 {runtime.get('fallback_unreported_days', 7)} 天中补发 {len(fallback_df)} 篇未报过论文。")
-            df = fallback_df
+    df = pd.DataFrame(all_rows)
 
     if not df.empty:
         df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False])
@@ -882,10 +1000,13 @@ def main():
 
     write_markdown(md_path, df, today_str, runtime.get("report_top_n", 10))
 
+    if not df.empty:
+        mark_displayed(conn, df["url"].tolist(), df.get("doi", pd.Series(dtype=str)).fillna("").tolist())
+
     with open(stats_path, "w", encoding="utf-8") as f:
         json.dump(stats, f, ensure_ascii=False, indent=2)
 
-    if runtime.get("email_enabled"):
+    if runtime.get("email_enabled") and (not df.empty or runtime.get("empty_report_email", True)):
         try:
             email_subject = f"[arxiv_agent] 文献简报 {today_str}｜收录 {len(df)} 篇"
             email_body = build_email_body(df, today_str, runtime.get("email_top_n", 5))
@@ -895,12 +1016,11 @@ def main():
                 body=email_body,
                 attachments=[md_path, excel_path if not df.empty else "", stats_path],
             )
+            if not df.empty:
+                mark_reported(conn, df["url"].tolist(), df.get("doi", pd.Series(dtype=str)).fillna("").tolist())
             print("邮件推送已发送。")
         except Exception as e:
             print(f"邮件推送失败：{e}")
-
-    if not df.empty:
-        mark_reported(conn, df["url"].tolist())
 
     if df.empty:
         print("没有抓到符合条件的新论文。")
