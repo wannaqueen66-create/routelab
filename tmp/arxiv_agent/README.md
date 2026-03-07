@@ -240,6 +240,8 @@ python test_email.py
 这样做的目的是：
 - 保持原版 arXiv 搜索逻辑不变
 - 同时让通用文献源使用更合适的关键词形式
+- 对通用文献源做“温和收敛”，减少纯泛 mobility / perception / behavior 带来的噪音
+- 但仍保留 VR / HCI / 行为 / 生理测量等跨学科入口
 
 ---
 

@@ -81,9 +81,11 @@ queries:
 generic_queries:
 
   spatial_behavior: >
-    "built environment" OR architecture OR indoor OR "indoor environment"
-    OR "spatial behavior" OR "occupant behavior" OR "space use"
-    OR "human behavior" OR "activity pattern" OR "space-time" OR spatiotemporal
+    (("built environment" OR architecture OR indoor OR "indoor environment" OR campus OR spatial)
+    AND
+    ("spatial behavior" OR "occupant behavior" OR "space use" OR "activity pattern" OR spatiotemporal OR "activity space"))
+    OR
+    (HCI AND (space OR spatial OR environment))
 
   vr_environment: >
     ("virtual reality" OR VR OR "immersive environment")
@@ -92,19 +94,22 @@ generic_queries:
      OR "pupil dilation" OR fixation OR saccade
      OR neural OR "brain activity")
     AND
-    ("built environment" OR architecture OR indoor
-     OR "spatial perception" OR perception OR affordance OR presence OR "environmental perception")
+    ("spatial perception" OR affordance OR presence OR "environmental perception"
+     OR "built environment" OR architecture OR indoor OR space OR spatial)
 
   mobility_trajectory: >
-    "human mobility" OR trajectory OR "movement pattern" OR "spatiotemporal mobility"
-    OR "activity space" OR "time geography" OR "path choice" OR "movement ecology"
+    (("human mobility" OR "spatiotemporal mobility" OR trajectory OR "movement pattern" OR "path choice")
+    AND
+    (space OR spatial OR campus OR environment OR "built environment" OR indoor OR stadium OR gymnasium))
+    OR
+    ("activity space" OR "time geography")
 
   sports_space_optional: >
     ("sports facility" OR "sport facility" OR "sports space" OR gymnasium OR stadium OR "sports field"
      OR "campus sports" OR "recreational facility")
     AND
-    (trajectory OR mobility OR spatiotemporal OR "space use" OR "occupant behavior"
-     OR "virtual reality" OR VR OR affordance OR "spatial perception")
+    (mobility OR spatiotemporal OR trajectory OR "space use" OR "occupant behavior"
+     OR "virtual reality" OR VR OR affordance OR "spatial perception" OR gaze OR EEG)
 
 # -----------------------------
 # （可选）过滤设置：减少“纯算法论文”噪音
