@@ -276,8 +276,9 @@ function reverseGeocodeLocalWGS84({ latitude, longitude }) {
   const cached = gridCache.get(`osm:${key}`);
   if (cached) return Promise.resolve(cached);
   const url = buildNominatimUrl({ latitude, longitude });
-  const ua = config?.map?.nominatimUserAgent || 'RouteLab-MP/1.0 (+https://routelab.qzz.io)';
-  return requestJson(url, { timeout: 7000, header: { 'User-Agent': ua } })
+  // NOTE: WeChat mini program forbids setting User-Agent header.
+  // For Nominatim usage policy, prefer proxying via our cloud API.
+  return requestJson(url, { timeout: 7000 })
     .then((data) => parseNominatim(data))
     .then((parsed) => {
       if (parsed) {
