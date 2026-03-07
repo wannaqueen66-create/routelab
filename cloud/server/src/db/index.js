@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+const { migrateDatabase } = require('./migrate');
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
@@ -14,13 +16,11 @@ pool.on('connect', (client) => {
         .catch((error) => console.error('Failed to enforce UTF-8 client encoding', error));
 });
 
-// Corrected path relative to src/db
+// Legacy init.sql path (deprecated)
 const INIT_SQL_PATH = path.resolve(__dirname, '../../..', 'scripts', 'init.sql');
 const REQUIRED_SOCIAL_TABLES = [
     'route_likes',
     'route_comments',
-    'route_comment_likes',
-    'route_comment_replies',
 ];
 
 let databaseReadyPromise = null;
@@ -33,13 +33,19 @@ function splitSqlStatements(sql) {
 }
 
 async function applyInitSql() {
+    // Deprecated: kept only for local/dev compatibility.
     if (!INIT_SQL_PATH) {
         return;
     }
     if (!fs.existsSync(INIT_SQL_PATH)) {
-        console.warn(`Skipping database bootstrap: init script not found at ${INIT_SQL_PATH}`);
         return;
     }
+
+    // Only run legacy init.sql when explicitly enabled.
+    if (process.env.DB_BOOTSTRAP_LEGACY_INIT !== '1') {
+        return;
+    }
+
     let sql;
     try {
         sql = await fs.promises.readFile(INIT_SQL_PATH, 'utf8');
@@ -48,17 +54,17 @@ async function applyInitSql() {
         throw error;
     }
     if (!sql || !sql.trim()) {
-        console.warn('Database init script is empty, skipping bootstrap');
         return;
     }
+
     const statements = splitSqlStatements(sql);
     if (!statements.length) {
-        console.warn('Database init script produced no executable statements, skipping bootstrap');
         return;
     }
+
     const client = await pool.connect();
     try {
-        console.log('Applying database bootstrap script');
+        console.log('Applying legacy database init.sql (DB_BOOTSTRAP_LEGACY_INIT=1)');
         for (const statement of statements) {
             try {
                 await client.query(statement);
@@ -71,10 +77,7 @@ async function applyInitSql() {
                 throw error;
             }
         }
-        console.log('Database bootstrap script applied successfully');
-    } catch (error) {
-        console.error('Database bootstrap failed', error);
-        throw error;
+        console.log('Legacy init.sql applied');
     } finally {
         client.release();
     }
@@ -139,7 +142,14 @@ async function verifyUtf8Encoding() {
 function ensureDatabaseReady() {
     if (!databaseReadyPromise) {
         databaseReadyPromise = (async () => {
+            // New path: apply SQL migrations (idempotent, versioned)
+            await migrateDatabase(pool, {
+                migrationsDir: path.resolve(__dirname, '../../..', 'migrations'),
+            });
+
+            // Legacy path (dev only)
             await applyInitSql();
+
             await verifyUtf8Encoding();
             await verifyRequiredTables();
         })().catch((error) => {

@@ -9,6 +9,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy source code
 COPY src ./src
+COPY migrations ./migrations
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \
