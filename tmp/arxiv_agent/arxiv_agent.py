@@ -53,6 +53,8 @@ def load_env() -> tuple[OpenAI, dict]:
         "email_use_tls": parse_bool(os.getenv("EMAIL_USE_TLS"), True),
         "report_top_n": int(os.getenv("REPORT_TOP_N", "10")),
         "email_top_n": int(os.getenv("EMAIL_TOP_N", "5")),
+        "enable_fallback_unreported": parse_bool(os.getenv("ENABLE_FALLBACK_UNREPORTED"), True),
+        "fallback_unreported_days": int(os.getenv("FALLBACK_UNREPORTED_DAYS", "7")),
     }
 
     client_kwargs = {"api_key": api_key}
@@ -170,6 +172,63 @@ def mark_reported(conn: sqlite3.Connection, urls: list[str]):
             (now, now, url),
         )
     conn.commit()
+
+
+def load_fallback_unreported(conn: sqlite3.Connection, days: int, limit: int) -> pd.DataFrame:
+    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    rows = conn.execute(
+        """
+        SELECT source, query_name, published_date, title, url, authors, primary_category, categories,
+               english_abstract, chinese_summary, analysis_json, related_score
+        FROM papers
+        WHERE reported_at IS NULL
+          AND published_date >= ?
+          AND COALESCE(meets_threshold, 0) = 1
+        ORDER BY related_score DESC, published_date DESC
+        LIMIT ?
+        """,
+        (cutoff, limit),
+    ).fetchall()
+
+    if not rows:
+        return pd.DataFrame()
+
+    items = []
+    for row in rows:
+        analysis = {}
+        try:
+            analysis = json.loads(row[10])
+        except Exception:
+            analysis = {}
+        items.append(
+            {
+                "source": row[0],
+                "query_name": row[1],
+                "published_date": row[2],
+                "title": row[3],
+                "url": row[4],
+                "authors": row[5],
+                "primary_category": row[6],
+                "categories": row[7],
+                "english_abstract": row[8],
+                "中文摘要": row[9],
+                "研究主题": analysis.get("研究主题", ""),
+                "空间/场景类型": analysis.get("空间/场景类型", ""),
+                "研究场景": analysis.get("研究场景", ""),
+                "自变量": analysis.get("自变量", ""),
+                "因变量": analysis.get("因变量", ""),
+                "行为指标": analysis.get("行为指标", ""),
+                "生理/感知指标": analysis.get("生理/感知指标", ""),
+                "研究方法": analysis.get("研究方法", ""),
+                "数据/样本": analysis.get("数据/样本", ""),
+                "主要结论": analysis.get("主要结论", ""),
+                "与建筑/体育空间研究相关性": analysis.get("与建筑/体育空间研究相关性", ""),
+                "相关性分数": row[11],
+                "可借鉴启发": analysis.get("可借鉴启发", ""),
+                "原始分析": analysis.get("原始分析", ""),
+            }
+        )
+    return pd.DataFrame(items)
 
 
 def upsert_paper(
@@ -809,6 +868,13 @@ def main():
     stats_path = os.path.join(output_dir, f"{output_prefix}_{today_str}_stats.json")
 
     df = pd.DataFrame(all_rows)
+
+    if df.empty and runtime.get("enable_fallback_unreported", True):
+        fallback_limit = max(runtime.get("report_top_n", 10), runtime.get("email_top_n", 5))
+        fallback_df = load_fallback_unreported(conn, runtime.get("fallback_unreported_days", 7), fallback_limit)
+        if not fallback_df.empty:
+            print(f"启用补发机制：从最近 {runtime.get('fallback_unreported_days', 7)} 天中补发 {len(fallback_df)} 篇未报过论文。")
+            df = fallback_df
 
     if not df.empty:
         df = df.sort_values(by=["相关性分数", "published_date"], ascending=[False, False])

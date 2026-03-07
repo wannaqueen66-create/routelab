@@ -45,17 +45,20 @@
 - 形成自己的历史文献库
 - 记录论文是否已被正式日报/邮件上报
 
-## 5. 相关性阈值过滤 + 已上报去重
+## 5. 相关性阈值过滤 + 已上报去重 + 补发机制
 支持在 `.env` 中设置：
 
 ```env
 MIN_RELEVANCE_SCORE=70
+ENABLE_FALLBACK_UNREPORTED=true
+FALLBACK_UNREPORTED_DAYS=7
 ```
 
 说明：
 - 抓到并分析过的论文都会进入数据库
 - 只有 **相关性分数 >= 阈值** 的论文才会进入最终日报 / Excel / 邮件输出
 - 已经正式报过的论文，默认不会重复进入下一次日报/邮件
+- 如果当天没有新增达标论文，可自动从最近 N 天中补发“未报过的旧论文”
 
 ## 6. 自动输出日报
 每次运行后默认输出：
@@ -203,6 +206,8 @@ python test_email.py
 - `FORCE_REFRESH`：是否忽略缓存强制重跑
 - `REPORT_TOP_N`：Markdown 简报里展示多少条重点论文
 - `EMAIL_TOP_N`：邮件正文里展示多少条重点论文
+- `ENABLE_FALLBACK_UNREPORTED`：当天没有新增时，是否补发最近 N 天里未报过的旧论文
+- `FALLBACK_UNREPORTED_DAYS`：补发窗口天数
   - `false`：优先复用数据库里的历史分析结果（更快、更省 token）
   - `true`：忽略缓存，重新分析已抓到的论文（适合刚改 prompt、评分逻辑、字段结构后测试）
 
