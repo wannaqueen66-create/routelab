@@ -21,12 +21,14 @@ def load_config(config_path: str = "config.yaml") -> dict:
         return yaml.safe_load(f)
 
 
-def load_env() -> OpenAI:
+def load_env() -> tuple[OpenAI, str]:
     load_dotenv()
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("没有读取到 OPENAI_API_KEY，请检查 .env 文件。")
-    return OpenAI(api_key=api_key)
+
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    return OpenAI(api_key=api_key), model
 
 
 def ensure_output_dir(path: str) -> None:
@@ -501,11 +503,10 @@ def main():
     print("arxiv agent started")
 
     config = load_config("config.yaml")
-    client = load_env()
+    client, openai_model = load_env()
 
     output_dir = config.get("output_dir", "output")
     output_prefix = config.get("output_prefix", "arxiv_daily")
-    openai_model = config.get("openai_model", "gpt-4.1-mini")
     max_chars_per_paper = config.get("max_chars_per_paper", 6000)
     days_back = config.get("days_back", 2)
     max_results_per_query = config.get("max_results_per_query", 10)

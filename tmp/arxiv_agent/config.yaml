@@ -12,9 +12,9 @@ output_dir: "output"          # 输出文件夹（不存在会自动创建）
 output_prefix: "arxiv_daily"  # 输出文件名前缀，程序会自动拼接日期（YYYY-MM-DD）
 
 # -----------------------------
-# OpenAI 模型设置
+# OpenAI 输入长度设置
+# 模型改由 .env 中的 OPENAI_MODEL 控制
 # -----------------------------
-openai_model: "gpt-4.1-mini"  # 推荐：便宜/快；想更强可换 gpt-4.1（更贵）
 max_chars_per_paper: 6000     # 送入模型的最大字符数（title+abstract），控制成本
 
 # -----------------------------

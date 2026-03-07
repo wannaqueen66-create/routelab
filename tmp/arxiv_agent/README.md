@@ -76,7 +76,10 @@ pip install arxiv pandas pyyaml python-dotenv openai openpyxl requests
 
 ```env
 OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=gpt-4.1-mini
 ```
+
+> 以后如果你想换模型，直接改 `.env` 里的 `OPENAI_MODEL`，不用改代码或 `config.yaml`。
 
 ---
 
@@ -99,6 +102,10 @@ python arxiv_agent.py
 - `must_have_keywords`：必须命中词
 - `analysis_retries`：分析失败重试次数
 - `force_refresh`：是否忽略缓存
+
+在 `.env` 中可调：
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
 
 ---
 
