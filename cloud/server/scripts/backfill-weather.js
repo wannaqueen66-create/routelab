@@ -20,12 +20,12 @@ function sleep(ms) {
 }
 
 async function main() {
+    // Points are in route_points table, not routes table
     const { rows } = await pool.query(`
-        SELECT r.id, r.points
+        SELECT r.id, rp.latitude, rp.longitude
         FROM routes r
+        INNER JOIN route_points rp ON rp.route_id = r.id AND rp.seq = 0
         WHERE r.weather IS NULL
-          AND r.points IS NOT NULL
-          AND jsonb_array_length(r.points) > 0
         ORDER BY r.created_at DESC
     `);
 
@@ -39,9 +39,7 @@ async function main() {
 
     for (let i = 0; i < rows.length; i++) {
         const route = rows[i];
-        const points = Array.isArray(route.points) ? route.points : [];
-        const first = points[0];
-        if (!first || !first.latitude || !first.longitude) {
+        if (!route.latitude || !route.longitude) {
             console.log(`  [${i + 1}/${rows.length}] ${route.id} — no valid point, skip`);
             failed++;
             continue;
@@ -49,8 +47,8 @@ async function main() {
 
         try {
             const [weather, air] = await Promise.all([
-                fetchCurrentWeather(first.latitude, first.longitude).catch(() => null),
-                fetchAirQuality(first.latitude, first.longitude).catch(() => null),
+                fetchCurrentWeather(route.latitude, route.longitude).catch(() => null),
+                fetchAirQuality(route.latitude, route.longitude).catch(() => null),
             ]);
 
             if (!weather) {
