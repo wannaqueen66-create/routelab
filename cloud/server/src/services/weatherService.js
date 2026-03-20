@@ -10,6 +10,7 @@ const fetch = require('node-fetch');
 const {
     QWEATHER_API_KEY,
     QWEATHER_BASE_URL,
+    QWEATHER_HOST,
     AMAP_WEB_KEY,
     AQICN_TOKEN,
     WEATHER_USER_AGENT,
@@ -232,10 +233,16 @@ async function fetchQWeatherWeatherSnapshot(latitude, longitude) {
 async function fetchQWeatherAirSnapshot(latitude, longitude) {
     ensureQWeatherConfigured();
     // New API: /airquality/v1/current/{lat}/{lon} (replaces deprecated /v7/air/now)
-    const base = QWEATHER_BASE_URL.replace(/\/$/, '');
+    // Uses QWEATHER_HOST (without /v7 suffix) since this is a new path
+    const host = (QWEATHER_HOST || '').replace(/\/$/, '');
+    if (!host) {
+        const error = new Error('QWeather host is not configured');
+        error.statusCode = 500;
+        throw error;
+    }
     const lat = Number(latitude).toFixed(2);
     const lon = Number(longitude).toFixed(2);
-    const url = `${base}/airquality/v1/current/${lat}/${lon}?lang=zh-hans&key=${QWEATHER_API_KEY}`;
+    const url = `${host}/airquality/v1/current/${lat}/${lon}?lang=zh-hans&key=${QWEATHER_API_KEY}`;
 
     let response;
     try {

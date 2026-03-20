@@ -50,6 +50,13 @@ const QWEATHER_BASE_URL = (() => {
   }
   return '';
 })();
+// Host without /v7 suffix, for new APIs like /airquality/v1
+const QWEATHER_HOST = (() => {
+  const normalizedHost = (QWEATHER_API_HOST || '').replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  if (normalizedHost) return `https://${normalizedHost}`;
+  if (LEGACY_QWEATHER_BASE) return LEGACY_QWEATHER_BASE.replace(/\/v7\/?$/, '').replace(/\/$/, '');
+  return '';
+})();
 const AQICN_TOKEN = process.env.AQICN_TOKEN || '';
 
 const OPEN_METEO_WEATHER_BASE =
@@ -127,6 +134,7 @@ module.exports = {
   QWEATHER_API_KEY,
   QWEATHER_API_HOST,
   QWEATHER_BASE_URL,
+  QWEATHER_HOST,
   AQICN_TOKEN,
   OPEN_METEO_WEATHER_BASE,
   OPEN_METEO_AIR_BASE,
