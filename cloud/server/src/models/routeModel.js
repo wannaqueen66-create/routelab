@@ -45,6 +45,7 @@ async function getAllRouteIdsByUserId(userId, options = {}) {
 
 async function createRoute(userId, routeData) {
     const {
+        id,
         clientId,
         name,
         privacyLevel = 'private',
@@ -61,11 +62,12 @@ async function createRoute(userId, routeData) {
 
     const result = await pool.query(
         `INSERT INTO routes (
-      user_id, client_id, name, privacy_level, activity_type, purpose_code,
+      id, user_id, client_id, name, privacy_level, activity_type, purpose_code,
       start_time, end_time, stats, meta, photos, weather, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
     RETURNING *`,
         [
+            id,
             userId,
             clientId || null,
             name || null,
