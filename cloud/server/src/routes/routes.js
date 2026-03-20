@@ -23,11 +23,72 @@ const {
     softDeleteComment,
     fetchRouteSocialStats,
     getRouteForSocial,
-    getPublicRoutes
+    getPublicRoutes,
+    updateRouteWeather,
 } = require('../models/routeModel');
+
+const {
+    fetchWeatherSnapshot,
+    fetchAirQualitySnapshot,
+    describeAqi,
+    buildExerciseSuggestion,
+} = require('../services/weatherService');
 
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
+
+// --- Async weather backfill (fire-and-forget after route creation) ---
+function backfillWeatherForRoute(routeId, points) {
+    if (!Array.isArray(points) || points.length === 0) return;
+    // Use the first point as the location reference
+    const first = points[0];
+    const lat = Number(first.latitude);
+    const lon = Number(first.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    // Fire-and-forget: don't await, don't block response
+    (async () => {
+        try {
+            const [weather, air] = await Promise.all([
+                fetchWeatherSnapshot(lat, lon),
+                fetchAirQualitySnapshot(lat, lon).catch(() => null),
+            ]);
+
+            const aqi = air?.aqi ?? null;
+            const { level: airLevel, category: airCategory } = describeAqi(aqi);
+            const suggestion = buildExerciseSuggestion({
+                temperature: weather?.temperature,
+                aqi,
+                weatherCode: weather?.weatherCode,
+                windSpeed: weather?.windSpeed,
+                humidity: weather?.humidity,
+            });
+
+            const weatherSnapshot = {
+                temperature: weather?.temperature ?? null,
+                apparentTemperature: weather?.apparentTemperature ?? null,
+                weatherCode: weather?.weatherCode ?? null,
+                weatherText: weather?.weatherText || null,
+                humidity: weather?.humidity ?? null,
+                windSpeed: weather?.windSpeed ?? null,
+                windDirection: weather?.windDirection ?? null,
+                windDirectionText: weather?.windDirectionText || null,
+                aqi,
+                airLevel,
+                airCategory,
+                pm25: air?.pm25 ?? air?.pm2p5 ?? null,
+                suggestion,
+                source: weather?.source || 'unknown',
+                fetchedAt: weather?.fetchedAt || Date.now(),
+            };
+
+            await updateRouteWeather(routeId, weatherSnapshot);
+        } catch (err) {
+            console.error(`[weather-backfill] route=${routeId} failed:`, err.message);
+        }
+    })();
+}
+
 
 const PRIVACY_LEVEL_VALUES = new Set(['private', 'public']);
 
@@ -276,6 +337,11 @@ router.post('/', ensureAuth, async (req, res) => {
         const pointsByRoute = await getPointsByRoute([created.id]);
         const item = mapRouteRow(created, pointsByRoute[created.id] || [], { includePoints: true });
 
+        // Async weather backfill (non-blocking)
+        if (!payload.weather) {
+            backfillWeatherForRoute(created.id, payload.points);
+        }
+
         res.status(201).json({
             route: item,
             lastSyncAt: Date.now(),
@@ -307,6 +373,12 @@ router.put('/:id', ensureAuth, async (req, res) => {
             const created = await createRoute(req.userId, payload);
             const pointsByRoute = await getPointsByRoute([created.id]);
             const item = mapRouteRow(created, pointsByRoute[created.id] || [], { includePoints: true });
+
+            // Async weather backfill (non-blocking)
+            if (!payload.weather) {
+                backfillWeatherForRoute(created.id, payload.points);
+            }
+
             return res.status(201).json({ route: item, upserted: 'created', lastSyncAt: Date.now() });
         }
 

@@ -362,6 +362,19 @@ async function getPublicRoutes(options = {}) {
     return result.rows;
 }
 
+// === Weather Backfill ===
+
+async function updateRouteWeather(routeId, weather) {
+    if (!routeId || !weather) return null;
+    const result = await pool.query(
+        `UPDATE routes SET weather = $1, updated_at = NOW()
+     WHERE id = $2 AND weather IS NULL
+     RETURNING id`,
+        [JSON.stringify(weather), routeId]
+    );
+    return result.rows[0] || null;
+}
+
 module.exports = {
     // Route CRUD
     getRouteById,
@@ -389,4 +402,6 @@ module.exports = {
     getRouteForSocial,
     // Public
     getPublicRoutes,
+    // Weather backfill
+    updateRouteWeather,
 };
