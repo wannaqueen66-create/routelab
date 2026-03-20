@@ -1,8 +1,9 @@
 'use strict';
 
+const { applyThemeMixin } = require('../../utils/theme');
 const api = require('../../services/api');
 
-Page({
+Page(applyThemeMixin({
   data: {
     categoryOptions: [
       { key: 'bug', label: '功能异常 / Bug' },
@@ -63,5 +64,5 @@ Page({
         this.setData({ submitting: false });
       });
   },
-});
+}));
 

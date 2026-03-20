@@ -1,6 +1,7 @@
 .feedback-page {
   min-height: 100vh;
-  background: #f3f4f6;
+  background: var(--color-page-bg);
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .feedback-scroll {
@@ -11,7 +12,7 @@
 }
 
 .feedback-card {
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 24rpx;
   padding: 24rpx;
   box-shadow: 0 12rpx 25rpx rgba(15, 23, 42, 0.06);
@@ -29,17 +30,17 @@
 .feedback-label {
   font-size: 28rpx;
   font-weight: 600;
-  color: #111827;
+  color: var(--color-text-primary);
 }
 
 .feedback-input,
 .feedback-picker,
 .feedback-textarea {
   border-radius: 16rpx;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
   padding: 16rpx 20rpx;
   font-size: 28rpx;
-  background: #f9fafb;
+  background: var(--color-surface-muted);
 }
 
 .feedback-picker {
@@ -59,9 +60,24 @@
   padding: 22rpx;
   font-size: 30rpx;
   color: #ffffff;
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
 }
 
 .feedback-submit-btn::after {
   border: none;
+}
+
+/* Dark mode overrides */
+.dark .feedback-card {
+  box-shadow: 0 12rpx 25rpx rgba(0, 0, 0, 0.3);
+}
+
+.dark .feedback-input,
+.dark .feedback-picker,
+.dark .feedback-textarea {
+  color: var(--color-text-primary);
+}
+
+.dark .feedback-submit-btn {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
 }

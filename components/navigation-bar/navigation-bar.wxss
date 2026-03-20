@@ -113,3 +113,20 @@
   letter-spacing: 1px;
   font-weight: 600;
 }
+
+/* ── Dark mode ── */
+.dark.weui-navigation-bar {
+  background: var(--color-surface, #1e293b);
+  box-shadow: 0 12rpx 24rpx rgba(0, 0, 0, 0.25);
+  border-bottom-color: rgba(248, 250, 252, 0.06);
+}
+
+.dark .weui-navigation-bar__btn_goback_wrapper {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(248, 250, 252, 0.08);
+  box-shadow: 0 12rpx 30rpx rgba(0, 0, 0, 0.3);
+}
+
+.dark .weui-navigation-bar__btn_goback {
+  background-color: #f1f5f9;
+}

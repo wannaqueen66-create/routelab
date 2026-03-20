@@ -1,7 +1,23 @@
-<view class="page">
-  <rlab-nav title="RouteLab · 偏好设置"></rlab-nav>
+<view class="page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="RouteLab · 偏好设置" theme="{{theme}}"></rlab-nav>
 
   <scroll-view class="page__scroll" scroll-y>
+    <view class="section">
+      <view class="section__title">外观模式</view>
+      <view class="theme-options">
+        <view
+          wx:for="{{themeOptions}}"
+          wx:key="key"
+          class="theme-option {{themePreference === item.key ? 'theme-option--active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="handleThemeChange"
+        >
+          <text class="theme-option__icon">{{item.icon}}</text>
+          <text class="theme-option__label">{{item.label}}</text>
+        </view>
+      </view>
+    </view>
+
     <view class="section section--profile-cta">
       <view class="section__title">账户信息</view>
       <view class="section__desc">完善头像与昵称后，可在公共内容中展示专属资料</view>

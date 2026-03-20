@@ -2,8 +2,9 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #f4f6fb 0%, #eef2ff 100%);
-  color: #0f172a;
+  background: var(--gradient-page);
+  color: var(--color-text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .badge-scroll {
@@ -16,7 +17,7 @@
 }
 
 .badge-summary {
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 28rpx;
   padding: 32rpx;
   box-shadow: 0 20rpx 40rpx rgba(15, 23, 42, 0.08);
@@ -28,7 +29,7 @@
 
 .badge-summary__title {
   font-size: 28rpx;
-  color: #64748b;
+  color: var(--color-text-secondary);
 }
 
 .badge-summary__points {
@@ -50,7 +51,7 @@
 
 .badge-summary__hint {
   font-size: 24rpx;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .badge-list {
@@ -64,8 +65,9 @@
   gap: 16rpx;
   padding: 24rpx;
   border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  transition: background 0.3s ease;
   align-items: center;
 }
 
@@ -88,15 +90,38 @@
 .badge-card__title {
   font-size: 30rpx;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--color-text-primary);
 }
 
 .badge-card__range,
 .badge-card__status {
   font-size: 24rpx;
-  color: #475569;
+  color: var(--color-text-secondary);
+}
+
+.badge-card--locked {
+  opacity: 0.5;
 }
 
 .badge-card--unlocked .badge-card__status {
   color: #16a34a;
+}
+
+.badge-card--unlocked {
+  box-shadow: 0 16rpx 36rpx rgba(59, 130, 246, 0.15), 0 0 0 1rpx rgba(59, 130, 246, 0.2);
+}
+
+/* Dark mode overrides */
+.dark .badge-summary {
+  box-shadow: 0 20rpx 40rpx rgba(0, 0, 0, 0.3);
+}
+
+.dark .badge-card {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.dark .badge-card--unlocked {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(147, 197, 253, 0.1));
+  box-shadow: 0 16rpx 36rpx rgba(59, 130, 246, 0.2), 0 0 12rpx rgba(59, 130, 246, 0.15);
 }

@@ -7,6 +7,7 @@
       linear-gradient(180deg, var(--color-page-bg) 0%, var(--color-page-bg-strong) 100%)
     );
     color: var(--color-text-primary);
+    transition: background 0.3s ease, color 0.3s ease;
   }
   
   .sync-status-bar {
@@ -126,7 +127,7 @@
   .history-skeleton__card {
     border-radius: var(--radius-card);
     border: 1rpx solid var(--color-border-soft);
-    background: rgba(255, 255, 255, 0.88);
+    background: var(--color-surface);
     padding: 22rpx;
     display: flex;
     flex-direction: column;
@@ -287,4 +288,39 @@
   .route-card__date {
     font-size: 22rpx;
     color: var(--color-text-tertiary);
+  }
+
+  /* ── Smooth transitions ── */
+  .filter,
+  .route-card,
+  .history-skeleton__card {
+    transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* ── Dark mode overrides ── */
+  .dark .history-skeleton__line {
+    background: linear-gradient(90deg, rgba(51, 65, 85, 0.6), rgba(30, 41, 59, 0.8), rgba(51, 65, 85, 0.6));
+  }
+
+  .dark .sync-status-error {
+    background: rgba(220, 38, 38, 0.18);
+    color: #fca5a5;
+  }
+
+  .dark .sync-status-error__hint {
+    color: #fca5a5;
+  }
+
+  .dark .sync-status-error__retry {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fca5a5;
+  }
+
+  .dark .route-card__sync-error {
+    background: rgba(220, 38, 38, 0.15);
+    color: #fca5a5;
+  }
+
+  .dark .route-card__sync-error-body {
+    color: #fca5a5;
   }

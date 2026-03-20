@@ -1,5 +1,5 @@
-<view class="profile-page">
-  <rlab-nav title="RouteLab · 我的"></rlab-nav>
+<view class="profile-page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="RouteLab · 我的" theme="{{theme}}"></rlab-nav>
 
   <scroll-view class="profile-scroll" scroll-y>
     <view class="profile-card profile-card--identity">

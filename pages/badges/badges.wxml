@@ -1,5 +1,5 @@
-<view class="badge-page">
-  <rlab-nav title="勋章墙"></rlab-nav>
+<view class="badge-page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="勋章墙" theme="{{theme}}"></rlab-nav>
 
   <scroll-view class="badge-scroll" scroll-y>
     <view class="badge-summary">

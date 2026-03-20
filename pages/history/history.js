@@ -1,3 +1,4 @@
+const { applyThemeMixin } = require('../../utils/theme');
 const {
   subscribe,
   getRoutes,
@@ -92,7 +93,7 @@ function formatSyncSummary(status = {}) {
   };
 }
 
-Page({
+Page(applyThemeMixin({
   data: {
     filterTabs: FILTER_TABS,
     activeFilter: 'all',
@@ -318,4 +319,4 @@ Page({
     }
     this.handleForceSyncTap();
   },
-});
+}));

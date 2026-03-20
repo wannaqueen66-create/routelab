@@ -1,4 +1,5 @@
-﻿const { getRoutes, updateRoutePrivacy, deleteRoute, syncRouteToCloud } = require('../../services/route-store');
+﻿const { applyThemeMixin } = require('../../utils/theme');
+const { getRoutes, updateRoutePrivacy, deleteRoute, syncRouteToCloud } = require('../../services/route-store');
 const { PRIVACY_LEVELS, PRIVACY_LEVEL_MAP } = require('../../constants/privacy');
 const { ACTIVITY_TYPE_MAP, DEFAULT_ACTIVITY_TYPE } = require('../../constants/activity');
 const { PURPOSE_MAP } = require('../../constants/purpose');
@@ -7,7 +8,6 @@ const { formatDuration, formatDate, formatClock } = require('../../utils/time');
 const { getActivityLevel } = require('../../services/analytics');
 const { getActivityLevelMeta, ACTIVITY_LEVEL_LIST } = require('../../constants/activity-level');
 const api = require('../../services/api');
-
 function buildPolyline(points = []) {
   if (!Array.isArray(points) || !points.length) {
     return [];
@@ -24,7 +24,6 @@ function buildPolyline(points = []) {
     },
   ];
 }
-
 function buildMarkers(points = [], pausePoints = []) {
   if (!Array.isArray(points) || !points.length) {
     return [];
@@ -63,7 +62,6 @@ function buildMarkers(points = [], pausePoints = []) {
       },
     },
   ];
-
   (pausePoints || []).forEach((point, index) => {
     if (!point) {
       return;
@@ -85,10 +83,8 @@ function buildMarkers(points = [], pausePoints = []) {
       },
     });
   });
-
   return markers;
 }
-
 function normalizePhotos(photos = []) {
   if (!Array.isArray(photos)) {
     return [];
@@ -103,7 +99,6 @@ function normalizePhotos(photos = []) {
     };
   });
 }
-
 function formatDisplayName(nickname, accountId) {
   const raw = typeof nickname === 'string' ? nickname.trim() : '';
   if (raw) {
@@ -115,7 +110,6 @@ function formatDisplayName(nickname, accountId) {
   }
   return 'RouteLab 用户';
 }
-
 function formatCommentReply(reply = {}, fallbackRouteId) {
   if (!reply || typeof reply !== 'object') {
     return null;
@@ -159,7 +153,6 @@ function formatCommentReply(reply = {}, fallbackRouteId) {
     },
   };
 }
-
 function formatCommentThread(comment = {}, fallbackRouteId) {
   if (!comment || typeof comment !== 'object') {
     return null;
@@ -229,7 +222,6 @@ function formatCommentThread(comment = {}, fallbackRouteId) {
     deletedAt: Number.isFinite(deletedAtNumeric) ? deletedAtNumeric : null,
   };
 }
-
 function sortComments(list = []) {
   return [...(Array.isArray(list) ? list : [])].sort((a, b) => {
     const likeDiff = (Number(b.likes) || 0) - (Number(a.likes) || 0);
@@ -239,8 +231,7 @@ function sortComments(list = []) {
     return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
   });
 }
-
-Page({
+Page(applyThemeMixin({
   data: {
     routeId: '',
     detail: null,
@@ -319,7 +310,6 @@ Page({
         ? route.purposeType
         : '';
     const purposeMeta = rawPurpose && PURPOSE_MAP[rawPurpose] ? PURPOSE_MAP[rawPurpose] : null;
-
     this.setData({
       routeId: route.id,
       detail: {
@@ -805,9 +795,4 @@ Page({
       path: `/pages/route-detail/route-detail?id=${this.routeId}`,
     };
   },
-});
-
-
-
-
-
+}));

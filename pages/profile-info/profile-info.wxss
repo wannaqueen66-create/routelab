@@ -21,10 +21,11 @@
 }
 
 .section {
-  background: #ffffff;
+  background: var(--color-surface);
   border-radius: 24rpx;
   padding: 32rpx;
   box-shadow: 0 8rpx 24rpx rgba(18, 38, 77, 0.08);
+  transition: background 0.3s ease;
 }
 
 .section--avatar {
@@ -45,7 +46,7 @@
 .section__label-meta {
   font-size: 26rpx;
   font-weight: 500;
-  color: #8c8c8c;
+  color: var(--color-text-tertiary);
 }
 
 .section__hint {
@@ -70,7 +71,7 @@
   height: 176rpx;
   border-radius: 50%;
   overflow: hidden;
-  background: #f0f2f8;
+  background: var(--color-surface-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -83,7 +84,7 @@
 
 .avatar-preview__placeholder {
   font-size: 28rpx;
-  color: #9aa0b5;
+  color: var(--color-text-tertiary);
 }
 
 .avatar-picker__button {
@@ -102,18 +103,22 @@
 .avatar-picker__fallback {
   flex: 1;
   font-size: 26rpx;
-  color: #9aa0b5;
+  color: var(--color-text-tertiary);
   line-height: 1.6;
 }
 
 .nickname-input {
   margin-top: 24rpx;
   padding: 24rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid var(--color-border);
   border-radius: 16rpx;
   font-size: 30rpx;
-  color: #1f2937;
-  background: #f9fafb;
+  color: var(--color-text-primary);
+  background: var(--color-surface-muted);
+}
+
+.nickname-input:focus {
+  box-shadow: 0 0 0 4rpx var(--color-primary-soft);
 }
 
 .radio-group {
@@ -128,12 +133,12 @@
   align-items: center;
   gap: 12rpx;
   font-size: 28rpx;
-  color: #1f2937;
+  color: var(--color-text-primary);
 }
 
 .radio-group__text {
   font-size: 28rpx;
-  color: #1f2937;
+  color: var(--color-text-primary);
 }
 
 .picker {
@@ -142,15 +147,19 @@
 
 .picker__display {
   padding: 24rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid var(--color-border);
   border-radius: 16rpx;
   font-size: 30rpx;
-  color: #1f2937;
-  background: #f9fafb;
+  color: var(--color-text-primary);
+  background: var(--color-surface-muted);
+}
+
+.picker__display:focus {
+  box-shadow: 0 0 0 4rpx var(--color-primary-soft);
 }
 
 .picker__display--placeholder {
-  color: #9aa0b5;
+  color: var(--color-text-tertiary);
 }
 
 .section--metrics {
@@ -167,16 +176,20 @@
 
 .field__label {
   font-size: 26rpx;
-  color: #475569;
+  color: var(--color-text-secondary);
 }
 
 .field__input {
   padding: 24rpx;
-  border: 1rpx solid #d1d5db;
+  border: 1rpx solid var(--color-border);
   border-radius: 16rpx;
   font-size: 30rpx;
-  color: #1f2937;
-  background: #f9fafb;
+  color: var(--color-text-primary);
+  background: var(--color-surface-muted);
+}
+
+.field__input:focus {
+  box-shadow: 0 0 0 4rpx var(--color-primary-soft);
 }
 
 .save-button {
@@ -191,4 +204,17 @@
 
 .save-button[disabled='true'] {
   opacity: 0.6;
+}
+
+/* Dark mode overrides */
+.dark .section {
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.3);
+}
+
+.dark .avatar-preview {
+  background: var(--color-surface-muted);
+}
+
+.dark .save-button {
+  box-shadow: 0 12rpx 24rpx rgba(47, 73, 209, 0.4);
 }
