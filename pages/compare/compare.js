@@ -1,3 +1,4 @@
+const { applyThemeMixin } = require('../../utils/theme');
 const { subscribe, getRoutes } = require('../../services/route-store');
 const { buildComparisonSummary, getActivityLevel } = require('../../services/analytics');
 const { formatDistance, formatCalories } = require('../../utils/format');
@@ -76,7 +77,7 @@ function normalizeRoute(route) {
   };
 }
 
-Page({
+Page(applyThemeMixin({
   data: {
     summaryCards: [],
     selectedLevel: 'high',
@@ -121,4 +122,4 @@ Page({
       levelRoutes,
     });
   },
-});
+}));

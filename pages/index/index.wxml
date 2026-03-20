@@ -1,5 +1,5 @@
-<view class="page">
-  <rlab-nav title="RouteLab" back="{{false}}"></rlab-nav>
+<view class="page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="RouteLab" back="{{false}}" theme="{{theme}}"></rlab-nav>
 
   <view wx:if="{{!networkConnected}}" class="banner banner--offline">
     <text>当前网络不可用，轨迹会在恢复后自动同步</text>

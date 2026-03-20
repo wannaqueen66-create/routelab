@@ -1,6 +1,7 @@
-﻿<view class="page">
+﻿<view class="page {{theme === 'dark' ? 'dark' : ''}}">
   <rlab-nav
     title="RouteLab · 历史轨迹"
+    theme="{{theme}}"
   ></rlab-nav>
 
   <view class="sync-status-bar">

@@ -1,6 +1,7 @@
-﻿<view class="page">
+﻿<view class="page {{theme === 'dark' ? 'dark' : ''}}">
   <rlab-nav
     title="RouteLab 路线详情"
+    theme="{{theme}}"
   ></rlab-nav>
 
   <scroll-view class="page__scroll" scroll-y wx:if="{{detail}}">

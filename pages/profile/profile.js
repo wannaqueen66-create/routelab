@@ -1,5 +1,6 @@
 'use strict';
 
+const { applyThemeMixin } = require('../../utils/theme');
 const {
   getRecentSettings,
   saveRecentSettings,
@@ -45,7 +46,7 @@ function formatIdentity(value) {
   return IDENTITY_LABELS[value] || '未填写';
 }
 
-Page({
+Page(applyThemeMixin({
   data: {
     avatarUrl: '',
     avatarColor: '#e2e8f0',
@@ -163,4 +164,4 @@ Page({
       confirmText: '知道了',
     });
   },
-});
+}));

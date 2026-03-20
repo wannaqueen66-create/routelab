@@ -1,8 +1,9 @@
 'use strict';
 
+const { applyThemeMixin } = require('../../utils/theme');
 const rewards = require('../../services/rewards');
 
-Page({
+Page(applyThemeMixin({
   data: {
     totalPoints: 0,
     badgeIcon: '🏃',
@@ -29,4 +30,4 @@ Page({
       badges: wall,
     });
   },
-});
+}));

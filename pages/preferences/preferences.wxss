@@ -7,25 +7,27 @@
     linear-gradient(180deg, var(--color-page-bg) 0%, var(--color-page-bg-strong) 100%)
   );
   color: var(--color-text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .page__scroll {
   flex: 1;
-  padding: 32rpx;
+  padding: var(--spacing-page, 32rpx);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 28rpx;
+  gap: var(--spacing-section-gap, 24rpx);
 }
 
 .section {
   background: var(--color-surface);
-  border-radius: 28rpx;
-  padding: 32rpx;
+  border-radius: var(--radius-card, 32rpx);
+  padding: var(--spacing-card, 28rpx);
   box-shadow: var(--shadow-card);
   display: flex;
   flex-direction: column;
   gap: 20rpx;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .section__title {
@@ -35,14 +37,58 @@
 
 .section--profile-cta {
   background: var(--gradient-hero);
-  border: 1px solid rgba(47, 107, 255, 0.08);
+  border: 1px solid var(--color-border);
 }
 
+/* ── Theme selector ── */
+.theme-options {
+  display: flex;
+  gap: 16rpx;
+}
+
+.theme-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  padding: 24rpx 12rpx;
+  border-radius: 20rpx;
+  background: var(--color-surface-muted);
+  border: 2rpx solid var(--color-border);
+  transition: border-color 0.25s ease, background 0.25s ease, transform 0.2s ease;
+}
+
+.theme-option:active {
+  transform: scale(0.97);
+}
+
+.theme-option--active {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.theme-option__icon {
+  font-size: 36rpx;
+}
+
+.theme-option__label {
+  font-size: 24rpx;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.theme-option--active .theme-option__label {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ── Picker ── */
 .picker {
   background: var(--color-surface-muted);
   border-radius: 20rpx;
   padding: 22rpx;
-  border: 1px solid rgba(31, 42, 68, 0.08);
+  border: 1px solid var(--color-border);
 }
 
 .picker__value {
@@ -69,6 +115,7 @@
   line-height: 1.5;
 }
 
+/* ── Field ── */
 .field {
   display: flex;
   flex-direction: column;
@@ -90,15 +137,22 @@
   background: var(--color-surface-muted);
   border-radius: 20rpx;
   padding: 20rpx;
-  border: 1px solid rgba(31, 42, 68, 0.08);
+  border: 1px solid var(--color-border);
   color: var(--color-text-primary);
   font-size: 28rpx;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.field__input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4rpx var(--color-primary-soft);
 }
 
 .field__input::placeholder {
   color: var(--color-text-tertiary);
 }
 
+/* ── Actions ── */
 .actions {
   display: flex;
   flex-direction: column;
@@ -108,29 +162,34 @@
 
 .btn {
   border: none;
-  border-radius: 16rpx;
+  border-radius: var(--radius-pill, 999rpx);
   padding: 24rpx;
   font-size: 30rpx;
   font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn:active {
+  transform: translateY(2rpx) scale(0.98);
 }
 
 .btn--primary {
-  background: linear-gradient(135deg, #2563eb, #4c1d95);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
   color: #ffffff;
-  box-shadow: 0 20rpx 40rpx rgba(37, 99, 235, 0.45);
+  box-shadow: 0 20rpx 40rpx rgba(47, 107, 255, 0.3);
 }
 
 .btn--accent {
-  background: #ffffff;
-  color: #2563eb;
-  border: 1rpx solid rgba(37, 99, 235, 0.3);
-  box-shadow: 0 16rpx 32rpx rgba(37, 99, 235, 0.25);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 1rpx solid rgba(47, 107, 255, 0.3);
+  box-shadow: 0 16rpx 32rpx rgba(47, 107, 255, 0.15);
 }
 
 .btn--ghost {
-  background: rgba(37, 99, 235, 0.1);
-  color: #1d4ed8;
-  border: 1px solid rgba(37, 99, 235, 0.3);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border: 1px solid rgba(47, 107, 255, 0.2);
 }
 
 .btn::after {
@@ -142,4 +201,16 @@
   font-size: 24rpx;
   color: var(--color-text-secondary);
   margin-top: 12rpx;
+}
+
+/* ── Dark mode overrides ── */
+.dark .btn--primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 20rpx 40rpx rgba(59, 130, 246, 0.3);
+}
+
+.dark .btn--accent {
+  background: var(--color-surface);
+  border-color: rgba(96, 165, 250, 0.2);
+  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.2);
 }

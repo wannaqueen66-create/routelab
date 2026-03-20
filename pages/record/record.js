@@ -1,5 +1,6 @@
 ﻿'use strict';
 
+const { applyThemeMixin } = require('../../utils/theme');
 const { checkLocationAuthorization, requestLocationAuthorization, openLocationSetting } = require('../../utils/permissions');
 const tracker = require('../../services/tracker');
 const { PRIVACY_LEVELS } = require('../../constants/privacy');
@@ -119,7 +120,7 @@ function inferActivityByAverageSpeed(distance = 0, duration = 0) {
   return 'ride';
 }
 
-Page({
+Page(applyThemeMixin({
   data: {
     tracking: false,
     paused: false,
@@ -1310,5 +1311,5 @@ Page({
         }
       });
   },
-});
+}));
 

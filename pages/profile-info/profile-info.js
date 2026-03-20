@@ -1,3 +1,4 @@
+const { applyThemeMixin } = require('../../utils/theme');
 const mediaService = require('../../services/media');
 const api = require('../../services/api');
 const {
@@ -51,7 +52,7 @@ function formatDateInput(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-Page({
+Page(applyThemeMixin({
   data: {
     avatarPreview: '',
     avatarRemoteUrl: '',
@@ -357,4 +358,4 @@ Page({
         });
       });
   },
-});
+}));
