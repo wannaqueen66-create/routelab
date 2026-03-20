@@ -480,4 +480,73 @@ module.exports = {
     fetchAdminUserDetail,
     // Routes
     fetchAdminRoutes,
+    fetchAdminRouteDetail,
+};
+ntsResult = await pool.query(
+        `SELECT * FROM route_points WHERE route_id = $1 ORDER BY seq ASC`,
+        [routeId]
+    );
+
+    const points = pointsResult.rows.map((point) => ({
+        id: point.id,
+        seq: point.seq,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        altitude: point.altitude,
+        timestamp: point.timestamp?.getTime() || null,
+        createdAt: point.created_at?.getTime() || null,
+      })
+    );
+
+    return {
+        id: row.id,
+        userId: row.user_id,
+        ownerId: row.user_id,
+        owner: {
+            id: row.user_id,
+            displayName: row.owner_nickname || null,
+            avatar: row.owner_avatar || null,
+        },
+        ownerNickname: row.owner_nickname || null,
+        ownerAvatar: row.owner_avatar || null,
+        clientId: row.client_id,
+        name: row.name,
+        title: row.name,
+        activityType: row.activity_type,
+        purposeCode: row.purpose_code,
+        privacyLevel: row.privacy_level,
+        startTime: row.start_time?.getTime() || null,
+        endTime: row.end_time?.getTime() || null,
+        stats: row.stats || {},
+        statSummary: row.stats || {},
+        meta: row.meta || {},
+        photos: row.photos || [],
+        weather: row.weather || null,
+        pointCount: points.length,
+        points,
+        createdAt: row.created_at?.getTime() || null,
+        updatedAt: row.updated_at?.getTime() || null,
+        deletedAt: row.deleted_at?.getTime() || null,
+    };
+}
+
+module.exports = {
+    // Analytics
+    computeAdminAnalyticsSummary,
+    computeAdminAnalyticsTimeseries,
+    computeCollectionDistribution,
+    computePurposeDistribution,
+    // Backup
+    buildBackupSnapshot,
+    saveBackupToDisk,
+    listAvailableBackups,
+    loadBackupFromDisk,
+    // Export
+    serializeCsvValue,
+    buildRoutesCsv,
+    // Users
+    fetchAdminUsers,
+    fetchAdminUserDetail,
+    // Routes
+    fetchAdminRoutes,
 };

@@ -27,7 +27,8 @@ const {
     buildRoutesCsv,
     fetchAdminUsers,
     fetchAdminUserDetail,
-    fetchAdminRoutes
+    fetchAdminRoutes,
+    fetchAdminRouteDetail
 } = require('../services/adminService');
 
 const { sanitizeEnumValue } = require('../utils/format');
@@ -389,6 +390,23 @@ router.post('/backups/restore', ensureAuth, async (req, res) => {
         const snapshot = loadBackupFromDisk(filename);
         // Note: Actual restore logic would need to be implemented carefully
         // This is a placeholder that just validates the backup file
+        res.json({
+            filename,
+            version: snapshot.version,
+            createdAt: snapshot.createdAt,
+            users: snapshot.users?.length || 0,
+            routes: snapshot.routes?.length || 0,
+            routePoints: snapshot.routePoints?.length || 0,
+            message: 'Backup file validated successfully. Full restore not implemented yet.',
+        });
+    } catch (error) {
+        console.error('POST /api/admin/backups/restore failed', error);
+        res.status(500).json({ error: 'Failed to restore backup' });
+    }
+});
+
+module.exports = router;
+validates the backup file
         res.json({
             filename,
             version: snapshot.version,
