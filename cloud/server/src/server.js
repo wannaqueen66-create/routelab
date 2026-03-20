@@ -6,9 +6,10 @@
  */
 
 const { app, upload } = require('./app');
-const { PORT } = require('./config/index');
+const { PORT, JWT_SECRET } = require('./config/index');
 const { ensureDatabaseReady } = require('./db/index');
 const apiRoutes = require('./routes/index');
+const createEnsureAuth = require('./middlewares/ensureAuth');
 
 let routesRegistered = false;
 
@@ -19,7 +20,8 @@ function registerRoutes(targetApp = app) {
 
   targetApp.use('/api', apiRoutes);
 
-  targetApp.post('/api/upload', upload.single('file'), (req, res) => {
+  const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
+  targetApp.post('/api/upload', ensureAuth, upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -60,6 +62,15 @@ async function startServer() {
 }
 
 if (require.main === module) {
+  // Global error handlers to prevent silent crashes
+  process.on('unhandledRejection', (reason) => {
+    console.error('[FATAL] Unhandled Promise rejection:', reason);
+  });
+  process.on('uncaughtException', (err) => {
+    console.error('[FATAL] Uncaught exception:', err);
+    process.exit(1);
+  });
+
   startServer();
 }
 

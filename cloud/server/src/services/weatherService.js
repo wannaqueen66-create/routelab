@@ -91,33 +91,33 @@ function findClosestTimeIndex(times = []) {
 
 function buildExerciseSuggestion({ temperature, aqi, weatherCode, windSpeed, humidity }) {
     if (temperature === null || temperature === undefined) {
-        return 'Weather data is temporarily unavailable. Please try again later.';
+        return '天气数据暂时不可用，请稍后再试。';
     }
     if (aqi !== null && aqi !== undefined) {
         const value = Number(aqi);
         if (!Number.isNaN(value) && value >= 150) {
-            return 'Air quality is poor. Reduce outdoor intensity and consider a mask.';
+            return '空气质量较差，建议减少户外运动强度，佩戴口罩。';
         }
     }
     if (weatherCode !== null && weatherCode !== undefined) {
         const rainyCodes = [51, 53, 55, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99];
         if (rainyCodes.includes(Number(weatherCode))) {
-            return 'Rain is expected. Prepare rain gear or train indoors.';
+            return '预计有降雨，建议携带雨具或改为室内运动。';
         }
         const snowyCodes = [71, 73, 75, 77, 85, 86];
         if (snowyCodes.includes(Number(weatherCode))) {
-            return 'Conditions may be icy. Choose safe routes or move indoors.';
+            return '路面可能结冰，建议选择安全路线或改为室内运动。';
         }
     }
     if (humidity !== null && humidity !== undefined && Number(humidity) >= 85) {
-        return 'Humidity is high. Rehydrate often and avoid overheating.';
+        return '湿度较高，请注意及时补水，避免过度运动。';
     }
     if (windSpeed !== null && windSpeed !== undefined && Number(windSpeed) >= 25) {
-        return 'Strong winds today. Keep warm and limit long outdoor sessions.';
+        return '今天风力较大，注意保暖，减少长时间户外运动。';
     }
-    if (temperature <= 0) return 'It is quite cold. Dress warmly and shorten outdoor time.';
-    if (temperature >= 32) return 'Hot weather forecast. Slow down, stay shaded, and hydrate well.';
-    return 'Weather looks good. Maintain your planned outdoor training.';
+    if (temperature <= 0) return '气温较低，注意保暖，适当缩短户外运动时间。';
+    if (temperature >= 32) return '天气炎热，注意防晒补水，避免高温时段运动。';
+    return '天气不错，可以按计划进行户外运动。';
 }
 
 // === QWeather Functions ===

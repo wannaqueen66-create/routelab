@@ -20,12 +20,12 @@ USER nodejs
 
 # Environment
 ENV NODE_ENV=production
-ENV PORT=4000
+ENV PORT=8080
 
-EXPOSE 4000
+EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "const p=process.env.PORT||4000;const url='http://127.0.0.1:'+p+'/api/ping';require('http').get(url,(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+  CMD node -e "const p=process.env.PORT||8080;const url='http://127.0.0.1:'+p+'/api/ping';require('http').get(url,(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
 CMD ["node", "src/server.js"]
