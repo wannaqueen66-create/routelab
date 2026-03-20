@@ -6,8 +6,8 @@
 
 const { pool } = require('../src/db/index');
 const {
-    fetchCurrentWeather,
-    fetchAirQuality,
+    fetchWeatherSnapshot,
+    fetchAirQualitySnapshot,
     describeAqi,
     buildExerciseSuggestion,
 } = require('../src/services/weatherService');
@@ -47,8 +47,8 @@ async function main() {
 
         try {
             const [weather, air] = await Promise.all([
-                fetchCurrentWeather(route.latitude, route.longitude).catch(() => null),
-                fetchAirQuality(route.latitude, route.longitude).catch(() => null),
+                fetchWeatherSnapshot(route.latitude, route.longitude).catch(() => null),
+                fetchAirQualitySnapshot(route.latitude, route.longitude).catch(() => null),
             ]);
 
             if (!weather) {
