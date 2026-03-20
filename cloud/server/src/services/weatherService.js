@@ -11,6 +11,7 @@ const {
     QWEATHER_API_KEY,
     QWEATHER_BASE_URL,
     AMAP_WEB_KEY,
+    AQICN_TOKEN,
     WEATHER_USER_AGENT,
     OPEN_METEO_WEATHER_BASE,
     OPEN_METEO_AIR_BASE
@@ -229,31 +230,70 @@ async function fetchQWeatherWeatherSnapshot(latitude, longitude) {
 }
 
 async function fetchQWeatherAirSnapshot(latitude, longitude) {
-    const location = `${longitude},${latitude}`;
-    const { payload } = await requestQWeather(
-        '/air/now',
-        { location, lang: 'zh-hans' },
-        'air/now'
-    );
-    const now = payload.now || {};
-    const fetchedAt = Date.now();
-    const aqi = normalizeNumberValue(now.aqi);
+    ensureQWeatherConfigured();
+    // New API: /airquality/v1/current/{lat}/{lon} (replaces deprecated /v7/air/now)
+    const base = QWEATHER_BASE_URL.replace(/\/$/, '');
+    const lat = Number(latitude).toFixed(2);
+    const lon = Number(longitude).toFixed(2);
+    const url = `${base}/airquality/v1/current/${lat}/${lon}?lang=zh-hans&key=${QWEATHER_API_KEY}`;
+
+    let response;
+    try {
+        response = await fetch(url, {
+            headers: {
+                'User-Agent': WEATHER_USER_AGENT,
+                Accept: 'application/json',
+            },
+        });
+    } catch (networkError) {
+        console.error('[QWeather] airquality/v1 network error');
+        networkError.statusCode = 502;
+        throw networkError;
+    }
+
+    if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        console.error('[QWeather] airquality/v1 error', {
+            url: url.replace(QWEATHER_API_KEY, '***'),
+            httpStatus: response.status,
+            body: text.slice(0, 200),
+        });
+        const error = new Error('QWeather air quality v1 failed');
+        error.statusCode = response.status;
+        throw error;
+    }
+
+    const payload = await response.json();
+    const indexes = Array.isArray(payload.indexes) ? payload.indexes : [];
+    const pollutants = Array.isArray(payload.pollutants) ? payload.pollutants : [];
+
+    // Prefer China AQI (cn-mep), fall back to US EPA, then QAQI
+    const chinaIndex = indexes.find((i) => i.code === 'cn-mep');
+    const usIndex = indexes.find((i) => i.code === 'us-epa');
+    const bestIndex = chinaIndex || usIndex || indexes[0];
+
+    const aqi = bestIndex ? normalizeNumberValue(bestIndex.aqi) : null;
     const meta = describeAqi(aqi);
-    const category = typeof now.category === 'string' ? now.category : '';
-    const level = category || now.level || meta.level;
+
+    // Extract pollutant concentrations
+    function findPollutant(code) {
+        const p = pollutants.find((item) => item.code === code);
+        return p ? normalizeNumberValue(p.concentration?.value) : null;
+    }
 
     return {
         aqi: aqi ?? null,
-        category: category || meta.category,
-        level,
-        pm2p5: normalizeNumberValue(now.pm2p5),
-        pm25: normalizeNumberValue(now.pm2p5),
-        pm10: normalizeNumberValue(now.pm10),
-        o3: normalizeNumberValue(now.o3),
-        so2: normalizeNumberValue(now.so2),
-        no2: normalizeNumberValue(now.no2),
-        co: normalizeNumberValue(now.co),
-        fetchedAt,
+        category: bestIndex?.category || meta.category,
+        level: bestIndex?.level || meta.level,
+        pm2p5: findPollutant('pm2p5'),
+        pm25: findPollutant('pm2p5'),
+        pm10: findPollutant('pm10'),
+        o3: findPollutant('o3'),
+        so2: findPollutant('so2'),
+        no2: findPollutant('no2'),
+        co: findPollutant('co'),
+        healthAdvice: bestIndex?.health?.advice?.generalPopulation || null,
+        fetchedAt: Date.now(),
         source: 'qweather',
     };
 }
@@ -403,6 +443,49 @@ async function fetchOpenMeteoAirQualitySnapshot(latitude, longitude) {
     };
 }
 
+// === AQICN (World Air Quality Index) ===
+
+async function fetchAqicnAirSnapshot(latitude, longitude) {
+    if (!AQICN_TOKEN) {
+        const error = new Error('AQICN token is not configured');
+        error.statusCode = 500;
+        throw error;
+    }
+    const url = `https://api.waqi.info/feed/geo:${latitude};${longitude}/?token=${AQICN_TOKEN}`;
+
+    const response = await fetch(url, {
+        headers: { 'User-Agent': WEATHER_USER_AGENT },
+    });
+    if (!response.ok) {
+        const error = new Error('AQICN request failed');
+        error.statusCode = response.status;
+        throw error;
+    }
+
+    const payload = await response.json();
+    if (payload.status !== 'ok' || !payload.data) {
+        const error = new Error('AQICN response invalid: ' + (payload.status || 'unknown'));
+        error.statusCode = 502;
+        throw error;
+    }
+
+    const data = payload.data;
+    const iaqi = data.iaqi || {};
+
+    return {
+        aqi: normalizeNumberValue(data.aqi),
+        pm25: iaqi.pm25?.v != null ? normalizeNumberValue(iaqi.pm25.v) : null,
+        pm10: iaqi.pm10?.v != null ? normalizeNumberValue(iaqi.pm10.v) : null,
+        o3: iaqi.o3?.v != null ? normalizeNumberValue(iaqi.o3.v) : null,
+        so2: iaqi.so2?.v != null ? normalizeNumberValue(iaqi.so2.v) : null,
+        no2: iaqi.no2?.v != null ? normalizeNumberValue(iaqi.no2.v) : null,
+        co: iaqi.co?.v != null ? normalizeNumberValue(iaqi.co.v) : null,
+        stationName: data.city?.name || null,
+        fetchedAt: Date.now(),
+        source: 'aqicn',
+    };
+}
+
 // === Unified Fetchers (with fallback) ===
 
 async function fetchWeatherSnapshot(latitude, longitude) {
@@ -445,6 +528,7 @@ async function fetchWeatherSnapshot(latitude, longitude) {
 async function fetchAirQualitySnapshot(latitude, longitude) {
     const errors = [];
 
+    // 1. QWeather (new v1 API, best China precision at 1x1km)
     if (QWEATHER_API_KEY && QWEATHER_BASE_URL) {
         try {
             return await fetchQWeatherAirSnapshot(latitude, longitude);
@@ -454,6 +538,17 @@ async function fetchAirQualitySnapshot(latitude, longitude) {
         }
     }
 
+    // 2. AQICN (China national monitoring stations, real EPA data)
+    if (AQICN_TOKEN) {
+        try {
+            return await fetchAqicnAirSnapshot(latitude, longitude);
+        } catch (error) {
+            error.provider = 'aqicn';
+            errors.push(error);
+        }
+    }
+
+    // 3. Open-Meteo (global fallback, CAMS model)
     try {
         return await fetchOpenMeteoAirQualitySnapshot(latitude, longitude);
     } catch (error) {
@@ -477,6 +572,7 @@ module.exports = {
     fetchAmapWeatherSnapshot,
     fetchOpenMeteoWeatherSnapshot,
     fetchOpenMeteoAirQualitySnapshot,
+    fetchAqicnAirSnapshot,
     // Unified (with fallback)
     fetchWeatherSnapshot,
     fetchAirQualitySnapshot,

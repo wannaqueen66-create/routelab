@@ -50,6 +50,8 @@ const QWEATHER_BASE_URL = (() => {
   }
   return '';
 })();
+const AQICN_TOKEN = process.env.AQICN_TOKEN || '';
+
 const OPEN_METEO_WEATHER_BASE =
   (process.env.OPEN_METEO_WEATHER_BASE || 'https://api.open-meteo.com/v1/forecast').replace(
     /\/$/,
@@ -125,6 +127,7 @@ module.exports = {
   QWEATHER_API_KEY,
   QWEATHER_API_HOST,
   QWEATHER_BASE_URL,
+  AQICN_TOKEN,
   OPEN_METEO_WEATHER_BASE,
   OPEN_METEO_AIR_BASE,
   GEOCODE_OSM_BASE_URL,
