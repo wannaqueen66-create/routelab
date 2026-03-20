@@ -1,5 +1,5 @@
-<view class="feedback-page">
-  <rlab-nav title="问题反馈"></rlab-nav>
+<view class="feedback-page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="问题反馈" theme="{{theme}}"></rlab-nav>
 
   <scroll-view scroll-y class="feedback-scroll" enable-back-to-top>
     <view class="feedback-card">

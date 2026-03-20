@@ -362,6 +362,18 @@ function saveAchievementStats(stats = {}) {
   return payload;
 }
 
+function getThemePreference() {
+  const value = safeGet(STORAGE_KEYS.THEME_PREFERENCE, 'auto');
+  if (['light', 'dark', 'auto'].includes(value)) return value;
+  return 'auto';
+}
+
+function setThemePreference(value) {
+  const normalized = ['light', 'dark', 'auto'].includes(value) ? value : 'auto';
+  safeSet(STORAGE_KEYS.THEME_PREFERENCE, normalized);
+  return normalized;
+}
+
 module.exports = {
   getRoutes,
   saveRoute,
@@ -390,4 +402,6 @@ module.exports = {
   saveAchievementStats,
   getLatestSeenAnnouncement,
   setLatestSeenAnnouncement,
+  getThemePreference,
+  setThemePreference,
 };

@@ -8,7 +8,7 @@
     syncRoutesToCloud,
   } = require('./services/route-store');
 const auth = require('./services/auth');
-const { getRecentSettings, getUserProfile, getUserAccount, saveAchievementStats } = require('./utils/storage');
+const { getRecentSettings, getUserProfile, getUserAccount, saveAchievementStats, getThemePreference, setThemePreference } = require('./utils/storage');
 const { saveRecentSettings, setKeepScreenPreference } = require('./utils/storage');
 const {
   checkLocationAuthorization,
@@ -64,6 +64,8 @@ function isStoredProfileComplete(profile) {
 }
   
 App({
+  _themeListeners: [],
+
   globalData: {
     routes: [],
     networkConnected: true,
@@ -71,6 +73,7 @@ App({
       loggedIn: false,
       profileComplete: false,
       profileSnapshot: null,
+      theme: 'light',
     },
 
     buildProfileSnapshot() {
@@ -126,9 +129,53 @@ App({
       });
     },
   
+    resolveTheme() {
+      const pref = getThemePreference();
+      let effective = 'light';
+      if (pref === 'dark') {
+        effective = 'dark';
+      } else if (pref === 'auto') {
+        try {
+          const sysInfo = wx.getSystemInfoSync();
+          effective = sysInfo.theme === 'dark' ? 'dark' : 'light';
+        } catch (_) {
+          effective = 'light';
+        }
+      }
+      this.globalData.theme = effective;
+      this._themeListeners.forEach((cb) => {
+        try { cb(effective); } catch (_) {}
+      });
+      return effective;
+    },
+
+    setTheme(preference) {
+      setThemePreference(preference);
+      return this.resolveTheme();
+    },
+
+    onThemeUpdate(cb) {
+      if (typeof cb === 'function' && !this._themeListeners.includes(cb)) {
+        this._themeListeners.push(cb);
+      }
+    },
+
+    offThemeUpdate(cb) {
+      this._themeListeners = this._themeListeners.filter((fn) => fn !== cb);
+    },
+
     onLaunch() {
       logger.ensureLogFile();
       logger.info('App launch');
+
+      this.resolveTheme();
+      if (typeof wx.onThemeChange === 'function') {
+        wx.onThemeChange(() => {
+          if (getThemePreference() === 'auto') {
+            this.resolveTheme();
+          }
+        });
+      }
 
       this.profilePrompting = false;
       this.lastProfilePromptAt = 0;

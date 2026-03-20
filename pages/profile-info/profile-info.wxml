@@ -1,5 +1,5 @@
-<view class="page">
-  <rlab-nav title="RouteLab · 个人信息"></rlab-nav>
+<view class="page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="RouteLab · 个人信息" theme="{{theme}}"></rlab-nav>
   <scroll-view class="page__scroll" scroll-y>
     <form class="form" bindsubmit="handleSubmit">
       <view class="section section--avatar">

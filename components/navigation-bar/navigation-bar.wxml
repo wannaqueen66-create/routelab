@@ -1,4 +1,4 @@
-<view class="weui-navigation-bar {{extClass}}">
+<view class="weui-navigation-bar {{extClass}} {{theme === 'dark' ? 'dark' : ''}}">
   <view class="weui-navigation-bar__inner {{ios ? 'ios' : 'android'}}" style="color: {{color}}; background: {{background}}; {{displayStyle}}; {{innerPaddingRight}}; {{safeAreaTop}};">
 
     <!-- 左侧按钮 -->

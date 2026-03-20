@@ -34,6 +34,10 @@ Component({
       type: Boolean,
       value: false,
     },
+    theme: {
+      type: String,
+      value: '',
+    },
     animated: {
       // 显示隐藏的时候 opacity 动画效果
       type: Boolean,

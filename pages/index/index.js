@@ -1,5 +1,6 @@
 'use strict';
 
+const { applyThemeMixin } = require('../../utils/theme');
 const {
   checkLocationAuthorization,
   requestLocationAuthorization,
@@ -154,7 +155,7 @@ const DEFAULT_USER_CARD = buildUserCard({
   overview: EMPTY_OVERVIEW,
 });
 
-Page({
+Page(applyThemeMixin({
   data: {
     tabs: TAB_META,
     activeTab: TAB_META[0].key,
@@ -825,4 +826,4 @@ Page({
       icon: 'none',
     });
   },
-});
+}));

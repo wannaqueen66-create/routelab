@@ -1,4 +1,4 @@
-<view class="record-page">
+<view class="record-page {{theme === 'dark' ? 'dark' : ''}}">
   <view class="map-region">
     <view class="record-nav">
       <rlab-nav
