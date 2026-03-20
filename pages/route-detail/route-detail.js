@@ -335,6 +335,8 @@ Page(applyThemeMixin({
           : '本次路线未填写出行目的',
         purposeIcon: purposeMeta ? purposeMeta.icon : '？',
         hasPurpose: !!purposeMeta,
+        weather: route.weather || null,
+        hasWeather: !!(route.weather && route.weather.temperature !== undefined),
       },
       polyline: buildPolyline(route.points),
       markers: buildMarkers(route.points, route.meta?.pausePoints),

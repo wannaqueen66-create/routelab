@@ -36,9 +36,11 @@ services:
       PORT: ${API_PORT:-8080}
       STORAGE_LOCAL_PATH: /data/uploads
       STORAGE_BASE_URL: ${STORAGE_BASE_URL:-https://routelab.qzz.io/static/uploads}
+      BACKUP_STORAGE_PATH: /data/backups
       DATABASE_URL: postgres://${POSTGRES_USER:-routelab}:${POSTGRES_PASSWORD:?set in .env}@db:5432/${POSTGRES_DB:-routelab}
     volumes:
       - api_uploads:/data/uploads
+      - api_backups:/data/backups
       - ./scripts:/scripts:ro
     expose:
       - "8080"
@@ -70,3 +72,4 @@ services:
 volumes:
   db_data:
   api_uploads:
+  api_backups:

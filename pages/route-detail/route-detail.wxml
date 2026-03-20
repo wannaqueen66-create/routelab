@@ -56,6 +56,38 @@
       <view class="category__desc">{{detail.activityLevel.description}}</view>
     </view>
 
+    <!-- Weather snapshot -->
+    <view class="section weather-section" wx:if="{{detail.hasWeather}}">
+      <view class="section__title">出行天气</view>
+      <view class="weather-card">
+        <view class="weather-card__main">
+          <text class="weather-card__temp">{{detail.weather.temperature}}°</text>
+          <text class="weather-card__text">{{detail.weather.weatherText || '未知'}}</text>
+        </view>
+        <view class="weather-card__details">
+          <view class="weather-card__item" wx:if="{{detail.weather.apparentTemperature !== undefined}}">
+            <text class="weather-card__label">体感</text>
+            <text class="weather-card__value">{{detail.weather.apparentTemperature}}°</text>
+          </view>
+          <view class="weather-card__item" wx:if="{{detail.weather.humidity !== undefined}}">
+            <text class="weather-card__label">湿度</text>
+            <text class="weather-card__value">{{detail.weather.humidity}}%</text>
+          </view>
+          <view class="weather-card__item" wx:if="{{detail.weather.windSpeed !== undefined}}">
+            <text class="weather-card__label">风速</text>
+            <text class="weather-card__value">{{detail.weather.windSpeed}} km/h</text>
+          </view>
+          <view class="weather-card__item" wx:if="{{detail.weather.aqi !== undefined}}">
+            <text class="weather-card__label">AQI</text>
+            <text class="weather-card__value">{{detail.weather.aqi}}</text>
+          </view>
+        </view>
+        <view class="weather-card__suggestion" wx:if="{{detail.weather.suggestion}}">
+          <text>{{detail.weather.suggestion}}</text>
+        </view>
+      </view>
+    </view>
+
     <view class="section category-legend" wx:if="{{levelStandards.length}}">
       <view class="section__title">评定标准</view>
       <view class="category-legend__grid">
