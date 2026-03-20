@@ -21,6 +21,11 @@ router.get('/ping', (req, res) => {
     res.json({ status: 'ok', time: Date.now() });
 });
 
+// Compatibility metrics endpoint for legacy web views
+router.get('/metrics/daily', async (req, res) => {
+    res.json({ items: [], total: 0, days: Number(req.query.days || 14) || 14 });
+});
+
 // Mount sub-routers
 router.use('/login', authRoutes);
 router.use('/user', userRoutes);

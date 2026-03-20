@@ -379,6 +379,107 @@ router.post('/backups', ensureAuth, async (req, res) => {
     }
 });
 
+// GET /api/admin/maintenance/backup/:filename
+router.get('/maintenance/backup/:filename', ensureAuth, async (req, res) => {
+    if (!ensureAdminRequest(req, res)) return;
+    const filename = req.params.filename;
+    if (!filename) {
+        return res.status(400).json({ error: 'Backup filename is required' });
+    }
+    try {
+        const snapshot = loadBackupFromDisk(filename);
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify(snapshot, null, 2));
+    } catch (error) {
+        console.error('GET /api/admin/maintenance/backup/:filename failed', error);
+        res.status(500).json({ error: 'Failed to download backup' });
+    }
+});
+
+// POST /api/admin/maintenance/restore
+router.post('/maintenance/restore', ensureAuth, async (req, res) => {
+    if (!ensureAdminRequest(req, res)) return;
+    const { filename } = req.body || {};
+    if (!filename) {
+        return res.status(400).json({ error: 'Backup filename is required' });
+    }
+    try {
+        const snapshot = loadBackupFromDisk(filename);
+        res.json({
+            filename,
+            version: snapshot.version,
+            createdAt: snapshot.createdAt,
+            users: snapshot.users?.length || 0,
+            routes: snapshot.routes?.length || 0,
+            routePoints: snapshot.routePoints?.length || 0,
+            message: 'Backup file validated successfully. Full restore not implemented yet.',
+        });
+    } catch (error) {
+        console.error('POST /api/admin/maintenance/restore failed', error);
+        res.status(500).json({ error: 'Failed to restore backup' });
+    }
+});
+
+// POST /api/admin/backups/restore
+router.post('/backups/restore', ensureAuth, async (req, res) => {
+    if (!ensureAdminRequest(req, res)) return;
+    const { filename } = req.body || {};
+    if (!filename) {
+        return res.status(400).json({ error: 'Backup filename is required' });
+    }
+    try {
+        const snapshot = loadBackupFromDisk(filename);
+        // Note: Actual restore logic would need to be implemented carefully
+        // This is a placeholder that just validates the backup file
+        res.json({
+            filename,
+            version: snapshot.version,
+            createdAt: snapshot.createdAt,
+            users: snapshot.users?.length || 0,
+            routes: snapshot.routes?.length || 0,
+            routePoints: snapshot.routePoints?.length || 0,
+            message: 'Backup file validated successfully. Full restore not implemented yet.',
+        });
+    } catch (error) {
+        console.error('POST /api/admin/backups/restore failed', error);
+        res.status(500).json({ error: 'Failed to restore backup' });
+    }
+});
+
+module.exports = router;
+validates the backup file
+        res.json({
+            filename,
+            version: snapshot.version,
+            createdAt: snapshot.createdAt,
+            users: snapshot.users?.length || 0,
+            routes: snapshot.routes?.length || 0,
+            routePoints: snapshot.routePoints?.length || 0,
+            message: 'Backup file validated successfully. Full restore not implemented yet.',
+        });
+    } catch (error) {
+        console.error('POST /api/admin/backups/restore failed', error);
+        res.status(500).json({ error: 'Failed to restore backup' });
+    }
+});
+
+module.exports = router;
+apshot();
+        const { filename, filepath } = await saveBackupToDisk(snapshot);
+        res.json({
+            filename,
+            createdAt: snapshot.createdAt,
+            users: snapshot.users.length,
+            routes: snapshot.routes.length,
+            routePoints: snapshot.routePoints.length,
+        });
+    } catch (error) {
+        console.error('POST /api/admin/backups failed', error);
+        res.status(500).json({ error: 'Failed to create backup' });
+    }
+});
+
 // POST /api/admin/backups/restore
 router.post('/backups/restore', ensureAuth, async (req, res) => {
     if (!ensureAdminRequest(req, res)) return;
