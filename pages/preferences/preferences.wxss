@@ -13,6 +13,7 @@
 .page__scroll {
   flex: 1;
   padding: var(--spacing-page, 32rpx);
+  padding-bottom: calc(var(--spacing-page, 32rpx) + env(safe-area-inset-bottom) + 20rpx);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -187,9 +188,9 @@
 }
 
 .btn--ghost {
-  background: var(--color-primary-soft);
+  background: rgba(47, 107, 255, 0.1);
   color: var(--color-primary);
-  border: 1px solid rgba(47, 107, 255, 0.2);
+  border: 1px solid rgba(47, 107, 255, 0.3);
 }
 
 .btn::after {
