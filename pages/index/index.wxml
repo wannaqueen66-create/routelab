@@ -242,21 +242,19 @@
               </view>
             </block>
           </view>
-          <view class="settings-row settings-row--link" bindtap="handleCompleteProfile">
+          <view class="settings-row settings-row--link" hover-class="row-hover" bindtap="handleCompleteProfile">
             <text class="settings-row__title">完善个人信息</text>
             <text class="settings-row__link-text">前往</text>
           </view>
         </view>
 
         <view class="profile-section profile-section--settings">
-          <view class="settings-row">
+          <view class="settings-row settings-row--link" hover-class="row-hover" bindtap="handleOpenPreferences">
             <view class="settings-row__texts">
-              <text class="settings-row__title">同步数据</text>
-              <text class="settings-row__desc">{{syncInfo.pending > 0 ? syncInfo.pending + ' 条待同步' : '上次：' + syncInfo.lastSyncText}}</text>
+              <text class="settings-row__title">偏好设置</text>
+              <text class="settings-row__desc">主题、隐私等级与体重身高设置</text>
             </view>
-            <button class="btn btn--ghost btn--sm" loading="{{syncBusy}}" catchtap="handleManualSync">
-              {{syncBusy ? '' : '同步'}}
-            </button>
+            <text class="settings-row__link-text">前往</text>
           </view>
           <view class="settings-divider"></view>
           <view class="settings-row">
@@ -267,15 +265,17 @@
             <switch checked="{{userCard.defaultPublic}}" bindchange="handlePrivacySwitchChange"></switch>
           </view>
           <view class="settings-divider"></view>
-          <view class="settings-row settings-row--link" bindtap="handleOpenPreferences">
+          <view class="settings-row">
             <view class="settings-row__texts">
-              <text class="settings-row__title">偏好设置</text>
-              <text class="settings-row__desc">主题、隐私等级与体重设置</text>
+              <text class="settings-row__title">同步数据</text>
+              <text class="settings-row__desc">{{syncInfo.pending > 0 ? syncInfo.pending + ' 条待同步' : '上次：' + syncInfo.lastSyncText}}</text>
             </view>
-            <text class="settings-row__link-text">前往</text>
+            <button class="btn btn--outline btn--sm" loading="{{syncBusy}}" catchtap="handleManualSync">
+              {{syncBusy ? '' : '同步'}}
+            </button>
           </view>
           <view class="settings-divider"></view>
-          <view class="settings-row settings-row--link" bindtap="handleOpenFeedback">
+          <view class="settings-row settings-row--link" hover-class="row-hover" bindtap="handleOpenFeedback">
             <view class="settings-row__texts">
               <text class="settings-row__title">问题反馈</text>
               <text class="settings-row__desc">遇到问题或提交功能建议</text>
@@ -283,7 +283,7 @@
             <text class="settings-row__link-text">填写</text>
           </view>
           <view class="settings-divider"></view>
-          <view class="settings-row settings-row--link" bindtap="handleOpenAbout">
+          <view class="settings-row settings-row--link" hover-class="row-hover" bindtap="handleOpenAbout">
             <view class="settings-row__texts">
               <text class="settings-row__title">关于 RouteLab</text>
               <text class="settings-row__desc">了解应用版本与协议信息</text>
