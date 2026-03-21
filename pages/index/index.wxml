@@ -224,15 +224,8 @@
               </view>
             </view>
           </view>
-          <view class="profile-card__badge" bindtap="handleOpenBadgeWall">
-            <text class="profile-card__badge-icon">{{userCard.badgeIcon}}</text>
-            <view class="profile-card__badge-info">
-              <text class="profile-card__badge-label">{{userCard.badgeLabel}}</text>
-              <text class="profile-card__badge-sub">{{userCard.badgeUnlockedText}}</text>
-            </view>
-          </view>
           <view class="profile-card__hint-row" bindtap="handleOpenBadgeWall">
-            <text class="profile-card__badge-hint">{{userCard.badgeNextHint}}</text>
+            <text class="profile-card__badge-hint">{{userCard.badgeIcon}} {{userCard.badgeUnlockedText}} · {{userCard.badgeNextHint}}</text>
             <text class="profile-card__badge-cta">查看勋章墙</text>
           </view>
         </view>
@@ -240,7 +233,6 @@
         <view class="profile-section profile-section--info">
           <view class="section-header">
             <text class="section-title">个人信息</text>
-            <text class="section-subtitle">完善资料可获得更准确的运动统计</text>
           </view>
           <view class="info-list">
             <block wx:for="{{userCard.personalInfo}}" wx:key="key">
@@ -250,45 +242,37 @@
               </view>
             </block>
           </view>
-          <button class="btn btn--primary profile-section__cta" bindtap="handleCompleteProfile">
-            完善个人信息
-          </button>
-        </view>
-
-        <view class="profile-section profile-section--sync">
-          <view class="section-header">
-            <text class="section-title">同步状态</text>
-            <text class="section-subtitle">手动同步可立即上传未同步数据</text>
+          <view class="settings-row settings-row--link" bindtap="handleCompleteProfile">
+            <text class="settings-row__title">完善个人信息</text>
+            <text class="settings-row__link-text">前往</text>
           </view>
-          <view class="sync-summary">
-            <view class="sync-summary__item">
-              <text class="sync-summary__value">{{syncInfo.pending}}</text>
-              <text class="sync-summary__label">待同步</text>
-            </view>
-            <view class="sync-summary__item">
-              <text class="sync-summary__value">{{syncInfo.synced}}</text>
-              <text class="sync-summary__label">已同步</text>
-            </view>
-            <view class="sync-summary__item">
-              <text class="sync-summary__value">{{syncInfo.deleted}}</text>
-              <text class="sync-summary__label">已屏蔽</text>
-            </view>
-          </view>
-          <view class="sync-meta">
-            <text>上次同步：{{syncInfo.lastSyncText}}</text>
-          </view>
-          <button class="btn btn--ghost" loading="{{syncBusy}}" bindtap="handleManualSync">
-            {{syncBusy ? '同步中...' : '手动同步'}}
-          </button>
         </view>
 
         <view class="profile-section profile-section--settings">
+          <view class="settings-row">
+            <view class="settings-row__texts">
+              <text class="settings-row__title">同步数据</text>
+              <text class="settings-row__desc">{{syncInfo.pending > 0 ? syncInfo.pending + ' 条待同步' : '上次：' + syncInfo.lastSyncText}}</text>
+            </view>
+            <button class="btn btn--ghost btn--sm" loading="{{syncBusy}}" catchtap="handleManualSync">
+              {{syncBusy ? '' : '同步'}}
+            </button>
+          </view>
+          <view class="settings-divider"></view>
           <view class="settings-row">
             <view class="settings-row__texts">
               <text class="settings-row__title">默认隐私</text>
               <text class="settings-row__desc">{{userCard.privacyDescription}}</text>
             </view>
             <switch checked="{{userCard.defaultPublic}}" bindchange="handlePrivacySwitchChange"></switch>
+          </view>
+          <view class="settings-divider"></view>
+          <view class="settings-row settings-row--link" bindtap="handleOpenPreferences">
+            <view class="settings-row__texts">
+              <text class="settings-row__title">偏好设置</text>
+              <text class="settings-row__desc">主题、隐私等级与体重设置</text>
+            </view>
+            <text class="settings-row__link-text">前往</text>
           </view>
           <view class="settings-divider"></view>
           <view class="settings-row settings-row--link" bindtap="handleOpenFeedback">
@@ -305,14 +289,6 @@
               <text class="settings-row__desc">了解应用版本与协议信息</text>
             </view>
             <text class="settings-row__link-text">查看</text>
-          </view>
-          <view class="settings-divider"></view>
-          <view class="settings-row settings-row--link" bindtap="handleOpenPreferences">
-            <view class="settings-row__texts">
-              <text class="settings-row__title">偏好设置</text>
-              <text class="settings-row__desc">主题、隐私等级与体重设置</text>
-            </view>
-            <text class="settings-row__link-text">前往</text>
           </view>
         </view>
       </view>

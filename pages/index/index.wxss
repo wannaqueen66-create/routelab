@@ -216,6 +216,11 @@
   color: var(--color-primary-strong);
 }
 
+.btn--sm {
+  padding: 10rpx 24rpx;
+  font-size: 24rpx;
+}
+
 .hero__stats {
   margin-top: 20rpx;
   display: grid;
