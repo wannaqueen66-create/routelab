@@ -90,9 +90,4 @@ Page({
     });
   },
 
-  handleEditProfile() {
-    wx.navigateTo({
-      url: '/pages/profile-info/profile-info',
-    });
-  },
 });
