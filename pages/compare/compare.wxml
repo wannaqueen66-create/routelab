@@ -2,8 +2,6 @@
   <rlab-nav
     title="RouteLab · 人群对比"
     theme="{{theme}}"
-    background="#0f172a"
-    color="#ffffff"
   ></rlab-nav>
 
   <scroll-view class="page__scroll" scroll-y enable-back-to-top>
