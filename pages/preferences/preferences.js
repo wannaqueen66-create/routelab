@@ -16,6 +16,7 @@ Page({
     privacyOptions: PRIVACY_LEVELS,
     privacyIndex: Math.max(PRIVACY_LEVELS.findIndex((item) => item.key === 'private'), 0),
     weight: 60,
+    height: 170,
     message: '',
   },
 
@@ -31,6 +32,7 @@ Page({
       themePreference: getThemePreference(),
       privacyIndex,
       weight: settings.weight || 60,
+      height: settings.height || 170,
     });
     this._themeListener = (t) => this.setData({ theme: t });
     app.onThemeUpdate(this._themeListener);
@@ -56,15 +58,19 @@ Page({
 
   handleWeightInput(event) {
     const weight = Number(event.detail.value) || 0;
-    this.setData({
-      weight,
-    });
+    this.setData({ weight });
+  },
+
+  handleHeightInput(event) {
+    const height = Number(event.detail.value) || 0;
+    this.setData({ height });
   },
 
   handleSave() {
     const payload = {
       privacyLevel: this.data.privacyOptions[this.data.privacyIndex].key,
       weight: this.data.weight,
+      height: this.data.height,
       autoSync: true,
     };
     saveRecentSettings(payload);

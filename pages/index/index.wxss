@@ -216,9 +216,20 @@
   color: var(--color-primary-strong);
 }
 
+.btn--outline {
+  background: transparent;
+  border: 1rpx solid var(--color-primary);
+  color: var(--color-primary);
+}
+
 .btn--sm {
   padding: 10rpx 24rpx;
   font-size: 24rpx;
+}
+
+.row-hover {
+  background: var(--color-primary-soft);
+  border-radius: 12rpx;
 }
 
 .hero__stats {

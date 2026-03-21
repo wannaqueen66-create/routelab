@@ -57,6 +57,20 @@
       </view>
     </view>
 
+    <view class="section">
+      <view class="section__title">身高</view>
+      <view class="field">
+        <text class="field__label">身高 (cm)</text>
+        <input
+          class="field__input"
+          type="number"
+          placeholder="170"
+          value="{{height}}"
+          bindinput="handleHeightInput"
+        />
+      </view>
+    </view>
+
     <view class="actions">
       <button class="btn btn--primary" bindtap="handleSave">保存偏好</button>
       <button class="btn btn--ghost" bindtap="handleClearOffline">清理离线缓存</button>
