@@ -83,25 +83,11 @@ Page(applyThemeMixin({
     const avatarColor = getAvatarColor(avatarSeed);
     const privacyLevel = settings.privacyLevel || 'public';
     const defaultPublic = privacyLevel !== 'private';
-    const weightValue = Number(settings.weight);
-    const weightText =
-      Number.isFinite(weightValue) && weightValue > 0 ? `${weightValue} kg` : '未填写';
-
     const personalInfo = [
       { key: 'name', label: '姓名', value: nickname || '未填写' },
       { key: 'gender', label: '性别', value: formatGender(profile?.gender || account?.gender) },
       { key: 'ageRange', label: '年龄段', value: formatAgeRange(profile?.ageRange || account?.ageRange) },
       { key: 'identity', label: '身份标签', value: formatIdentity(profile?.identity || account?.identity) },
-      { key: 'birthday', label: '生日', value: profile?.birthday || '未填写' },
-      { key: 'weight', label: '体重', value: weightText },
-      {
-        key: 'height',
-        label: '身高',
-        value:
-          profile?.height && Number.isFinite(Number(profile.height))
-            ? `${Number(profile.height)} cm`
-            : '未填写',
-      },
     ];
 
     const achievementSnapshot = rewards.getAchievementSnapshot();
@@ -162,6 +148,12 @@ Page(applyThemeMixin({
       content: 'RouteLab 致力于提供安全、可靠的校园轨迹记录与分享服务。',
       showCancel: false,
       confirmText: '知道了',
+    });
+  },
+
+  handleOpenPreferences() {
+    wx.navigateTo({
+      url: '/pages/preferences/preferences',
     });
   },
 }));
