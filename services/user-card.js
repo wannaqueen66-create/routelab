@@ -92,31 +92,11 @@ function createProfileCard({ settings, profile, account }) {
     const initial = getInitialFromName(nickname || avatarSeed);
     const privacyLevel = settings?.privacyLevel || 'private';
     const defaultPublic = privacyLevel === 'public';
-    const weightSource =
-        profile?.weight !== undefined && profile?.weight !== null && profile?.weight !== ''
-            ? Number(profile.weight)
-            : settings?.weight;
-    const weightText =
-        Number.isFinite(Number(weightSource)) && Number(weightSource) > 0
-            ? `${Number(weightSource).toFixed(1).replace(/\.0$/, '')} kg`
-            : '未填写';
-    const heightSource =
-        profile?.height !== undefined && profile?.height !== null && profile?.height !== ''
-            ? Number(profile.height)
-            : null;
-    const heightText =
-        Number.isFinite(heightSource) && heightSource > 0
-            ? `${heightSource.toFixed(1).replace(/\.0$/, '')} cm`
-            : '未填写';
-    const birthdayText = profile?.birthday || '未填写';
     const personalInfo = [
         { key: 'name', label: '姓名', value: nickname || '未填写' },
         { key: 'gender', label: '性别', value: formatGenderLabel(profile?.gender || account?.gender) },
         { key: 'ageRange', label: '年龄段', value: formatAgeRangeLabel(profile?.ageRange || account?.ageRange) },
         { key: 'identity', label: '身份标签', value: formatIdentityLabel(profile?.identity || account?.identity) },
-        { key: 'birthday', label: '生日', value: birthdayText },
-        { key: 'weight', label: '体重', value: weightText },
-        { key: 'height', label: '身高', value: heightText },
     ];
     return {
         nickname,

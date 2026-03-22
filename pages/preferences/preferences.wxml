@@ -18,12 +18,6 @@
       </view>
     </view>
 
-    <view class="section section--profile-cta">
-      <view class="section__title">账户信息</view>
-      <view class="section__desc">完善头像与昵称后，可在公共内容中展示专属资料</view>
-      <button class="btn btn--accent" bindtap="handleEditProfile">完善个人信息</button>
-    </view>
-
     <view class="section">
       <view class="section__title">默认隐私等级</view>
       <picker
@@ -53,6 +47,20 @@
           placeholder="60"
           value="{{weight}}"
           bindinput="handleWeightInput"
+        />
+      </view>
+    </view>
+
+    <view class="section">
+      <view class="section__title">身高</view>
+      <view class="field">
+        <text class="field__label">身高 (cm)</text>
+        <input
+          class="field__input"
+          type="number"
+          placeholder="170"
+          value="{{height}}"
+          bindinput="handleHeightInput"
         />
       </view>
     </view>

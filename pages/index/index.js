@@ -798,6 +798,12 @@ Page(applyThemeMixin({
     });
   },
 
+  handleOpenPreferences() {
+    wx.navigateTo({
+      url: '/pages/preferences/preferences',
+    });
+  },
+
   handlePrivacySwitchChange(event) {
     const isPublic = Boolean(event?.detail?.value);
     const nextPrivacy = isPublic ? 'public' : 'private';

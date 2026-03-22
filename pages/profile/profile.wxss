@@ -19,7 +19,8 @@
 .profile-card {
   background: var(--color-surface);
   border-radius: 24rpx;
-  box-shadow: 0 16rpx 30rpx rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4rpx 20rpx rgba(15, 23, 42, 0.1);
+  border: 1rpx solid rgba(31, 42, 68, 0.08);
   padding: 24rpx;
   display: flex;
   gap: 20rpx;
@@ -95,7 +96,7 @@
   min-width: 170rpx;
   padding: 12rpx 16rpx;
   border-radius: 20rpx;
-  background: rgba(37, 99, 235, 0.08);
+  background: rgba(37, 99, 235, 0.14);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -181,20 +182,27 @@
 }
 
 .profile-card__badge-hint {
-  font-size: 22rpx;
-  color: var(--color-text-tertiary);
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+  flex: 1;
 }
 
 .profile-card__badge-cta {
   font-size: 24rpx;
+  font-weight: 600;
   color: var(--color-primary);
+  background: var(--color-primary-soft);
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  flex-shrink: 0;
 }
 
 .profile-section {
   background: var(--color-surface);
   border-radius: 24rpx;
   padding: 24rpx;
-  box-shadow: 0 12rpx 25rpx rgba(15, 23, 42, 0.06);
+  box-shadow: 0 4rpx 16rpx rgba(15, 23, 42, 0.1);
+  border: 1rpx solid rgba(31, 42, 68, 0.07);
   transition: background 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -228,7 +236,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 12rpx 0;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid rgba(31, 42, 68, 0.1);
 }
 
 .info-row:last-child {
@@ -280,21 +288,39 @@
 
 .settings-divider {
   height: 1px;
-  background: var(--color-border);
+  background: rgba(31, 42, 68, 0.1);
 }
 
 .settings-row__link-text {
-  font-size: 26rpx;
+  font-size: 24rpx;
+  font-weight: 600;
   color: var(--color-primary);
+  background: var(--color-primary-soft);
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  flex-shrink: 0;
+}
+
+.profile-section--info .settings-row--link {
+  margin-top: 6rpx;
+  padding-top: 16rpx;
+  border-top: 1px solid rgba(31, 42, 68, 0.1);
+}
+
+.row-hover {
+  background: var(--color-primary-soft);
+  border-radius: 12rpx;
 }
 
 /* Dark mode overrides */
 .dark .profile-card {
-  box-shadow: 0 16rpx 30rpx rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.4);
+  border-color: rgba(248, 250, 252, 0.07);
 }
 
 .dark .profile-section {
-  box-shadow: 0 12rpx 25rpx rgba(0, 0, 0, 0.3);
+  box-shadow: 0 6rpx 16rpx rgba(0, 0, 0, 0.35);
+  border-color: rgba(248, 250, 252, 0.06);
 }
 
 .dark .profile-card__achievements {
@@ -302,5 +328,17 @@
 }
 
 .dark .profile-card__points {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(96, 165, 250, 0.2);
+}
+
+.dark .info-row {
+  border-bottom-color: rgba(248, 250, 252, 0.08);
+}
+
+.dark .settings-divider {
+  background: rgba(248, 250, 252, 0.1);
+}
+
+.dark .profile-section--info .settings-row--link {
+  border-top-color: rgba(248, 250, 252, 0.08);
 }
