@@ -454,6 +454,7 @@ function createRoutePayload({
   startLabel,
   endLabel,
   purposeType = '',
+  routeFeedback = null,
 }) {
   const effectiveWeight = weight || 60;
   const safePhotos = normalizePhotoList(photos);
@@ -535,6 +536,8 @@ function createRoutePayload({
       pausePoints: safePausePoints,
       activityInference,
       purposeType: normalizedPurpose,
+      routeFeedback:
+        routeFeedback && typeof routeFeedback === 'object' ? { ...routeFeedback } : null,
     },
     photos: safePhotos,
     createdAt: Date.now(),
@@ -704,6 +707,10 @@ function sanitizeRouteForUpload(route) {
     startPoint: sanitizedPoints[0] || null,
     endPoint: sanitizedPoints[sanitizedPoints.length - 1] || null,
     weight,
+    routeFeedback:
+      route.meta?.routeFeedback && typeof route.meta.routeFeedback === 'object'
+        ? { ...route.meta.routeFeedback }
+        : base.meta.routeFeedback || null,
   };
   meta.durationText = formatDuration(stats.duration);
   if (meta.startLocation === undefined) {

@@ -1439,6 +1439,10 @@ function stopTracking(meta = {}) {
         ? options.purposeType
         : trackerState.options.purposeType || '',
     pausePoints: capturedPausePoints,
+    routeFeedback:
+      options.routeFeedback && typeof options.routeFeedback === 'object'
+        ? { ...options.routeFeedback }
+        : null,
   };
 
   const resolveLocations = () => {

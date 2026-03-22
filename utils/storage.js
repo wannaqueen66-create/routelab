@@ -374,6 +374,46 @@ function setThemePreference(value) {
   return normalized;
 }
 
+function getRouteFeedbackDrafts() {
+  const drafts = safeGet(STORAGE_KEYS.ROUTE_FEEDBACK_DRAFTS, {});
+  return drafts && typeof drafts === 'object' ? { ...drafts } : {};
+}
+
+function getRouteFeedbackDraft(routeId) {
+  if (!routeId) {
+    return null;
+  }
+  const drafts = getRouteFeedbackDrafts();
+  const value = drafts[routeId];
+  return value && typeof value === 'object' ? { ...value } : null;
+}
+
+function saveRouteFeedbackDraft(routeId, payload = null) {
+  if (!routeId) {
+    return null;
+  }
+  const drafts = getRouteFeedbackDrafts();
+  if (!payload || typeof payload !== 'object') {
+    delete drafts[routeId];
+  } else {
+    drafts[routeId] = {
+      ...payload,
+      updatedAt: Date.now(),
+    };
+  }
+  safeSet(STORAGE_KEYS.ROUTE_FEEDBACK_DRAFTS, drafts);
+  return drafts[routeId] || null;
+}
+
+function removeRouteFeedbackDraft(routeId) {
+  if (!routeId) {
+    return;
+  }
+  const drafts = getRouteFeedbackDrafts();
+  delete drafts[routeId];
+  safeSet(STORAGE_KEYS.ROUTE_FEEDBACK_DRAFTS, drafts);
+}
+
 module.exports = {
   getRoutes,
   saveRoute,
@@ -404,4 +444,8 @@ module.exports = {
   setLatestSeenAnnouncement,
   getThemePreference,
   setThemePreference,
+  getRouteFeedbackDrafts,
+  getRouteFeedbackDraft,
+  saveRouteFeedbackDraft,
+  removeRouteFeedbackDraft,
 };

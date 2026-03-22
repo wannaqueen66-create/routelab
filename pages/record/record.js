@@ -5,8 +5,15 @@ const { checkLocationAuthorization, requestLocationAuthorization, openLocationSe
 const tracker = require('../../services/tracker');
 const { PRIVACY_LEVELS } = require('../../constants/privacy');
 const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../../constants/activity');
-const { getRecentSettings, saveRecentSettings, getKeepScreenPreference } = require('../../utils/storage');
+const {
+  getRecentSettings,
+  saveRecentSettings,
+  getKeepScreenPreference,
+  saveRouteFeedbackDraft,
+  removeRouteFeedbackDraft,
+} = require('../../utils/storage');
 const api = require('../../services/api');
+const { getRouteRecommendations } = require('../../services/route-recommendations');
 const { formatSpeed, formatCalories } = require('../../utils/format');
 const { formatDuration, formatClock } = require('../../utils/time');
 const { estimateCalories } = require('../../utils/geo');
@@ -37,6 +44,10 @@ const DEFAULT_CENTER = {
 const MAP_AUTO_CENTER_INTERVAL_MS = 10000;
 
 const MAX_PHOTOS = 9;
+const FINISH_CONFIRM_SCALE = 18;
+const FINISH_CONFIRM_RADIUS_METERS = 500;
+const SATISFACTION_MIN = 1;
+const SATISFACTION_MAX = 7;
 
 const MARKER_ICONS = {
   start: '/assets/icons/start.png',
@@ -120,6 +131,50 @@ function inferActivityByAverageSpeed(distance = 0, duration = 0) {
   return 'ride';
 }
 
+function clampSatisfaction(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 5;
+  }
+  return Math.max(SATISFACTION_MIN, Math.min(SATISFACTION_MAX, Math.round(numeric)));
+}
+
+function formatSatisfactionLabel(value) {
+  const score = clampSatisfaction(value);
+  if (score <= 2) {
+    return `较不满意 ${score}/7`;
+  }
+  if (score === 3 || score === 4) {
+    return `一般 ${score}/7`;
+  }
+  if (score === 5 || score === 6) {
+    return `满意 ${score}/7`;
+  }
+  return `非常满意 ${score}/7`;
+}
+
+function formatMeters(value) {
+  const numeric = Number(value) || 0;
+  if (numeric >= 1000) {
+    return `${(numeric / 1000).toFixed(1)} km`;
+  }
+  return `${Math.round(numeric)} m`;
+}
+
+function formatSeconds(value) {
+  const seconds = Number(value) || 0;
+  if (seconds <= 0) {
+    return '--';
+  }
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} 分钟`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remain = minutes % 60;
+  return remain ? `${hours} 小时 ${remain} 分钟` : `${hours} 小时`;
+}
+
 Page(applyThemeMixin({
   data: {
     tracking: false,
@@ -169,6 +224,24 @@ Page(applyThemeMixin({
     uploading: false,
     finishSheetVisible: false,
     finishAutoPaused: false,
+    finishConfirmVisible: false,
+    finishConfirmSelectionMode: 'map',
+    finishConfirmSubtitle: '请确认本次轨迹的终点位置',
+    finishConfirmTip: '地图已放大到终点附近 500m 范围，点击地图即可确认',
+    finishConfirmLatitude: null,
+    finishConfirmLongitude: null,
+    finishConfirmMarker: [],
+    finishConfirmCircle: [],
+    finishConfirmScale: FINISH_CONFIRM_SCALE,
+    satisfactionScore: 5,
+    satisfactionLabel: formatSatisfactionLabel(5),
+    routeSurveyVisible: false,
+    routeRecommendationLoading: false,
+    routeRecommendationSource: 'fallback',
+    routeRecommendationOptions: [],
+    routePreferenceChoice: '',
+    routePreferenceLabel: '',
+    routePreferenceReason: '',
     batchRetrying: false,
     batchRetryProgressText: '',
     locateAnimationActive: false,
@@ -550,7 +623,17 @@ Page(applyThemeMixin({
     });
   },
 
-  handleMapTap() {
+  handleMapTap(event) {
+    if (this.data.finishConfirmVisible) {
+      const detail = event?.detail || {};
+      const latitude = Number(detail.latitude);
+      const longitude = Number(detail.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        return;
+      }
+      this.setFinishConfirmPoint({ latitude, longitude });
+      return;
+    }
     if (!this.data.hasRoutePoints) {
       wx.showToast({ title: '开始记录后可查看路线', icon: 'none' });
       return;
@@ -804,7 +887,6 @@ Page(applyThemeMixin({
       return;
     }
 
-    // 打开完成面板前刷新一次隐私偏好，默认值与个人主页设置保持一致
     try {
       const settings = typeof getRecentSettings === 'function' ? getRecentSettings() || {} : {};
       const storedPrivacyKey = settings.privacyLevel;
@@ -827,22 +909,174 @@ Page(applyThemeMixin({
     if (autoPaused) {
       tracker.pauseTracking();
     }
+    this.openFinishConfirm(autoPaused);
+  },
+
+  openFinishConfirm(autoPaused = false) {
+    const state = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
+    const points = Array.isArray(state.points) ? state.points : [];
+    const lastPoint = points.length ? points[points.length - 1] : null;
+    const fallbackPoint =
+      Number.isFinite(this.data.userLatitude) && Number.isFinite(this.data.userLongitude)
+        ? { latitude: this.data.userLatitude, longitude: this.data.userLongitude }
+        : null;
+    const targetPoint = lastPoint || fallbackPoint;
+    if (!targetPoint) {
+      wx.showToast({ title: '未获取到终点位置，请稍后再试', icon: 'none' });
+      if (autoPaused) {
+        tracker.resumeTracking();
+      }
+      return;
+    }
     this.setData({
-      finishSheetVisible: true,
       finishAutoPaused: autoPaused,
+      finishConfirmVisible: true,
+      finishSheetVisible: false,
+      routeSurveyVisible: false,
+      routeRecommendationLoading: false,
+      finishConfirmSelectionMode: 'map',
+      finishConfirmSubtitle: '请确认本次轨迹的终点位置',
+      finishConfirmTip: '地图已放大到终点附近 500m 范围，点击地图即可确认',
+      centerLatitude: targetPoint.latitude,
+      centerLongitude: targetPoint.longitude,
+      mapScale: FINISH_CONFIRM_SCALE,
+      finishConfirmScale: FINISH_CONFIRM_SCALE,
+    });
+    this.setFinishConfirmPoint(targetPoint);
+  },
+
+  setFinishConfirmPoint(point) {
+    const latitude = Number(point?.latitude);
+    const longitude = Number(point?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+    this.setData({
+      finishConfirmLatitude: latitude,
+      finishConfirmLongitude: longitude,
+      finishConfirmMarker: [
+        {
+          id: 'finish-confirm',
+          latitude,
+          longitude,
+          iconPath: MARKER_ICONS.live,
+          width: 30,
+          height: 30,
+          anchor: { x: 0.5, y: 1 },
+        },
+      ],
+      finishConfirmCircle: [
+        {
+          latitude,
+          longitude,
+          radius: FINISH_CONFIRM_RADIUS_METERS,
+          color: 'rgba(47, 107, 255, 0.12)',
+          fillColor: 'rgba(47, 107, 255, 0.12)',
+          strokeWidth: 2,
+        },
+      ],
     });
   },
 
-  handleFinishCancel() {
-    // ������¼������ѡ��ȡ��ʱ������Ƿ��Զ�����¼ʱ��Ҫ�ָ�
+  handleFinishConfirmCancel() {
     const shouldResume = this.data.finishAutoPaused;
     this.setData({
+      finishConfirmVisible: false,
       finishSheetVisible: false,
+      routeSurveyVisible: false,
       finishAutoPaused: false,
+      finishConfirmMarker: [],
+      finishConfirmCircle: [],
     });
     if (shouldResume) {
       tracker.resumeTracking();
     }
+  },
+
+  handleFinishConfirmNext() {
+    const latitude = Number(this.data.finishConfirmLatitude);
+    const longitude = Number(this.data.finishConfirmLongitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      wx.showToast({ title: '请先点击地图确认终点', icon: 'none' });
+      return;
+    }
+    this.setData({
+      finishConfirmVisible: false,
+      finishSheetVisible: true,
+      satisfactionScore: clampSatisfaction(this.data.satisfactionScore),
+      satisfactionLabel: formatSatisfactionLabel(this.data.satisfactionScore),
+    });
+  },
+
+  handleFinishCancel() {
+    const shouldResume = this.data.finishAutoPaused;
+    this.setData({
+      finishSheetVisible: false,
+      finishConfirmVisible: false,
+      routeSurveyVisible: false,
+      finishAutoPaused: false,
+      finishConfirmMarker: [],
+      finishConfirmCircle: [],
+    });
+    if (shouldResume) {
+      tracker.resumeTracking();
+    }
+  },
+
+  handleSatisfactionChange(event) {
+    const value = clampSatisfaction(event?.detail?.value);
+    this.setData({
+      satisfactionScore: value,
+      satisfactionLabel: formatSatisfactionLabel(value),
+    });
+  },
+
+  handleRoutePreferenceSelect(event) {
+    const { key, label } = event.currentTarget.dataset || {};
+    this.setData({
+      routePreferenceChoice: key || '',
+      routePreferenceLabel: label || '',
+    });
+  },
+
+  handleRoutePreferenceReasonInput(event) {
+    this.setData({ routePreferenceReason: event.detail.value || '' });
+  },
+
+  buildRouteFeedbackPayload(route = null) {
+    const state = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
+    const points = Array.isArray(state.points) ? state.points : [];
+    const start = points[0] || null;
+    const confirmedEnd =
+      Number.isFinite(Number(this.data.finishConfirmLatitude)) && Number.isFinite(Number(this.data.finishConfirmLongitude))
+        ? {
+            latitude: Number(this.data.finishConfirmLatitude),
+            longitude: Number(this.data.finishConfirmLongitude),
+          }
+        : points[points.length - 1] || null;
+    return {
+      routeId: route?.id || '',
+      satisfactionScore: clampSatisfaction(this.data.satisfactionScore),
+      satisfactionLabel: formatSatisfactionLabel(this.data.satisfactionScore),
+      preferenceChoice: this.data.routePreferenceChoice || '',
+      preferenceLabel: this.data.routePreferenceLabel || '',
+      preferenceReason: (this.data.routePreferenceReason || '').trim(),
+      confirmedEnd,
+      start,
+      recommendationSource: this.data.routeRecommendationSource || 'fallback',
+      recommendationOptions: Array.isArray(this.data.routeRecommendationOptions)
+        ? this.data.routeRecommendationOptions.map((item) => ({
+            id: item.id,
+            title: item.title,
+            summary: item.summary,
+            scoreHint: item.scoreHint,
+            provider: item.provider,
+            isActual: !!item.isActual,
+            distanceMeters: item.distanceMeters || null,
+            durationSeconds: item.durationSeconds || null,
+          }))
+        : [],
+    };
   },
 
   handleFinishSave() {
@@ -854,13 +1088,94 @@ Page(applyThemeMixin({
       if (!success) {
         return;
       }
-      this.setData({
-        finishSheetVisible: false,
-        finishAutoPaused: false,
-        photos: [],
-      });
-      this.handleRouteReward(route);
+      this.loadRouteSurvey(route)
+        .catch((error) => {
+          logger.warn('loadRouteSurvey after finish failed', error?.errMsg || error?.message || error);
+        })
+        .finally(() => {
+          this.setData({
+            finishSheetVisible: false,
+            finishConfirmVisible: false,
+            finishAutoPaused: false,
+            photos: [],
+          });
+        });
     });
+  },
+
+  loadRouteSurvey(route) {
+    if (!route || !route.id) {
+      this.handleRouteReward(route);
+      return Promise.resolve();
+    }
+    const points = Array.isArray(route.points) ? route.points : [];
+    const start = points[0] || route.meta?.startPoint || null;
+    const end =
+      Number.isFinite(Number(this.data.finishConfirmLatitude)) && Number.isFinite(Number(this.data.finishConfirmLongitude))
+        ? { latitude: Number(this.data.finishConfirmLatitude), longitude: Number(this.data.finishConfirmLongitude) }
+        : points[points.length - 1] || route.meta?.endPoint || null;
+
+    this.setData({
+      routeSurveyVisible: true,
+      routeRecommendationLoading: true,
+      routeRecommendationSource: 'fallback',
+      routeRecommendationOptions: [],
+    });
+
+    return getRouteRecommendations({
+      start,
+      end,
+      actualPoints: points,
+      distance: route.stats?.distance || 0,
+      duration: route.stats?.duration || 0,
+    })
+      .then((payload) => {
+        const options = Array.isArray(payload?.recommendations)
+          ? payload.recommendations.map((item) => ({
+              ...item,
+              distanceText: item.distanceMeters ? formatMeters(item.distanceMeters) : '--',
+              durationText: item.durationSeconds ? formatSeconds(item.durationSeconds) : '--',
+              tagText: item.isActual
+                ? '实际轨迹'
+                : item.scoreHint === 'shortest'
+                ? '偏短'
+                : item.scoreHint === 'fastest'
+                ? '偏快'
+                : item.scoreHint === 'comfort'
+                ? '偏舒适'
+                : '候选',
+            }))
+          : [];
+        this.setData({
+          routeRecommendationLoading: false,
+          routeRecommendationSource: payload?.source || 'fallback',
+          routeRecommendationOptions: options,
+          routePreferenceChoice: this.data.routePreferenceChoice || '',
+        });
+        saveRouteFeedbackDraft(route.id, this.buildRouteFeedbackPayload(route));
+      })
+      .catch((error) => {
+        this.setData({
+          routeRecommendationLoading: false,
+          routeRecommendationSource: 'fallback',
+          routeRecommendationOptions: [],
+        });
+        saveRouteFeedbackDraft(route.id, this.buildRouteFeedbackPayload(route));
+        throw error;
+      });
+  },
+
+  handleRouteSurveySubmit() {
+    const feedback = this.buildRouteFeedbackPayload({ id: this.data.routeId || '' });
+    if (feedback.routeId) {
+      saveRouteFeedbackDraft(feedback.routeId, feedback);
+    }
+    this.setData({
+      routeSurveyVisible: false,
+      finishConfirmMarker: [],
+      finishConfirmCircle: [],
+    });
+    this.handleRouteReward({ id: feedback.routeId || this.data.routeId || '' });
   },
 
   ensureProfileReadyForTracking() {
@@ -885,6 +1200,25 @@ Page(applyThemeMixin({
     }
     const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
     const weight = this.data.weight || 60;
+    const feedbackMeta = {
+      satisfactionScore: clampSatisfaction(this.data.satisfactionScore),
+      satisfactionLabel: formatSatisfactionLabel(this.data.satisfactionScore),
+      preferenceChoice: this.data.routePreferenceChoice || '',
+      preferenceLabel: this.data.routePreferenceLabel || '',
+      preferenceReason: (this.data.routePreferenceReason || '').trim(),
+      confirmedEnd:
+        Number.isFinite(Number(this.data.finishConfirmLatitude)) && Number.isFinite(Number(this.data.finishConfirmLongitude))
+          ? {
+              latitude: Number(this.data.finishConfirmLatitude),
+              longitude: Number(this.data.finishConfirmLongitude),
+            }
+          : null,
+      questionnaireStage: 'completed_record',
+    };
+    const noteSuffix = `\n\n[Route Feedback]\n满意度：${feedbackMeta.satisfactionLabel}${
+      feedbackMeta.preferenceLabel ? `\n偏好：${feedbackMeta.preferenceLabel}` : ''
+    }${feedbackMeta.preferenceReason ? `\n原因：${feedbackMeta.preferenceReason}` : ''}`;
+    const finalNote = `${this.data.note || ''}${noteSuffix}`.trim();
     this.setData({ uploading: true });
     return media
       .ensureRemotePhotos(this.data.photos, { continueOnError: true })
@@ -900,11 +1234,12 @@ Page(applyThemeMixin({
         }
         return tracker.stopTracking({
           title: this.data.title,
-          note: this.data.note,
+          note: finalNote,
           privacyLevel,
           photos: normalizedUploaded.filter((item) => !item.uploadError),
           weight,
           purposeType: this.data.purposeSelectionKey,
+          routeFeedback: feedbackMeta,
         });
       })
       .then((route) => {
