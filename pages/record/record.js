@@ -1170,6 +1170,7 @@ Page(applyThemeMixin({
       routeRecommendationLoading: true,
       routeRecommendationSource: 'fallback',
       routeRecommendationOptions: [],
+      routeId: route.id,
     });
 
     return getRouteRecommendations({
@@ -1218,18 +1219,35 @@ Page(applyThemeMixin({
   },
 
   handleRouteSurveySubmit() {
-    const feedback = this.buildRouteFeedbackPayload({ id: this.data.routeId || '' });
-    if (feedback.routeId) {
-      saveRouteFeedbackDraft(feedback.routeId, feedback);
+    const routeId = this.data.routeId || '';
+    const feedback = this.buildRouteFeedbackPayload({ id: routeId });
+    if (!routeId) {
+      wx.showToast({ title: '未找到对应轨迹，无法提交调查', icon: 'none' });
+      return;
     }
-    this.setData({
-      routeSurveyVisible: false,
-      finishConfirmMarker: [],
-      finishConfirmCircle: [],
-    });
-    const currentState = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
-    this.updateState(currentState);
-    this.handleRouteReward({ id: feedback.routeId || this.data.routeId || '' });
+    saveRouteFeedbackDraft(routeId, feedback);
+    this.setData({ uploading: true });
+    api
+      .patchRoute(routeId, {
+        routeFeedback: feedback,
+      })
+      .then(() => {
+        this.setData({
+          routeSurveyVisible: false,
+          finishConfirmMarker: [],
+          finishConfirmCircle: [],
+        });
+        const currentState = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
+        this.updateState(currentState);
+        this.handleRouteReward({ id: routeId });
+      })
+      .catch((error) => {
+        logger.warn('patch route feedback failed', error?.errMsg || error?.message || error);
+        wx.showToast({ title: '调查结果提交失败，请稍后重试', icon: 'none' });
+      })
+      .finally(() => {
+        this.setData({ uploading: false });
+      });
   },
 
   ensureProfileReadyForTracking() {
