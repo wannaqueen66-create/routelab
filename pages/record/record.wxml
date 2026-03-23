@@ -314,7 +314,7 @@
     <view class="finish-sheet finish-sheet--survey">
       <view class="finish-sheet__header">
         <text class="finish-sheet__title">路径偏好调查</text>
-        <text class="finish-sheet__subtitle">对比系统候选路线与本次实际轨迹</text>
+        <text class="finish-sheet__subtitle">你为什么觉得这条实际路径更合适？</text>
       </view>
       <view class="route-survey__loading" wx:if="{{routeRecommendationLoading}}">
         <text>正在生成候选路线…</text>
@@ -335,19 +335,21 @@
           </view>
         </block>
         <view class="finish-field">
-          <text class="finish-field__label">你更认可哪种路径判断？</text>
+          <text class="finish-field__label">你选择这条实际路径的主要原因是？</text>
           <view class="route-choice-group">
-            <view class="route-choice {{routePreferenceChoice === 'shorter' ? 'route-choice--active' : ''}}" data-key="shorter" data-label="我觉得距离上更短" bindtap="handleRoutePreferenceSelect">A 我觉得距离上更短</view>
-            <view class="route-choice {{routePreferenceChoice === 'faster' ? 'route-choice--active' : ''}}" data-key="faster" data-label="我觉得时间上更快" bindtap="handleRoutePreferenceSelect">B 我觉得时间上更快</view>
-            <view class="route-choice {{routePreferenceChoice === 'comfortable' ? 'route-choice--active' : ''}}" data-key="comfortable" data-label="我觉得这条路径最舒适" bindtap="handleRoutePreferenceSelect">C 我觉得这条路径最舒适</view>
-            <view class="route-choice {{routePreferenceChoice === 'actual' ? 'route-choice--active' : ''}}" data-key="actual" data-label="我这次实际走的就是最合适的" bindtap="handleRoutePreferenceSelect">D 我这次实际走的就是最合适的</view>
+            <view class="route-choice {{routePreferenceChoice === 'shorter' ? 'route-choice--active' : ''}}" data-key="shorter" data-label="距离更短" bindtap="handleRoutePreferenceSelect">距离更短</view>
+            <view class="route-choice {{routePreferenceChoice === 'faster' ? 'route-choice--active' : ''}}" data-key="faster" data-label="更快 / 更少等待" bindtap="handleRoutePreferenceSelect">更快 / 更少等待</view>
+            <view class="route-choice {{routePreferenceChoice === 'comfortable' ? 'route-choice--active' : ''}}" data-key="comfortable" data-label="更舒适" bindtap="handleRoutePreferenceSelect">更舒适</view>
+            <view class="route-choice {{routePreferenceChoice === 'safer' ? 'route-choice--active' : ''}}" data-key="safer" data-label="更安全" bindtap="handleRoutePreferenceSelect">更安全</view>
+            <view class="route-choice {{routePreferenceChoice === 'familiar' ? 'route-choice--active' : ''}}" data-key="familiar" data-label="更熟悉 / 更习惯走这条路" bindtap="handleRoutePreferenceSelect">更熟悉 / 更习惯走这条路</view>
+            <view class="route-choice {{routePreferenceChoice === 'other' ? 'route-choice--active' : ''}}" data-key="other" data-label="其他原因" bindtap="handleRoutePreferenceSelect">其他原因</view>
           </view>
         </view>
         <view class="finish-field finish-field--textarea">
           <text class="finish-field__label">补充原因（可选）</text>
           <textarea
             class="finish-field__textarea"
-            placeholder="比如：避开拥挤、树荫更多、红绿灯更少、骑行更顺"
+            placeholder="比如：避开拥挤、树荫更多、红绿灯更少、平时都这么走"
             value="{{routePreferenceReason}}"
             bindinput="handleRoutePreferenceReasonInput"
             auto-height
