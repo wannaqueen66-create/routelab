@@ -4,6 +4,7 @@
  */
 
 const { pool } = require('../db/index');
+const { calculateSegmentDistanceMeters } = require('../utils/geo');
 
 // === Route CRUD ===
 
@@ -68,6 +69,19 @@ async function createRoute(userId, routeData) {
     const feedbackPreferenceLabel = routeFeedback?.preferenceLabel || null;
     const feedbackReasonText = routeFeedback?.preferenceReason || null;
     const feedbackSource = routeFeedback?.recommendationSource || null;
+    const rawEndPoint = Array.isArray(points) && points.length ? points[points.length - 1] : meta?.endPoint || null;
+    const confirmedEnd = routeFeedback?.confirmedEnd || null;
+    const rawEndLatitude = Number.isFinite(Number(rawEndPoint?.latitude)) ? Number(rawEndPoint.latitude) : null;
+    const rawEndLongitude = Number.isFinite(Number(rawEndPoint?.longitude)) ? Number(rawEndPoint.longitude) : null;
+    const confirmedEndLatitude = Number.isFinite(Number(confirmedEnd?.latitude)) ? Number(confirmedEnd.latitude) : null;
+    const confirmedEndLongitude = Number.isFinite(Number(confirmedEnd?.longitude)) ? Number(confirmedEnd.longitude) : null;
+    const confirmedEndDistanceMeters =
+        Number.isFinite(rawEndLatitude) && Number.isFinite(rawEndLongitude) && Number.isFinite(confirmedEndLatitude) && Number.isFinite(confirmedEndLongitude)
+            ? calculateSegmentDistanceMeters(
+                { latitude: rawEndLatitude, longitude: rawEndLongitude },
+                { latitude: confirmedEndLatitude, longitude: confirmedEndLongitude }
+              )
+            : null;
 
     const result = await pool.query(
         `INSERT INTO routes (
@@ -75,8 +89,9 @@ async function createRoute(userId, routeData) {
       start_time, end_time, stats, meta, photos, weather,
       feedback_choice, feedback_satisfaction_score, feedback_preference_label,
       feedback_reason_text, feedback_source, feedback_submitted_at,
+      raw_end_latitude, raw_end_longitude, confirmed_end_latitude, confirmed_end_longitude, confirmed_end_distance_meters,
       created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW())
     RETURNING *`,
         [
             id,
@@ -98,6 +113,11 @@ async function createRoute(userId, routeData) {
             feedbackReasonText,
             feedbackSource,
             routeFeedback ? new Date() : null,
+            rawEndLatitude,
+            rawEndLongitude,
+            confirmedEndLatitude,
+            confirmedEndLongitude,
+            confirmedEndDistanceMeters,
         ]
     );
 
@@ -160,6 +180,19 @@ async function updateRoute(routeId, userId, updateData) {
         params.push(JSON.stringify(photos));
     }
     if (routeFeedback !== undefined) {
+        const rawEndPoint = (meta && meta.endPoint) || null;
+        const rawEndLatitude = Number.isFinite(Number(rawEndPoint?.latitude)) ? Number(rawEndPoint.latitude) : null;
+        const rawEndLongitude = Number.isFinite(Number(rawEndPoint?.longitude)) ? Number(rawEndPoint.longitude) : null;
+        const confirmedEndLatitude = Number.isFinite(Number(routeFeedback?.confirmedEnd?.latitude)) ? Number(routeFeedback.confirmedEnd.latitude) : null;
+        const confirmedEndLongitude = Number.isFinite(Number(routeFeedback?.confirmedEnd?.longitude)) ? Number(routeFeedback.confirmedEnd.longitude) : null;
+        const confirmedEndDistanceMeters =
+            Number.isFinite(rawEndLatitude) && Number.isFinite(rawEndLongitude) && Number.isFinite(confirmedEndLatitude) && Number.isFinite(confirmedEndLongitude)
+                ? calculateSegmentDistanceMeters(
+                    { latitude: rawEndLatitude, longitude: rawEndLongitude },
+                    { latitude: confirmedEndLatitude, longitude: confirmedEndLongitude }
+                  )
+                : null;
+
         setClauses.push(`feedback_choice = $${paramIndex++}`);
         params.push(routeFeedback?.preferenceChoice || null);
 
@@ -177,6 +210,21 @@ async function updateRoute(routeId, userId, updateData) {
 
         setClauses.push(`feedback_submitted_at = $${paramIndex++}`);
         params.push(routeFeedback ? new Date() : null);
+
+        setClauses.push(`raw_end_latitude = $${paramIndex++}`);
+        params.push(rawEndLatitude);
+
+        setClauses.push(`raw_end_longitude = $${paramIndex++}`);
+        params.push(rawEndLongitude);
+
+        setClauses.push(`confirmed_end_latitude = $${paramIndex++}`);
+        params.push(confirmedEndLatitude);
+
+        setClauses.push(`confirmed_end_longitude = $${paramIndex++}`);
+        params.push(confirmedEndLongitude);
+
+        setClauses.push(`confirmed_end_distance_meters = $${paramIndex++}`);
+        params.push(confirmedEndDistanceMeters);
     }
 
     if (setClauses.length === 0) {
