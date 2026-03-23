@@ -170,12 +170,9 @@
     </view>
   </view>
 
-  <view
-    class="finish-sheet-overlay"
-    wx:if="{{finishConfirmVisible}}"
-    catchtouchmove="true"
-  >
-    <view class="finish-sheet finish-sheet--compact">
+  <view wx:if="{{finishConfirmVisible}}">
+    <view class="finish-confirm-mask" catchtouchmove="true"></view>
+    <view class="finish-sheet finish-sheet--compact finish-sheet--floating">
       <view class="finish-sheet__header">
         <text class="finish-sheet__title">终点二次确认</text>
         <text class="finish-sheet__subtitle">{{finishConfirmSubtitle}}</text>

@@ -868,6 +868,23 @@
   max-width: 640rpx;
 }
 
+.finish-confirm-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(6rpx);
+  z-index: 19;
+}
+
+.finish-sheet--floating {
+  position: fixed;
+  left: 32rpx;
+  right: 32rpx;
+  bottom: 48rpx;
+  margin: 0 auto;
+  z-index: 20;
+}
+
 .finish-confirm__body {
   display: flex;
   flex-direction: column;

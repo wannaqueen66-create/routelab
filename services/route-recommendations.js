@@ -9,7 +9,10 @@ function toFiniteNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-function clonePoint(point = {}) {
+function clonePoint(point = null) {
+  if (!point || typeof point !== 'object') {
+    return null;
+  }
   const latitude = toFiniteNumber(point.latitude);
   const longitude = toFiniteNumber(point.longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
