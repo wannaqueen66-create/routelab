@@ -161,6 +161,27 @@
       </view>
     </view>
 
+    <view class="section" wx:if="{{detail.hasRouteFeedback}}">
+      <view class="section__title">路径偏好反馈</view>
+      <view class="stats">
+        <view class="stat-card">
+          <text class="stat-card__label">偏好选项</text>
+          <text class="stat-card__value">{{detail.routeFeedback.preferenceLabel || detail.routeFeedback.preferenceChoice || '未填写'}}</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-card__label">满意度</text>
+          <text class="stat-card__value">{{detail.routeFeedback.satisfactionLabel || detail.routeFeedback.satisfactionScore || '未填写'}}</text>
+        </view>
+        <view class="stat-card">
+          <text class="stat-card__label">候选来源</text>
+          <text class="stat-card__value">{{detail.routeFeedback.recommendationSource || '未记录'}}</text>
+        </view>
+      </view>
+      <view class="note">
+        <text>{{detail.routeFeedback.preferenceReason || '未填写补充原因'}}</text>
+      </view>
+    </view>
+
     <view class="section">
       <view class="section__title">备注</view>
       <view class="note">

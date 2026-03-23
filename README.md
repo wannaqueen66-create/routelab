@@ -51,6 +51,7 @@
 - WeChat login and token-based auth / 微信登录与 token 鉴权
 - Route CRUD and incremental sync / 轨迹增删改查与增量同步
 - Route recommendation proxy and preference survey persistence / 路线推荐代理与路径偏好调查结果持久化
+- Structured route-feedback analytics fields + summary API / 路径偏好结构化统计字段与汇总接口
 - Comments, likes, public route feed / 评论、点赞、公开路线
 - Weather and geocode proxy / 天气与地理编码代理
 - Admin dashboard data services / 管理后台数据接口
@@ -347,6 +348,15 @@ https://your-domain.example/api/upload
 This avoids mismatches between `/photos` and `/api/upload`.
 
 这样可以避免 `/photos` 与 `/api/upload` 不一致导致的上传失败。
+
+### Route feedback storage strategy / 路径偏好数据存储策略
+
+- Raw survey payload is still preserved in `routes.meta.routeFeedback` for full context.  
+  原始问卷上下文仍保留在 `routes.meta.routeFeedback` 中。
+- Key analytics fields are also written into structured columns on `routes`, such as `feedback_choice` and `feedback_satisfaction_score`.  
+  同时会把关键统计字段写入 `routes` 表的结构化列，例如 `feedback_choice`、`feedback_satisfaction_score`。
+- Recommended analytics endpoint: `GET /api/admin/analytics/route-feedback-summary`  
+  推荐使用的统计接口：`GET /api/admin/analytics/route-feedback-summary`
 
 ## 10. Current Risks and TODOs / 当前风险与待优化项
 

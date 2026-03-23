@@ -30,6 +30,7 @@ import {
   downloadBackup,
   fetchAdminAnalyticsSummary,
   fetchAdminQualityMetrics,
+  fetchAdminRouteFeedbackSummary,
   fetchAdminAnnouncements,
   createAdminAnnouncement,
   updateAdminAnnouncement,
@@ -710,6 +711,7 @@ function UserManagement() {
 function DataAnalysis() {
   const [summary, setSummary] = useState(null);
   const [quality, setQuality] = useState(null);
+  const [routeFeedback, setRouteFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -719,12 +721,14 @@ function DataAnalysis() {
   const loadAnalytics = async () => {
     try {
       setLoading(true);
-      const [summaryData, qualityData] = await Promise.all([
+      const [summaryData, qualityData, routeFeedbackData] = await Promise.all([
         fetchAdminAnalyticsSummary({ rangeDays: 30 }),
         fetchAdminQualityMetrics(),
+        fetchAdminRouteFeedbackSummary({ rangeDays: 30 }),
       ]);
       setSummary(summaryData);
       setQuality(qualityData);
+      setRouteFeedback(routeFeedbackData);
     } catch (err) {
       console.error('Failed to load analytics:', err);
     } finally {
@@ -776,6 +780,35 @@ function DataAnalysis() {
             <div className="analytics-value">
               {((quality?.interpRatio || 0) * 100).toFixed(1)}%
             </div>
+        </div>
+      </div>
+
+      <div className="admin-card" style={{ marginTop: 16 }}>
+        <div className="admin-card-title">路径偏好统计（近 30 天）</div>
+        <div className="analytics-grid">
+          <div className="analytics-card">
+            <div className="analytics-label">反馈样本数</div>
+            <div className="analytics-value">{routeFeedback?.totalFeedback || 0}</div>
+          </div>
+          <div className="analytics-card">
+            <div className="analytics-label">平均满意度</div>
+            <div className="analytics-value">{(routeFeedback?.averageSatisfaction || 0).toFixed(2)}</div>
+          </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <div className="analytics-label" style={{ marginBottom: 8 }}>按偏好选项分布</div>
+          {Array.isArray(routeFeedback?.byChoice) && routeFeedback.byChoice.length ? (
+            <div className="flex flex-col gap-2">
+              {routeFeedback.byChoice.map((item) => (
+                <div key={item.choice} className="route-item-stats">
+                  <span>{item.choice}</span>
+                  <span>{item.count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="admin-placeholder">暂无路径偏好反馈数据</div>
+          )}
         </div>
       </div>
     </div>

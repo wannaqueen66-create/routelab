@@ -310,6 +310,7 @@ Page(applyThemeMixin({
         ? route.purposeType
         : '';
     const purposeMeta = rawPurpose && PURPOSE_MAP[rawPurpose] ? PURPOSE_MAP[rawPurpose] : null;
+    const routeFeedback = route.routeFeedback || route.meta?.routeFeedback || null;
     this.setData({
       routeId: route.id,
       detail: {
@@ -337,6 +338,8 @@ Page(applyThemeMixin({
         hasPurpose: !!purposeMeta,
         weather: route.weather || null,
         hasWeather: !!(route.weather && route.weather.temperature !== undefined),
+        routeFeedback,
+        hasRouteFeedback: !!routeFeedback,
       },
       polyline: buildPolyline(route.points),
       markers: buildMarkers(route.points, route.meta?.pausePoints),

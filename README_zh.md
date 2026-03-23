@@ -255,7 +255,31 @@ https://your-domain.example/api/upload
 
 ---
 
-## 11. 开发检查流程（提交前）
+## 11. 路径偏好数据存储策略
+
+当前项目对路径偏好调查采用“双存策略”：
+
+- **完整原始数据**：保留在 `routes.meta.routeFeedback`
+- **结构化统计字段**：同步写入 `routes` 表中的独立列，例如：
+  - `feedback_choice`
+  - `feedback_satisfaction_score`
+  - `feedback_preference_label`
+  - `feedback_reason_text`
+  - `feedback_source`
+  - `feedback_submitted_at`
+
+这样做的好处是：
+- 不丢原始上下文
+- 后续统计查询更简单
+- 后台可直接通过接口查看汇总结果
+
+推荐统计接口：
+
+```text
+GET /api/admin/analytics/route-feedback-summary
+```
+
+## 12. 开发检查流程（提交前）
 
 建议每次提交前在仓库根目录执行：
 
