@@ -33,6 +33,7 @@ const {
     describeAqi,
     buildExerciseSuggestion,
 } = require('../services/weatherService');
+const { getRouteRecommendations } = require('../services/routeRecommendationService');
 
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
@@ -130,6 +131,47 @@ function normalizePhotos(value) {
     return value.filter(Boolean);
 }
 
+function normalizeRouteFeedback(value) {
+    if (!value || typeof value !== 'object') {
+        return null;
+    }
+    const recommendationOptions = Array.isArray(value.recommendationOptions)
+        ? value.recommendationOptions
+            .filter((item) => item && typeof item === 'object')
+            .map((item) => ({
+                id: item.id || null,
+                title: item.title || null,
+                summary: item.summary || null,
+                provider: item.provider || null,
+                scoreHint: item.scoreHint || null,
+                strategy: item.strategy || null,
+                isActual: item.isActual === true,
+                distanceMeters: Number.isFinite(Number(item.distanceMeters)) ? Number(item.distanceMeters) : null,
+                durationSeconds: Number.isFinite(Number(item.durationSeconds)) ? Number(item.durationSeconds) : null,
+            }))
+        : [];
+
+    const confirmedEnd = value.confirmedEnd && typeof value.confirmedEnd === 'object'
+        ? {
+            latitude: Number.isFinite(Number(value.confirmedEnd.latitude)) ? Number(value.confirmedEnd.latitude) : null,
+            longitude: Number.isFinite(Number(value.confirmedEnd.longitude)) ? Number(value.confirmedEnd.longitude) : null,
+        }
+        : null;
+
+    return {
+        satisfactionScore: Number.isFinite(Number(value.satisfactionScore)) ? Number(value.satisfactionScore) : null,
+        satisfactionLabel: typeof value.satisfactionLabel === 'string' ? value.satisfactionLabel.trim() : '',
+        preferenceChoice: typeof value.preferenceChoice === 'string' ? value.preferenceChoice.trim() : '',
+        preferenceLabel: typeof value.preferenceLabel === 'string' ? value.preferenceLabel.trim() : '',
+        preferenceReason: typeof value.preferenceReason === 'string' ? value.preferenceReason.trim() : '',
+        recommendationSource: typeof value.recommendationSource === 'string' ? value.recommendationSource.trim() : '',
+        questionnaireStage: typeof value.questionnaireStage === 'string' ? value.questionnaireStage.trim() : '',
+        confirmedEnd,
+        recommendationOptions,
+        updatedAt: Date.now(),
+    };
+}
+
 function normalizePoints(value) {
     if (!Array.isArray(value)) {
         return [];
@@ -160,6 +202,9 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
     const body = input && typeof input === 'object' ? input : {};
     const meta = body.meta && typeof body.meta === 'object' ? body.meta : {};
     const stats = body.stats && typeof body.stats === 'object' ? body.stats : {};
+    const routeFeedback = normalizeRouteFeedback(
+        body.routeFeedback || meta.routeFeedback || body.route_feedback || null
+    );
 
     const normalizedId = normalizeRouteId(routeId || body.id);
     const clientId = normalizeRouteId(body.clientId);
@@ -189,7 +234,11 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
         startTime: normalizeTimestamp(body.startTime),
         endTime: normalizeTimestamp(body.endTime),
         stats,
-        meta,
+        meta: {
+            ...meta,
+            routeFeedback,
+        },
+        routeFeedback,
         photos: normalizePhotos(body.photos),
         points: normalizePoints(body.points),
         weather: body.weather && typeof body.weather === 'object' ? body.weather : null,
@@ -219,6 +268,7 @@ function mapRouteRow(row, points = [], options = {}) {
         meta: routeMeta,
         photos: row.photos || [],
         weather: row.weather || null,
+        routeFeedback: routeMeta.routeFeedback || null,
         pointCount: points.length,
         createdAt: row.created_at?.getTime() || null,
         updatedAt: row.updated_at?.getTime() || null,
@@ -311,6 +361,32 @@ router.post('/sync', ensureAuth, async (req, res) => {
     }
 });
 
+// === Route Recommendations ===
+
+router.post('/recommendations', ensureAuth, async (req, res) => {
+    try {
+        const body = req.body || {};
+        const start = body.start && typeof body.start === 'object' ? body.start : null;
+        const end = body.end && typeof body.end === 'object' ? body.end : null;
+        const actualPoints = Array.isArray(body.actualPoints) ? body.actualPoints : [];
+        const distanceMeters = Number(body.distanceMeters) || 0;
+        const durationMs = Number(body.durationMs) || 0;
+
+        const payload = await getRouteRecommendations({
+            start,
+            end,
+            actualPoints,
+            distanceMeters,
+            durationMs,
+        });
+
+        return res.json(payload);
+    } catch (error) {
+        console.error('POST /api/routes/recommendations failed', error);
+        return res.status(500).json({ error: 'Failed to build route recommendations' });
+    }
+});
+
 // === Route CRUD ===
 
 // POST /api/routes
@@ -393,6 +469,7 @@ router.put('/:id', ensureAuth, async (req, res) => {
             purposeCode: payload.purposeCode,
             stats: payload.stats,
             meta: payload.meta,
+            routeFeedback: payload.routeFeedback,
             photos: payload.photos,
         });
 
@@ -430,6 +507,8 @@ router.patch('/:id', ensureAuth, async (req, res) => {
         body.purposeType !== undefined ||
         body.stats !== undefined ||
         body.meta !== undefined ||
+        body.routeFeedback !== undefined ||
+        body.route_feedback !== undefined ||
         body.photos !== undefined;
 
     if (!hasKnownField) {
@@ -461,6 +540,10 @@ router.patch('/:id', ensureAuth, async (req, res) => {
                     : undefined,
         stats: body.stats !== undefined && typeof body.stats === 'object' ? body.stats : undefined,
         meta: body.meta !== undefined && typeof body.meta === 'object' ? body.meta : undefined,
+        routeFeedback:
+            body.routeFeedback !== undefined || body.route_feedback !== undefined
+                ? normalizeRouteFeedback(body.routeFeedback || body.route_feedback || null)
+                : undefined,
         photos: body.photos !== undefined ? normalizePhotos(body.photos) : undefined,
     };
 

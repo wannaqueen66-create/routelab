@@ -55,6 +55,7 @@ async function createRoute(userId, routeData) {
         endTime,
         stats = {},
         meta = {},
+        routeFeedback = null,
         photos = [],
         points = [],
         weather = null,
@@ -77,7 +78,7 @@ async function createRoute(userId, routeData) {
             startTime || null,
             endTime || null,
             JSON.stringify(stats),
-            JSON.stringify(meta),
+            JSON.stringify({ ...(meta || {}), routeFeedback: routeFeedback || meta?.routeFeedback || null }),
             JSON.stringify(photos),
             weather ? JSON.stringify(weather) : null,
         ]
@@ -101,6 +102,7 @@ async function updateRoute(routeId, userId, updateData) {
         purposeCode,
         stats,
         meta,
+        routeFeedback,
         photos,
     } = updateData;
 
@@ -128,9 +130,13 @@ async function updateRoute(routeId, userId, updateData) {
         setClauses.push(`stats = $${paramIndex++}`);
         params.push(JSON.stringify(stats));
     }
-    if (meta !== undefined) {
+    if (meta !== undefined || routeFeedback !== undefined) {
         setClauses.push(`meta = $${paramIndex++}`);
-        params.push(JSON.stringify(meta));
+        const nextMeta = {
+            ...((meta && typeof meta === 'object') ? meta : {}),
+            routeFeedback: routeFeedback !== undefined ? routeFeedback : (meta && meta.routeFeedback) || null,
+        };
+        params.push(JSON.stringify(nextMeta));
     }
     if (photos !== undefined) {
         setClauses.push(`photos = $${paramIndex++}`);

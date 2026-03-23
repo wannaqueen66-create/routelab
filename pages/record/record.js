@@ -175,6 +175,47 @@ function formatSeconds(value) {
   return remain ? `${hours} 小时 ${remain} 分钟` : `${hours} 小时`;
 }
 
+function buildRecommendationPolyline(options = [], actualPoints = []) {
+  const actual = Array.isArray(actualPoints)
+    ? actualPoints.filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
+    : [];
+  const candidates = Array.isArray(options) ? options : [];
+  const polylines = [];
+
+  if (actual.length >= 2) {
+    polylines.push({
+      points: actual,
+      color: '#2F6BFF',
+      width: 6,
+      dottedLine: false,
+      zIndex: 30,
+    });
+  }
+
+  candidates.forEach((item) => {
+    if (!item || item.isActual) {
+      return;
+    }
+    const points = Array.isArray(item.polyline)
+      ? item.polyline.filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
+      : [];
+    if (points.length < 2) {
+      return;
+    }
+    const strategy = item.strategy || item.scoreHint || '';
+    const color = strategy === 'riding' ? '#7C3AED' : strategy === 'driving' ? '#6B7280' : '#8B5CF6';
+    polylines.push({
+      points,
+      color,
+      width: strategy === 'driving' ? 3 : 4,
+      dottedLine: true,
+      zIndex: 10,
+    });
+  });
+
+  return polylines;
+}
+
 Page(applyThemeMixin({
   data: {
     tracking: false,
@@ -1151,6 +1192,7 @@ Page(applyThemeMixin({
           routeRecommendationSource: payload?.source || 'fallback',
           routeRecommendationOptions: options,
           routePreferenceChoice: this.data.routePreferenceChoice || '',
+          polyline: buildRecommendationPolyline(options, points),
         });
         saveRouteFeedbackDraft(route.id, this.buildRouteFeedbackPayload(route));
       })
@@ -1159,6 +1201,7 @@ Page(applyThemeMixin({
           routeRecommendationLoading: false,
           routeRecommendationSource: 'fallback',
           routeRecommendationOptions: [],
+          polyline: buildRecommendationPolyline([], points),
         });
         saveRouteFeedbackDraft(route.id, this.buildRouteFeedbackPayload(route));
         throw error;
@@ -1175,6 +1218,8 @@ Page(applyThemeMixin({
       finishConfirmMarker: [],
       finishConfirmCircle: [],
     });
+    const currentState = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
+    this.updateState(currentState);
     this.handleRouteReward({ id: feedback.routeId || this.data.routeId || '' });
   },
 

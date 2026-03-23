@@ -331,6 +331,7 @@
             <view class="route-option__meta">
               <text>距离：{{item.distanceText}}</text>
               <text>时长：{{item.durationText}}</text>
+              <text wx:if="{{!item.isActual}}">类型：{{item.strategy === 'walking' ? '步行推荐' : item.strategy === 'riding' ? '骑行推荐' : item.strategy === 'driving' ? '驾车风格推荐' : '候选路线'}}</text>
             </view>
           </view>
         </block>

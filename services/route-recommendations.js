@@ -104,6 +104,7 @@ function normalizeServerRecommendation(item = {}, index = 0) {
     distanceMeters: toFiniteNumber(item.distanceMeters ?? item.distance),
     durationSeconds: toFiniteNumber(item.durationSeconds ?? item.duration),
     scoreHint: item.scoreHint || item.strategy || '',
+    strategy: item.strategy || item.scoreHint || '',
     polyline,
     isActual: item.isActual === true,
   };

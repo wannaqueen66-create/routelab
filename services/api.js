@@ -229,6 +229,14 @@ function syncRoutes(payload = {}) {
   });
 }
 
+function getRouteRecommendations(payload = {}) {
+  return request({
+    path: '/routes/recommendations',
+    method: 'POST',
+    data: payload,
+  });
+}
+
 function patchRoute(id, patch = {}) {
   if (!id) {
     return Promise.reject(new Error('Route id is required'));
@@ -661,6 +669,7 @@ module.exports = {
   createRoute,
   listRoutes,
   syncRoutes,
+  getRouteRecommendations,
   patchRoute,
   removeRoute,
   likeRoute,
