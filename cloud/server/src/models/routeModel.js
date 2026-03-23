@@ -61,11 +61,22 @@ async function createRoute(userId, routeData) {
         weather = null,
     } = routeData;
 
+    const feedbackChoice = routeFeedback?.preferenceChoice || null;
+    const feedbackSatisfactionScore = Number.isFinite(Number(routeFeedback?.satisfactionScore))
+        ? Number(routeFeedback.satisfactionScore)
+        : null;
+    const feedbackPreferenceLabel = routeFeedback?.preferenceLabel || null;
+    const feedbackReasonText = routeFeedback?.preferenceReason || null;
+    const feedbackSource = routeFeedback?.recommendationSource || null;
+
     const result = await pool.query(
         `INSERT INTO routes (
       id, user_id, client_id, name, privacy_level, activity_type, purpose_code,
-      start_time, end_time, stats, meta, photos, weather, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+      start_time, end_time, stats, meta, photos, weather,
+      feedback_choice, feedback_satisfaction_score, feedback_preference_label,
+      feedback_reason_text, feedback_source, feedback_submitted_at,
+      created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW(), NOW())
     RETURNING *`,
         [
             id,
@@ -81,6 +92,12 @@ async function createRoute(userId, routeData) {
             JSON.stringify({ ...(meta || {}), routeFeedback: routeFeedback || meta?.routeFeedback || null }),
             JSON.stringify(photos),
             weather ? JSON.stringify(weather) : null,
+            feedbackChoice,
+            feedbackSatisfactionScore,
+            feedbackPreferenceLabel,
+            feedbackReasonText,
+            feedbackSource,
+            routeFeedback ? new Date() : null,
         ]
     );
 
@@ -141,6 +158,25 @@ async function updateRoute(routeId, userId, updateData) {
     if (photos !== undefined) {
         setClauses.push(`photos = $${paramIndex++}`);
         params.push(JSON.stringify(photos));
+    }
+    if (routeFeedback !== undefined) {
+        setClauses.push(`feedback_choice = $${paramIndex++}`);
+        params.push(routeFeedback?.preferenceChoice || null);
+
+        setClauses.push(`feedback_satisfaction_score = $${paramIndex++}`);
+        params.push(Number.isFinite(Number(routeFeedback?.satisfactionScore)) ? Number(routeFeedback.satisfactionScore) : null);
+
+        setClauses.push(`feedback_preference_label = $${paramIndex++}`);
+        params.push(routeFeedback?.preferenceLabel || null);
+
+        setClauses.push(`feedback_reason_text = $${paramIndex++}`);
+        params.push(routeFeedback?.preferenceReason || null);
+
+        setClauses.push(`feedback_source = $${paramIndex++}`);
+        params.push(routeFeedback?.recommendationSource || null);
+
+        setClauses.push(`feedback_submitted_at = $${paramIndex++}`);
+        params.push(routeFeedback ? new Date() : null);
     }
 
     if (setClauses.length === 0) {

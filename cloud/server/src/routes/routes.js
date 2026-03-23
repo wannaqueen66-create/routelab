@@ -269,6 +269,15 @@ function mapRouteRow(row, points = [], options = {}) {
         photos: row.photos || [],
         weather: row.weather || null,
         routeFeedback: routeMeta.routeFeedback || null,
+        feedbackChoice: row.feedback_choice || null,
+        feedbackSatisfactionScore:
+            row.feedback_satisfaction_score !== null && row.feedback_satisfaction_score !== undefined
+                ? Number(row.feedback_satisfaction_score)
+                : null,
+        feedbackPreferenceLabel: row.feedback_preference_label || null,
+        feedbackReasonText: row.feedback_reason_text || null,
+        feedbackSource: row.feedback_source || null,
+        feedbackSubmittedAt: row.feedback_submitted_at?.getTime() || null,
         pointCount: points.length,
         createdAt: row.created_at?.getTime() || null,
         updatedAt: row.updated_at?.getTime() || null,

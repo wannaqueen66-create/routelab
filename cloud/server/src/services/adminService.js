@@ -144,6 +144,58 @@ async function computePurposeDistribution(rangeDays = 30) {
     .filter((row) => row.purposeCode);
 }
 
+async function computeRouteFeedbackSummary(rangeDays = 30) {
+  const cutoff = new Date(Date.now() - rangeDays * 24 * 60 * 60 * 1000);
+  const summaryResult = await pool.query(
+    `SELECT
+        COUNT(*) FILTER (WHERE feedback_choice IS NOT NULL) AS total_feedback,
+        AVG(feedback_satisfaction_score) FILTER (WHERE feedback_satisfaction_score IS NOT NULL) AS avg_satisfaction
+       FROM routes
+      WHERE created_at >= $1
+        AND deleted_at IS NULL`,
+    [cutoff]
+  );
+
+  const choiceResult = await pool.query(
+    `SELECT feedback_choice, COUNT(*) AS count
+       FROM routes
+      WHERE created_at >= $1
+        AND deleted_at IS NULL
+        AND feedback_choice IS NOT NULL
+      GROUP BY feedback_choice
+      ORDER BY count DESC`,
+    [cutoff]
+  );
+
+  const purposeResult = await pool.query(
+    `SELECT purpose_code, feedback_choice, COUNT(*) AS count,
+            AVG(feedback_satisfaction_score) FILTER (WHERE feedback_satisfaction_score IS NOT NULL) AS avg_satisfaction
+       FROM routes
+      WHERE created_at >= $1
+        AND deleted_at IS NULL
+        AND feedback_choice IS NOT NULL
+      GROUP BY purpose_code, feedback_choice
+      ORDER BY purpose_code ASC NULLS LAST, count DESC`,
+    [cutoff]
+  );
+
+  return {
+    rangeDays,
+    totalFeedback: Number(summaryResult.rows[0]?.total_feedback || 0),
+    averageSatisfaction: Number(summaryResult.rows[0]?.avg_satisfaction || 0),
+    byChoice: choiceResult.rows.map((row) => ({
+      choice: row.feedback_choice,
+      count: Number(row.count || 0),
+    })),
+    byPurpose: purposeResult.rows.map((row) => ({
+      purposeCode: row.purpose_code || '',
+      choice: row.feedback_choice,
+      count: Number(row.count || 0),
+      averageSatisfaction: Number(row.avg_satisfaction || 0),
+    })),
+  };
+}
+
 // === Backup ===
 
 async function buildBackupSnapshot() {
@@ -512,6 +564,7 @@ module.exports = {
   computeAdminAnalyticsTimeseries,
   computeCollectionDistribution,
   computePurposeDistribution,
+  computeRouteFeedbackSummary,
   buildBackupSnapshot,
   saveBackupToDisk,
   listAvailableBackups,

@@ -21,6 +21,7 @@ const {
   computeAdminAnalyticsTimeseries,
   computeCollectionDistribution,
   computePurposeDistribution,
+  computeRouteFeedbackSummary,
   buildBackupSnapshot,
   saveBackupToDisk,
   listAvailableBackups,
@@ -158,6 +159,17 @@ router.get('/analytics/quality', ensureAuth, async (req, res) => {
   } catch (error) {
     console.error('GET /api/admin/analytics/quality failed', error);
     res.status(500).json({ error: 'Failed to compute quality metrics' });
+  }
+});
+
+router.get('/analytics/route-feedback-summary', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) return;
+  const rangeDays = Math.min(Math.max(Number(req.query.rangeDays || req.query.days) || 30, 1), 365);
+  try {
+    res.json(await computeRouteFeedbackSummary(rangeDays));
+  } catch (error) {
+    console.error('GET /api/admin/analytics/route-feedback-summary failed', error);
+    res.status(500).json({ error: 'Failed to compute route feedback summary' });
   }
 });
 
