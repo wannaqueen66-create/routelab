@@ -30,8 +30,8 @@
   跑步、步行、骑行轨迹记录
 - Activity type inference and statistics  
   运动类型识别与统计
-- Offline-first local storage with cloud sync  
-  先本地存储，后云端同步
+- Cloud-first route persistence with local fallback cache  
+  轨迹正式保存以云端成功为准，本地仅作失败兜底暂存
 - Public route sharing, likes, comments, and admin review  
   公开轨迹分享、点赞评论、后台审核管理
 
@@ -50,6 +50,7 @@
 
 - WeChat login and token-based auth / 微信登录与 token 鉴权
 - Route CRUD and incremental sync / 轨迹增删改查与增量同步
+- Route recommendation proxy and preference survey persistence / 路线推荐代理与路径偏好调查结果持久化
 - Comments, likes, public route feed / 评论、点赞、公开路线
 - Weather and geocode proxy / 天气与地理编码代理
 - Admin dashboard data services / 管理后台数据接口
@@ -84,8 +85,8 @@ Cloud Stack
    用户在小程序开始记录轨迹
 2. Location + motion data are filtered and aggregated locally  
    定位与传感器数据先在本地进行过滤与聚合
-3. Route data are stored locally and marked for sync  
-   轨迹先写入本地并标记待同步
+3. The mini program tries to save route data to the cloud first; local storage is only a fallback buffer when cloud write fails  
+   小程序优先把轨迹写入云端；只有云端写入失败时，本地才作为兜底暂存
 4. Cloud API receives route data and persists them to PostgreSQL  
    云端 API 接收并写入 PostgreSQL
 5. Admin dashboard reads and manages the same dataset  

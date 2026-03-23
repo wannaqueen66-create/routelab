@@ -54,7 +54,7 @@ function normalizeRoute(route) {
     previewPhoto,
     synced,
     syncPending: !synced,
-    syncStatusLabel: synced ? '已同步' : (syncError ? syncError.label : '待同步'),
+    syncStatusLabel: synced ? '已同步到云端' : (syncError ? syncError.label : '仅本地暂存'),
     syncErrorType: syncError?.type || '',
     syncErrorHint: syncError?.hint || '',
     syncErrorMessage: uploadError?.message || '',
@@ -85,7 +85,7 @@ function formatSyncSummary(status = {}) {
   const errorMessage = rawError?.message || '';
   const classified = rawError ? classifySyncError(rawError) : null;
   return {
-    text: `待同步 ${pending} · 已同步 ${synced} · 上次同步 ${lastSyncText}`,
+    text: `仅本地暂存 ${pending} · 已同步到云端 ${synced} · 上次同步 ${lastSyncText}`,
     errorMessage,
     errorType: classified?.type || '',
     errorHint: classified?.hint || '',
@@ -101,7 +101,7 @@ Page(applyThemeMixin({
     empty: true,
     syncing: false,
     historyLoading: true,
-    syncSummaryText: '待同步 0 · 已同步 0 · 上次同步 --',
+    syncSummaryText: '仅本地暂存 0 · 已同步到云端 0 · 上次同步 --',
     syncErrorText: '',
     syncErrorHint: '',
     syncErrorType: '',
