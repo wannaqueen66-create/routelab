@@ -101,7 +101,7 @@ function ensureSeedRoutes() {
       startLocation: startLocation(sample.startLabel),
       endLocation: startLocation(sample.endLabel),
     });
-    storeRoute(payload);
+    storeRoute(payload, { syncImmediately: false });
   });
 }
 

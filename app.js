@@ -436,7 +436,7 @@ App({
           endLocation: { name: '离线轨迹终点', displayName: '', address: null, raw: null },
         });
   
-        createdRoutes.push(storeRoute(payload));
+        createdRoutes.push(storeRoute(payload, { syncImmediately: false }));
         logger.info('Flushed offline fragments to route', {
           sessionId,
           fragments: sessionFragments.length,

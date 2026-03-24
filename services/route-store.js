@@ -1167,7 +1167,8 @@ function syncRoutesFromCloud(options = {}) {
     });
 }
 
-function storeRoute(route) {
+function storeRoute(route, options = {}) {
+  const { syncImmediately = true } = options || {};
   const pendingRoute = {
     ...route,
     pendingUpload: true,
@@ -1179,9 +1180,19 @@ function storeRoute(route) {
   };
   const saved = saveRoute(pendingRoute);
   notify();
+
+  if (!syncImmediately) {
+    return Promise.resolve({
+      route: saved,
+      cloudSaved: false,
+      localFallback: true,
+      syncError: null,
+    });
+  }
+
   const logContext = buildRouteLogContext(saved);
   logger.info('Route upload initiated after recording', logContext);
-  syncRouteToCloud(saved)
+  return syncRouteToCloud(saved)
     .then((cloudRoute) => {
       const removed = dropRouteFromLocalCache(saved.id, {
         logContext,
@@ -1210,19 +1221,26 @@ function storeRoute(route) {
         removedFromCache: removed,
       });
       const syncHint = cloudRoute?.updatedAt || saved.updatedAt || saved.endTime || Date.now();
-      return syncRoutesFromCloud({ updatedAfter: syncHint }).catch((error) => {
-        logger.warn('Post-upload refresh failed', {
-          ...logContext,
-          error: error?.errMsg || error?.message || error,
-        });
-        if (cloudRoute && removed) {
-          restoreRouteToLocalCache(cloudRoute, {
-            logContext,
-            reason: 'post_upload_refresh_failed',
+      return syncRoutesFromCloud({ updatedAfter: syncHint })
+        .catch((error) => {
+          logger.warn('Post-upload refresh failed', {
+            ...logContext,
+            error: error?.errMsg || error?.message || error,
           });
-        }
-        return null;
-      });
+          if (cloudRoute && removed) {
+            restoreRouteToLocalCache(cloudRoute, {
+              logContext,
+              reason: 'post_upload_refresh_failed',
+            });
+          }
+          return null;
+        })
+        .then(() => ({
+          route: cloudRoute || saved,
+          cloudSaved: true,
+          localFallback: false,
+          syncError: null,
+        }));
     })
     .catch((error) => {
       markRouteSyncFailed(saved.id, error);
@@ -1231,8 +1249,13 @@ function storeRoute(route) {
         error: error?.errMsg || error?.message || error,
         statusCode: error?.statusCode,
       });
+      return {
+        route: saved,
+        cloudSaved: false,
+        localFallback: true,
+        syncError: error,
+      };
     });
-  return saved;
 }
 
 function updateRoutePrivacy(id, privacyLevel) {

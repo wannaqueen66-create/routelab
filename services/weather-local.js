@@ -336,28 +336,41 @@ function formatWindSpeed(windSpeed) {
  * 格式化天气数据为 UI 展示格式
  */
 function formatWeatherPayload(payload = {}) {
-  const advice = analyzeSportAdvice(payload);
-  const weatherText = ensureChineseText(payload.weatherText, advice.label);
-  const suggestion = ensureChineseText(payload.suggestion, advice.label, WEATHER_SUGGESTION_MAP);
-  const apparent = Number(payload.apparentTemperature);
-  const humidity = Number(payload.humidity);
-  const windSpeed = Number(payload.windSpeed);
+  const normalizedAirQuality = payload.airQuality && typeof payload.airQuality === 'object'
+    ? payload.airQuality
+    : {
+        aqi: payload.aqi ?? null,
+        value: payload.aqi ?? null,
+        level: payload.airLevel || payload.airCategory || '',
+        category: payload.airCategory || payload.airLevel || '',
+      };
+  const normalizedPayload = {
+    ...payload,
+    airQuality: normalizedAirQuality,
+    cityName: payload.cityName || payload.city || payload.district || '',
+  };
+  const advice = analyzeSportAdvice(normalizedPayload);
+  const weatherText = ensureChineseText(normalizedPayload.weatherText, advice.label);
+  const suggestion = ensureChineseText(normalizedPayload.suggestion, advice.label, WEATHER_SUGGESTION_MAP);
+  const apparent = Number(normalizedPayload.apparentTemperature);
+  const humidity = Number(normalizedPayload.humidity);
+  const windSpeed = Number(normalizedPayload.windSpeed);
   return {
     loading: false,
     ready: true,
-    temperature: Number.isFinite(payload.temperature)
-      ? `${Number(payload.temperature).toFixed(1)}℃`
+    temperature: Number.isFinite(normalizedPayload.temperature)
+      ? `${Number(normalizedPayload.temperature).toFixed(1)}℃`
       : '--',
     apparentTemperature: Number.isFinite(apparent) ? `${apparent.toFixed(1)}℃` : null,
     weatherText,
     humidityText: Number.isFinite(humidity) ? `${Math.round(humidity)}%` : '--',
     windText: formatWindSpeed(windSpeed),
-    airQualityText: formatAirQuality(payload.airQuality),
-    airQualityLevel: payload.airQuality?.level || payload.airQuality?.category || '',
+    airQualityText: formatAirQuality(normalizedAirQuality),
+    airQualityLevel: normalizedAirQuality.level || normalizedAirQuality.category || '',
     suggestion,
-    fetchedAt: payload.fetchedAt || Date.now(),
+    fetchedAt: normalizedPayload.fetchedAt || Date.now(),
     error: '',
-    cityText: payload.cityName || '',
+    cityText: normalizedPayload.cityName || '',
     sportAdviceLevel: advice.label,
     sportAdviceLabel: suggestion,
     sportAdviceColor: advice.color,

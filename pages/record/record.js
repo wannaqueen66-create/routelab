@@ -51,8 +51,9 @@ const TOAST = {
   requireLocation: '请先获取定位权限',
   maxPhotos: '最多选择 9 张图片',
   startFailed: '无法开始记录，请稍后重试',
-  routeSaved: '路线已保存',
+  routeSaved: '路线已保存到云端',
   routeSaveFailed: '未能保存路线，请稍后重试',
+  routeSavedLocalOnly: '云端保存失败，已暂存本地',
   purposeRequired: '请选择本次运动的目的',
   purposeUpdated: '运动目的已更新',
   activityLocked: '开始记录后可设置行进方式',
@@ -852,6 +853,11 @@ Page(applyThemeMixin({
     this.finalizeTracking().then((result) => {
       const { success, route } = result || {};
       if (!success) {
+        this.setData({
+          finishSheetVisible: false,
+          finishAutoPaused: false,
+          photos: [],
+        });
         return;
       }
       this.setData({
@@ -907,13 +913,26 @@ Page(applyThemeMixin({
           purposeType: this.data.purposeSelectionKey,
         });
       })
-      .then((route) => {
-        const success = Boolean(route);
-        wx.showToast({
-          title: success ? TOAST.routeSaved : TOAST.routeSaveFailed,
-          icon: success ? 'success' : 'none',
-        });
-        return { success, route: success ? route : null };
+      .then((result) => {
+        const route = result?.route || null;
+        const cloudSaved = result?.cloudSaved === true;
+        const localFallback = result?.localFallback === true;
+        if (cloudSaved) {
+          wx.showToast({
+            title: TOAST.routeSaved,
+            icon: 'success',
+          });
+          return { success: true, route, cloudSaved: true, localFallback: false };
+        }
+        if (localFallback && route) {
+          wx.showToast({
+            title: TOAST.routeSavedLocalOnly,
+            icon: 'none',
+          });
+          return { success: false, route, cloudSaved: false, localFallback: true };
+        }
+        wx.showToast({ title: TOAST.routeSaveFailed, icon: 'none' });
+        return { success: false, route: null, cloudSaved: false, localFallback: false };
       })
       .catch((error) => {
         logger.warn('stopTracking failed', error?.errMsg || error);

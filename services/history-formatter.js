@@ -93,7 +93,7 @@ function formatHistoryRoute(route) {
         photosCount: Array.isArray(route.photos) ? route.photos.length : 0,
         synced,
         syncPending: !synced,
-        syncStatusLabel: synced ? '已同步' : (syncError ? `${syncError.label}` : '待同步'),
+        syncStatusLabel: synced ? '已同步到云端' : (syncError ? `${syncError.label}` : '仅本地暂存'),
         syncErrorType: syncError?.type || '',
         syncErrorLabel: syncError?.label || '',
         syncErrorHint: syncError?.hint || '',
