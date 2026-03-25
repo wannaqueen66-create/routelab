@@ -764,6 +764,425 @@
   margin-top: 8rpx;
 }
 
+/* ══════ Finish Wizard ══════ */
+
+.wizard-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--overlay-scrim, rgba(15, 23, 42, 0.55));
+  backdrop-filter: blur(16rpx);
+  z-index: 25;
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+}
+
+.wizard-progress {
+  padding: 20rpx 40rpx 0;
+  flex-shrink: 0;
+}
+
+.wizard-progress__bar {
+  height: 6rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.wizard-progress__fill {
+  height: 100%;
+  border-radius: 999rpx;
+  background: linear-gradient(90deg, #2563eb, #7c3aed);
+  transition: width 0.4s ease;
+}
+
+.wizard-progress__steps {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12rpx;
+}
+
+.wizard-progress__dot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+  opacity: 0.4;
+  transition: opacity 0.3s ease;
+}
+
+.wizard-progress__dot--active {
+  opacity: 1;
+}
+
+.wizard-progress__dot-label {
+  font-size: 20rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.wizard-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin: 20rpx 24rpx;
+  margin-bottom: calc(20rpx + constant(safe-area-inset-bottom));
+  margin-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  background: var(--color-surface);
+  border-radius: 36rpx;
+  padding: 32rpx;
+  box-shadow: 0 40rpx 100rpx rgba(15, 23, 42, 0.2);
+  overflow: hidden;
+}
+
+.wizard-card--tall {
+  min-height: 0;
+}
+
+.wizard-card--reward {
+  justify-content: center;
+}
+
+.wizard-card__header {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  text-align: center;
+  flex-shrink: 0;
+  margin-bottom: 20rpx;
+}
+
+.wizard-card__title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.wizard-card__subtitle {
+  font-size: 24rpx;
+  color: var(--color-text-secondary);
+}
+
+.wizard-card__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  overflow-y: auto;
+}
+
+.wizard-card__body--scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wizard-card__actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+  flex-shrink: 0;
+}
+
+/* ── Step 1: End Point Map ── */
+
+.wizard-card__map-wrap {
+  flex: 1;
+  min-height: 360rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  position: relative;
+}
+
+.wizard-card__map {
+  width: 100%;
+  height: 100%;
+}
+
+.wizard-card__map-hint {
+  position: absolute;
+  bottom: 16rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  backdrop-filter: blur(8rpx);
+  white-space: nowrap;
+}
+
+/* ── Step 2: Satisfaction ── */
+
+.satisfaction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24rpx;
+  padding: 32rpx 0;
+}
+
+.satisfaction__emoji {
+  font-size: 80rpx;
+  transition: transform 0.2s ease;
+}
+
+.satisfaction__label-text {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  min-height: 40rpx;
+}
+
+.satisfaction__track-wrap {
+  width: 100%;
+  position: relative;
+  padding: 0 16rpx;
+}
+
+.satisfaction__track {
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.satisfaction__track-fill {
+  height: 100%;
+  border-radius: 999rpx;
+  transition: width 0.15s ease, background 0.3s ease;
+}
+
+.satisfaction__slider {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  margin: 0;
+}
+
+.satisfaction__scale {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 16rpx;
+}
+
+.satisfaction__scale-label {
+  font-size: 22rpx;
+  color: var(--color-text-tertiary);
+}
+
+.satisfaction__ticks {
+  display: flex;
+  gap: 12rpx;
+}
+
+.satisfaction__tick {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: rgba(15, 23, 42, 0.06);
+  border: 2rpx solid transparent;
+  transition: all 0.2s ease;
+}
+
+.satisfaction__tick--active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  border-color: rgba(37, 99, 235, 0.5);
+  transform: scale(1.15);
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.35);
+}
+
+/* ── Step 3: Route Comparison Map ── */
+
+.wizard-card__route-map-wrap {
+  border-radius: 20rpx;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.wizard-card__route-map {
+  width: 100%;
+  height: 320rpx;
+}
+
+.wizard-card__route-legend {
+  padding: 12rpx 16rpx;
+  background: rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.route-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 22rpx;
+  color: var(--color-text-secondary);
+}
+
+.route-legend__line {
+  width: 24rpx;
+  height: 6rpx;
+  border-radius: 999rpx;
+}
+
+.wizard-card__route-map-loading {
+  padding: 40rpx 0;
+  text-align: center;
+  font-size: 24rpx;
+  color: var(--color-text-tertiary);
+}
+
+/* ── Preference chips ── */
+
+.preference-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.preference-chip {
+  padding: 16rpx 24rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: var(--color-text-secondary);
+  transition: all 0.2s ease;
+}
+
+.preference-chip--active {
+  border-color: rgba(37, 99, 235, 0.9);
+  background: linear-gradient(145deg, rgba(37, 99, 235, 0.18), rgba(124, 58, 237, 0.18));
+  color: var(--color-primary-strong);
+  box-shadow: 0 12rpx 32rpx rgba(37, 99, 235, 0.2);
+}
+
+.preference-chip__icon {
+  font-size: 28rpx;
+}
+
+.preference-chip__label {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+/* ── Wizard Summary ── */
+
+.wizard-summary {
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 24rpx;
+  padding: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.wizard-summary__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 26rpx;
+}
+
+.wizard-summary__label {
+  color: var(--color-text-secondary);
+}
+
+.wizard-summary__value {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+/* ── Reward Celebration (inside wizard) ── */
+
+.reward-celebration {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  align-items: center;
+}
+
+.reward-celebration__title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.reward-celebration__stats {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.04);
+  border-radius: 24rpx;
+  padding: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.reward-celebration__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}
+
+.reward-celebration__label {
+  font-weight: 500;
+}
+
+.reward-celebration__value {
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.reward-celebration__points {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  font-size: 28rpx;
+}
+
+.reward-celebration__points-label {
+  color: var(--color-text-secondary);
+}
+
+.reward-celebration__points-gain {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.reward-celebration__points-stars {
+  font-size: 32rpx;
+}
+
+.reward-celebration__total {
+  font-size: 26rpx;
+  color: var(--color-text-secondary);
+}
+
+.reward-celebration__total-value {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
 /* ── Smooth transitions for sheet elements ── */
 .record-sheet,
 .metric,
@@ -772,10 +1191,8 @@
 .status-chip,
 .btn--camera,
 .btn--ghost,
-.reward-modal,
-.reward-modal__stats,
+.wizard-card,
 .purpose-picker,
-.finish-sheet,
 .location-permission-dialog {
   transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
@@ -795,17 +1212,39 @@
   box-shadow: 0 40rpx 90rpx rgba(0, 0, 0, 0.4);
 }
 
-.dark .finish-sheet {
-  box-shadow: 0 40rpx 100rpx rgba(0, 0, 0, 0.4);
-}
-
 .dark .location-permission-dialog {
   --record-dialog-bg: rgba(30, 41, 59, 0.95);
   box-shadow: 0 32rpx 80rpx rgba(0, 0, 0, 0.4);
 }
 
-.dark .reward-modal {
-  box-shadow: 0 50rpx 120rpx rgba(0, 0, 0, 0.4);
+.dark .wizard-card {
+  box-shadow: 0 40rpx 100rpx rgba(0, 0, 0, 0.4);
+}
+
+.dark .wizard-progress__bar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dark .satisfaction__track {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.dark .satisfaction__tick {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dark .preference-chip {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.25);
+}
+
+.dark .wizard-summary,
+.dark .reward-celebration__stats {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dark .wizard-card__route-legend {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .dark .metric {
@@ -854,10 +1293,6 @@
 .dark .btn--ghost {
   background: rgba(37, 99, 235, 0.15);
   border-color: rgba(37, 99, 235, 0.35);
-}
-
-.dark .reward-modal__stats {
-  background: rgba(255, 255, 255, 0.06);
 }
 
 .dark .meta-inline__badge {

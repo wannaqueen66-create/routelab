@@ -242,6 +242,11 @@ export async function fetchAdminPurposeDistribution(params = {}) {
   return response.data;
 }
 
+export async function fetchAdminFeedbackAnalytics(params = {}) {
+  const response = await client.get('/admin/analytics/feedback', { params });
+  return response.data;
+}
+
 export async function fetchAdminRouteFeedbackSummary(params = {}) {
   const response = await client.get('/admin/analytics/route-feedback-summary', {
     params,

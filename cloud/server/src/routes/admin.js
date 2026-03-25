@@ -118,6 +118,79 @@ router.get('/analytics/distribution', ensureAuth, async (req, res) => {
   }
 });
 
+// ── Route Feedback Analytics ──
+
+router.get('/analytics/feedback', ensureAuth, async (req, res) => {
+  if (!ensureAdminRequest(req, res)) return;
+  const rangeDays = Math.min(Math.max(Number(req.query.rangeDays || req.query.days) || 30, 1), 365);
+  try {
+    // Satisfaction score distribution
+    const satisfactionResult = await pool.query(
+      `SELECT feedback_satisfaction_score AS score, COUNT(*)::int AS count
+       FROM routes
+       WHERE feedback_satisfaction_score IS NOT NULL
+         AND deleted_at IS NULL
+         AND created_at >= NOW() - ($1 || ' days')::interval
+       GROUP BY feedback_satisfaction_score
+       ORDER BY feedback_satisfaction_score`,
+      [rangeDays]
+    );
+
+    // Preference labels breakdown
+    const preferenceResult = await pool.query(
+      `SELECT label, COUNT(*)::int AS count
+       FROM routes, unnest(feedback_preference_labels) AS label
+       WHERE feedback_preference_labels IS NOT NULL
+         AND deleted_at IS NULL
+         AND created_at >= NOW() - ($1 || ' days')::interval
+       GROUP BY label
+       ORDER BY count DESC`,
+      [rangeDays]
+    );
+
+    // Average satisfaction
+    const avgResult = await pool.query(
+      `SELECT AVG(feedback_satisfaction_score)::numeric(3,1) AS avg_score,
+              COUNT(*)::int AS total_feedback
+       FROM routes
+       WHERE feedback_satisfaction_score IS NOT NULL
+         AND deleted_at IS NULL
+         AND created_at >= NOW() - ($1 || ' days')::interval`,
+      [rangeDays]
+    );
+
+    // Confirmed end point distance stats
+    const endPointResult = await pool.query(
+      `SELECT AVG(confirmed_end_distance_meters)::numeric(5,1) AS avg_distance,
+              MAX(confirmed_end_distance_meters)::numeric(5,1) AS max_distance,
+              COUNT(*)::int AS total_confirmed
+       FROM routes
+       WHERE confirmed_end_distance_meters IS NOT NULL
+         AND deleted_at IS NULL
+         AND created_at >= NOW() - ($1 || ' days')::interval`,
+      [rangeDays]
+    );
+
+    res.json({
+      satisfaction: satisfactionResult.rows,
+      preferences: preferenceResult.rows,
+      summary: {
+        averageScore: avgResult.rows[0]?.avg_score || null,
+        totalFeedback: avgResult.rows[0]?.total_feedback || 0,
+        endPointConfirmation: {
+          averageDistance: endPointResult.rows[0]?.avg_distance || null,
+          maxDistance: endPointResult.rows[0]?.max_distance || null,
+          totalConfirmed: endPointResult.rows[0]?.total_confirmed || 0,
+        },
+      },
+      rangeDays,
+    });
+  } catch (error) {
+    console.error('GET /api/admin/analytics/feedback failed', error);
+    res.status(500).json({ error: 'Failed to compute feedback analytics' });
+  }
+});
+
 router.get('/analytics/collection-distribution', ensureAuth, async (req, res) => {
   if (!ensureAdminRequest(req, res)) return;
   const rangeDays = Math.min(Math.max(Number(req.query.rangeDays || req.query.days) || 30, 1), 365);

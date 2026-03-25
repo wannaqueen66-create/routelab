@@ -5,15 +5,8 @@ const { checkLocationAuthorization, requestLocationAuthorization, openLocationSe
 const tracker = require('../../services/tracker');
 const { PRIVACY_LEVELS } = require('../../constants/privacy');
 const { DEFAULT_ACTIVITY_TYPE, ACTIVITY_TYPE_MAP } = require('../../constants/activity');
-const {
-  getRecentSettings,
-  saveRecentSettings,
-  getKeepScreenPreference,
-  saveRouteFeedbackDraft,
-  removeRouteFeedbackDraft,
-} = require('../../utils/storage');
+const { getRecentSettings, saveRecentSettings, getKeepScreenPreference } = require('../../utils/storage');
 const api = require('../../services/api');
-const { getRouteRecommendations } = require('../../services/route-recommendations');
 const { formatSpeed, formatCalories } = require('../../utils/format');
 const { formatDuration, formatClock } = require('../../utils/time');
 const { estimateCalories } = require('../../utils/geo');
@@ -23,6 +16,8 @@ const { getSyncStatus } = require('../../services/route-store');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
 const rewards = require('../../services/rewards');
+const { fetchAlternativeRoutes } = require('../../services/path-bridge');
+const { calculateSegmentDistance } = require('../../utils/geo');
 
 const app = typeof getApp === 'function' ? getApp() : null;
 
@@ -44,10 +39,6 @@ const DEFAULT_CENTER = {
 const MAP_AUTO_CENTER_INTERVAL_MS = 10000;
 
 const MAX_PHOTOS = 9;
-const FINISH_CONFIRM_SCALE = 18;
-const FINISH_CONFIRM_RADIUS_METERS = 500;
-const SATISFACTION_MIN = 1;
-const SATISFACTION_MAX = 7;
 
 const MARKER_ICONS = {
   start: '/assets/icons/start.png',
@@ -57,6 +48,28 @@ const MARKER_ICONS = {
 
 const FINISH_PRIVACY_OPTIONS =
   PRIVACY_LEVELS.filter((item) => ['public', 'private'].includes(item.key)) || PRIVACY_LEVELS;
+
+const SATISFACTION_CONFIG = [
+  { score: 1, emoji: '\uD83D\uDE2D', label: '非常不满意', color: '#ef4444' },
+  { score: 2, emoji: '\uD83D\uDE1E', label: '不满意', color: '#f97316' },
+  { score: 3, emoji: '\uD83D\uDE15', label: '有点不满意', color: '#eab308' },
+  { score: 4, emoji: '\uD83D\uDE10', label: '一般', color: '#a3a3a3' },
+  { score: 5, emoji: '\uD83D\uDE42', label: '还不错', color: '#22c55e' },
+  { score: 6, emoji: '\uD83D\uDE0A', label: '满意', color: '#3b82f6' },
+  { score: 7, emoji: '\uD83E\uDD29', label: '非常满意', color: '#7c3aed' },
+];
+
+const PREFERENCE_OPTIONS = [
+  { key: 'shorter_distance', icon: '\uD83D\uDCCF', label: '距离更短', selected: false },
+  { key: 'faster', icon: '\u26A1', label: '更快 / 更少等待', selected: false },
+  { key: 'comfortable', icon: '\uD83C\uDF3F', label: '更舒适', selected: false },
+  { key: 'safer', icon: '\uD83D\uDEE1\uFE0F', label: '更安全', selected: false },
+  { key: 'familiar', icon: '\uD83D\uDCCD', label: '更熟悉 / 习惯走', selected: false },
+  { key: 'other', icon: '\uD83D\uDCAC', label: '其他原因', selected: false },
+];
+
+const ALT_ROUTE_COLORS = ['#f97316', '#22c55e', '#ec4899'];
+const ALT_ROUTE_LABELS = ['A', 'B', 'C'];
 
 const TOAST = {
   requireLocation: '请先获取定位权限',
@@ -132,91 +145,6 @@ function inferActivityByAverageSpeed(distance = 0, duration = 0) {
   return 'ride';
 }
 
-function clampSatisfaction(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return 5;
-  }
-  return Math.max(SATISFACTION_MIN, Math.min(SATISFACTION_MAX, Math.round(numeric)));
-}
-
-function formatSatisfactionLabel(value) {
-  const score = clampSatisfaction(value);
-  if (score <= 2) {
-    return `较不满意 ${score}/7`;
-  }
-  if (score === 3 || score === 4) {
-    return `一般 ${score}/7`;
-  }
-  if (score === 5 || score === 6) {
-    return `满意 ${score}/7`;
-  }
-  return `非常满意 ${score}/7`;
-}
-
-function formatMeters(value) {
-  const numeric = Number(value) || 0;
-  if (numeric >= 1000) {
-    return `${(numeric / 1000).toFixed(1)} km`;
-  }
-  return `${Math.round(numeric)} m`;
-}
-
-function formatSeconds(value) {
-  const seconds = Number(value) || 0;
-  if (seconds <= 0) {
-    return '--';
-  }
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) {
-    return `${minutes} 分钟`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const remain = minutes % 60;
-  return remain ? `${hours} 小时 ${remain} 分钟` : `${hours} 小时`;
-}
-
-function buildRecommendationPolyline(options = [], actualPoints = []) {
-  const actual = Array.isArray(actualPoints)
-    ? actualPoints.filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
-    : [];
-  const candidates = Array.isArray(options) ? options : [];
-  const polylines = [];
-
-  if (actual.length >= 2) {
-    polylines.push({
-      points: actual,
-      color: '#2F6BFF',
-      width: 6,
-      dottedLine: false,
-      zIndex: 30,
-    });
-  }
-
-  candidates.forEach((item) => {
-    if (!item || item.isActual) {
-      return;
-    }
-    const points = Array.isArray(item.polyline)
-      ? item.polyline.filter((point) => Number.isFinite(point.latitude) && Number.isFinite(point.longitude))
-      : [];
-    if (points.length < 2) {
-      return;
-    }
-    const strategy = item.strategy || item.scoreHint || '';
-    const color = strategy === 'riding' ? '#7C3AED' : strategy === 'driving' ? '#6B7280' : '#8B5CF6';
-    polylines.push({
-      points,
-      color,
-      width: strategy === 'driving' ? 3 : 4,
-      dottedLine: true,
-      zIndex: 10,
-    });
-  });
-
-  return polylines;
-}
-
 Page(applyThemeMixin({
   data: {
     tracking: false,
@@ -266,24 +194,38 @@ Page(applyThemeMixin({
     uploading: false,
     finishSheetVisible: false,
     finishAutoPaused: false,
-    finishConfirmVisible: false,
-    finishConfirmSelectionMode: 'map',
-    finishConfirmSubtitle: '请确认本次轨迹的终点位置',
-    finishConfirmTip: '地图已放大到终点附近 500m 范围，点击地图即可确认',
-    finishConfirmLatitude: null,
-    finishConfirmLongitude: null,
-    finishConfirmMarker: [],
-    finishConfirmCircle: [],
-    finishConfirmScale: FINISH_CONFIRM_SCALE,
-    satisfactionScore: 5,
-    satisfactionLabel: formatSatisfactionLabel(5),
-    routeSurveyVisible: false,
-    routeRecommendationLoading: false,
-    routeRecommendationSource: 'fallback',
-    routeRecommendationOptions: [],
-    routePreferenceChoice: '',
-    routePreferenceLabel: '',
-    routePreferenceReason: '',
+    wizardVisible: false,
+    wizardStep: 1,
+    wizardEndLat: 0,
+    wizardEndLng: 0,
+    wizardMapScale: 18,
+    wizardEndMarkers: [],
+    wizardEndPolyline: [],
+    wizardEndConfirmed: false,
+    wizardEndDistText: '',
+    wizardConfirmedEndLat: null,
+    wizardConfirmedEndLng: null,
+    wizardRawEndLat: null,
+    wizardRawEndLng: null,
+    wizardEndDistMeters: 0,
+    satisfactionScore: 4,
+    satisfactionEmoji: '\uD83D\uDE10',
+    satisfactionLabel: '一般',
+    satisfactionColor: '#a3a3a3',
+    preferenceOptions: PREFERENCE_OPTIONS.map((o) => ({ ...o })),
+    preferenceHasOther: false,
+    preferenceHasSelection: false,
+    feedbackReasonText: '',
+    wizardLoadingRoutes: false,
+    wizardRouteMapReady: false,
+    wizardRouteCenterLat: 0,
+    wizardRouteCenterLng: 0,
+    wizardRouteMapScale: 15,
+    wizardRouteMarkers: [],
+    wizardRoutePolylines: [],
+    wizardRouteIncludePoints: [],
+    wizardAlternatives: [],
+    wizardActualDistText: '',
     batchRetrying: false,
     batchRetryProgressText: '',
     locateAnimationActive: false,
@@ -665,17 +607,7 @@ Page(applyThemeMixin({
     });
   },
 
-  handleMapTap(event) {
-    if (this.data.finishConfirmVisible) {
-      const detail = event?.detail || {};
-      const latitude = Number(detail.latitude);
-      const longitude = Number(detail.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        return;
-      }
-      this.setFinishConfirmPoint({ latitude, longitude });
-      return;
-    }
+  handleMapTap() {
     if (!this.data.hasRoutePoints) {
       wx.showToast({ title: '开始记录后可查看路线', icon: 'none' });
       return;
@@ -929,6 +861,7 @@ Page(applyThemeMixin({
       return;
     }
 
+    // Refresh privacy preference
     try {
       const settings = typeof getRecentSettings === 'function' ? getRecentSettings() || {} : {};
       const storedPrivacyKey = settings.privacyLevel;
@@ -941,313 +874,361 @@ Page(applyThemeMixin({
         }
       }
     } catch (error) {
-      logger.warn(
-        'refresh privacy from settings before finish failed',
-        error?.errMsg || error?.message || error
-      );
+      logger.warn('refresh privacy before finish failed', error?.errMsg || error?.message || error);
     }
 
     const autoPaused = !this.data.paused;
     if (autoPaused) {
       tracker.pauseTracking();
     }
-    this.openFinishConfirm(autoPaused);
-  },
 
-  openFinishConfirm(autoPaused = false) {
-    const state = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
-    const points = Array.isArray(state.points) ? state.points : [];
+    // Get the last GPS point as raw end point
+    const state = tracker.getTrackerState ? tracker.getTrackerState() : {};
+    const points = state.points || [];
     const lastPoint = points.length ? points[points.length - 1] : null;
-    const fallbackPoint =
-      Number.isFinite(this.data.userLatitude) && Number.isFinite(this.data.userLongitude)
-        ? { latitude: this.data.userLatitude, longitude: this.data.userLongitude }
-        : null;
-    const targetPoint = lastPoint || fallbackPoint;
-    if (!targetPoint) {
-      wx.showToast({ title: '未获取到终点位置，请稍后再试', icon: 'none' });
-      if (autoPaused) {
-        tracker.resumeTracking();
-      }
-      return;
-    }
+    const endLat = lastPoint ? lastPoint.latitude : this.data.centerLatitude;
+    const endLng = lastPoint ? lastPoint.longitude : this.data.centerLongitude;
+    const startPoint = points.length ? points[0] : null;
+
+    // Build polyline for the end point confirmation map
+    const endPolyline = this.data.polyline && this.data.polyline.length ? this.data.polyline : [];
+
+    // GPS end marker
+    const gpsEndMarker = {
+      id: 900,
+      latitude: endLat,
+      longitude: endLng,
+      iconPath: '/assets/icons/end.png',
+      width: 28,
+      height: 28,
+      callout: { content: 'GPS\u7EC8\u70B9', bgColor: '#94a3b8', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+    };
+
     this.setData({
       finishAutoPaused: autoPaused,
-      finishConfirmVisible: true,
-      finishSheetVisible: false,
-      routeSurveyVisible: false,
-      routeRecommendationLoading: false,
-      finishConfirmSelectionMode: 'map',
-      finishConfirmSubtitle: '请确认本次轨迹的终点位置',
-      finishConfirmTip: '地图已放大到终点附近 500m 范围，点击地图即可确认',
-      centerLatitude: targetPoint.latitude,
-      centerLongitude: targetPoint.longitude,
-      mapScale: FINISH_CONFIRM_SCALE,
-      finishConfirmScale: FINISH_CONFIRM_SCALE,
+      wizardVisible: true,
+      wizardStep: 1,
+      wizardEndLat: endLat,
+      wizardEndLng: endLng,
+      wizardMapScale: 18,
+      wizardEndMarkers: [gpsEndMarker],
+      wizardEndPolyline: endPolyline,
+      wizardEndConfirmed: false,
+      wizardEndDistText: '',
+      wizardConfirmedEndLat: null,
+      wizardConfirmedEndLng: null,
+      wizardRawEndLat: endLat,
+      wizardRawEndLng: endLng,
+      wizardEndDistMeters: 0,
+      satisfactionScore: 4,
+      satisfactionEmoji: SATISFACTION_CONFIG[3].emoji,
+      satisfactionLabel: SATISFACTION_CONFIG[3].label,
+      satisfactionColor: SATISFACTION_CONFIG[3].color,
+      preferenceOptions: PREFERENCE_OPTIONS.map((o) => ({ ...o, selected: false })),
+      preferenceHasOther: false,
+      preferenceHasSelection: false,
+      feedbackReasonText: '',
+      wizardLoadingRoutes: false,
+      wizardRouteMapReady: false,
+      wizardAlternatives: [],
     });
-    this.setFinishConfirmPoint(targetPoint);
+
+    // Store route points info for later steps
+    this._wizardStartPoint = startPoint;
+    this._wizardEndPoint = lastPoint;
+    this._wizardPoints = points;
   },
 
-  setFinishConfirmPoint(point) {
-    const latitude = Number(point?.latitude);
-    const longitude = Number(point?.longitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return;
-    }
-    this.setData({
-      finishConfirmLatitude: latitude,
-      finishConfirmLongitude: longitude,
-      finishConfirmMarker: [
-        {
-          id: 'finish-confirm',
-          latitude,
-          longitude,
-          iconPath: MARKER_ICONS.live,
-          width: 30,
-          height: 30,
-          anchor: { x: 0.5, y: 1 },
-        },
-      ],
-      finishConfirmCircle: [
-        {
-          latitude,
-          longitude,
-          radius: FINISH_CONFIRM_RADIUS_METERS,
-          color: 'rgba(47, 107, 255, 0.12)',
-          fillColor: 'rgba(47, 107, 255, 0.12)',
-          strokeWidth: 2,
-        },
-      ],
-    });
-  },
-
-  handleFinishConfirmCancel() {
+  handleWizardCancel() {
     const shouldResume = this.data.finishAutoPaused;
     this.setData({
-      finishConfirmVisible: false,
-      finishSheetVisible: false,
-      routeSurveyVisible: false,
+      wizardVisible: false,
+      wizardStep: 1,
       finishAutoPaused: false,
-      finishConfirmMarker: [],
-      finishConfirmCircle: [],
     });
     if (shouldResume) {
       tracker.resumeTracking();
     }
   },
 
-  handleFinishConfirmNext() {
-    const latitude = Number(this.data.finishConfirmLatitude);
-    const longitude = Number(this.data.finishConfirmLongitude);
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      wx.showToast({ title: '请先点击地图确认终点', icon: 'none' });
+  handleWizardPrev() {
+    const step = this.data.wizardStep;
+    if (step <= 1) {
       return;
     }
+    this.setData({ wizardStep: step - 1 });
+  },
+
+  handleWizardNext() {
+    const step = this.data.wizardStep;
+    if (step >= 4) {
+      return;
+    }
+    const nextStep = step + 1;
+    this.setData({ wizardStep: nextStep });
+
+    // When entering step 3, fetch alternative routes
+    if (nextStep === 3) {
+      this.loadAlternativeRoutes();
+    }
+  },
+
+  // ── Step 1: End Point Confirmation ──
+
+  handleWizardMapTap(event) {
+    const { latitude, longitude } = event.detail || {};
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+
+    const rawLat = this.data.wizardRawEndLat;
+    const rawLng = this.data.wizardRawEndLng;
+    const distMeters = calculateSegmentDistance(
+      { latitude: rawLat, longitude: rawLng },
+      { latitude, longitude }
+    );
+    const distText = distMeters >= 1000
+      ? `${(distMeters / 1000).toFixed(1)}km`
+      : `${Math.round(distMeters)}m`;
+
+    // GPS end marker
+    const gpsMarker = {
+      id: 900,
+      latitude: rawLat,
+      longitude: rawLng,
+      iconPath: '/assets/icons/end.png',
+      width: 24,
+      height: 24,
+      callout: { content: 'GPS\u7EC8\u70B9', bgColor: '#94a3b8', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 11, display: 'ALWAYS' },
+    };
+
+    // User confirmed end marker
+    const confirmedMarker = {
+      id: 901,
+      latitude,
+      longitude,
+      iconPath: '/assets/icons/start.png',
+      width: 32,
+      height: 32,
+      callout: { content: '\u786E\u8BA4\u7EC8\u70B9', bgColor: '#2563eb', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+    };
+
     this.setData({
-      finishConfirmVisible: false,
-      finishSheetVisible: true,
-      satisfactionScore: clampSatisfaction(this.data.satisfactionScore),
-      satisfactionLabel: formatSatisfactionLabel(this.data.satisfactionScore),
+      wizardEndConfirmed: true,
+      wizardConfirmedEndLat: latitude,
+      wizardConfirmedEndLng: longitude,
+      wizardEndDistMeters: distMeters,
+      wizardEndDistText: distText,
+      wizardEndMarkers: [gpsMarker, confirmedMarker],
+    });
+  },
+
+  // ── Step 2: Satisfaction Rating ──
+
+  handleSatisfactionChanging(event) {
+    this._updateSatisfaction(event.detail.value);
+  },
+
+  handleSatisfactionChange(event) {
+    this._updateSatisfaction(event.detail.value);
+  },
+
+  handleSatisfactionTick(event) {
+    const val = Number(event.currentTarget.dataset.val);
+    if (val >= 1 && val <= 7) {
+      this._updateSatisfaction(val);
+    }
+  },
+
+  _updateSatisfaction(score) {
+    const safeScore = Math.max(1, Math.min(7, Math.round(Number(score) || 4)));
+    const cfg = SATISFACTION_CONFIG[safeScore - 1] || SATISFACTION_CONFIG[3];
+    this.setData({
+      satisfactionScore: safeScore,
+      satisfactionEmoji: cfg.emoji,
+      satisfactionLabel: cfg.label,
+      satisfactionColor: cfg.color,
+    });
+  },
+
+  // ── Step 3: Route Preference Survey ──
+
+  handlePreferenceToggle(event) {
+    const key = event.currentTarget.dataset.key;
+    const options = this.data.preferenceOptions.map((o) => {
+      if (o.key === key) {
+        return { ...o, selected: !o.selected };
+      }
+      return { ...o };
+    });
+    const hasOther = options.some((o) => o.key === 'other' && o.selected);
+    const hasSelection = options.some((o) => o.selected);
+    this.setData({
+      preferenceOptions: options,
+      preferenceHasOther: hasOther,
+      preferenceHasSelection: hasSelection,
+    });
+  },
+
+  handleFeedbackReasonInput(event) {
+    this.setData({ feedbackReasonText: event.detail.value || '' });
+  },
+
+  loadAlternativeRoutes() {
+    if (this.data.wizardRouteMapReady || this.data.wizardLoadingRoutes) {
+      return;
+    }
+    const startPoint = this._wizardStartPoint;
+    const endPoint = this._wizardEndPoint;
+    const points = this._wizardPoints || [];
+
+    if (!startPoint || !endPoint) {
+      this.setData({ wizardRouteMapReady: true });
+      return;
+    }
+
+    // Determine activity mode for route fetching
+    const mode = this.data.activityKey === 'ride' ? 'ride' : 'walk';
+
+    // Actual route distance
+    const actualDist = Number(this.data.distanceText.replace(/[^0-9.]/g, '')) || 0;
+    const actualDistText = actualDist > 0 ? `${actualDist} km` : this.data.distanceText;
+
+    this.setData({ wizardLoadingRoutes: true, wizardActualDistText: actualDistText });
+
+    fetchAlternativeRoutes({ start: startPoint, end: endPoint, mode })
+      .then((result) => {
+        const alternatives = (result.alternatives || []).slice(0, 3);
+
+        // Build polylines: actual route (blue) + alternatives (orange, green, pink)
+        const polylines = [];
+
+        // Actual user route
+        if (points.length >= 2) {
+          polylines.push({
+            points: points.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+            color: '#2563eb',
+            width: 6,
+            arrowLine: true,
+          });
+        }
+
+        // Alternative routes
+        const altData = alternatives.map((alt, idx) => {
+          const color = ALT_ROUTE_COLORS[idx] || '#9ca3af';
+          const label = ALT_ROUTE_LABELS[idx] || String(idx + 1);
+          polylines.push({
+            points: alt.points,
+            color,
+            width: 4,
+            dottedLine: true,
+          });
+          const distKm = alt.distance >= 1000
+            ? `${(alt.distance / 1000).toFixed(1)}km`
+            : `${Math.round(alt.distance)}m`;
+          const durMin = alt.duration >= 60
+            ? `${Math.round(alt.duration / 60)}\u5206\u949F`
+            : `${alt.duration}\u79D2`;
+          return { label, color, distText: distKm, durText: durMin, index: idx };
+        });
+
+        // Include points for auto-fit
+        const allPoints = [];
+        if (startPoint) allPoints.push({ latitude: startPoint.latitude, longitude: startPoint.longitude });
+        if (endPoint) allPoints.push({ latitude: endPoint.latitude, longitude: endPoint.longitude });
+
+        // Start/end markers
+        const markers = [
+          {
+            id: 800,
+            latitude: startPoint.latitude,
+            longitude: startPoint.longitude,
+            iconPath: '/assets/icons/start.png',
+            width: 28,
+            height: 28,
+            callout: { content: '\u8D77\u70B9', bgColor: '#22c55e', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+          },
+          {
+            id: 801,
+            latitude: endPoint.latitude,
+            longitude: endPoint.longitude,
+            iconPath: '/assets/icons/end.png',
+            width: 28,
+            height: 28,
+            callout: { content: '\u7EC8\u70B9', bgColor: '#ef4444', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+          },
+        ];
+
+        const centerLat = (startPoint.latitude + endPoint.latitude) / 2;
+        const centerLng = (startPoint.longitude + endPoint.longitude) / 2;
+
+        this.setData({
+          wizardLoadingRoutes: false,
+          wizardRouteMapReady: true,
+          wizardRouteCenterLat: centerLat,
+          wizardRouteCenterLng: centerLng,
+          wizardRouteMapScale: 15,
+          wizardRouteMarkers: markers,
+          wizardRoutePolylines: polylines,
+          wizardRouteIncludePoints: allPoints,
+          wizardAlternatives: altData,
+        });
+      })
+      .catch((error) => {
+        logger.warn('loadAlternativeRoutes failed', error?.errMsg || error?.message || error);
+        this.setData({
+          wizardLoadingRoutes: false,
+          wizardRouteMapReady: true,
+          wizardAlternatives: [],
+        });
+      });
+  },
+
+  // ── Step 4: Save ──
+
+  handleWizardSave() {
+    if (this.data.uploading) {
+      return;
+    }
+
+    // Collect feedback data
+    const feedbackMeta = {
+      confirmedEndLatitude: this.data.wizardConfirmedEndLat,
+      confirmedEndLongitude: this.data.wizardConfirmedEndLng,
+      confirmedEndDistanceMeters: this.data.wizardEndDistMeters || null,
+      rawEndLatitude: this.data.wizardRawEndLat,
+      rawEndLongitude: this.data.wizardRawEndLng,
+      feedbackSatisfactionScore: this.data.satisfactionScore,
+      feedbackPreferenceLabels: this.data.preferenceOptions
+        .filter((o) => o.selected)
+        .map((o) => o.key),
+      feedbackReasonText: this.data.feedbackReasonText || null,
+      feedbackSource: 'wizard',
+    };
+
+    this._wizardFeedbackMeta = feedbackMeta;
+    this.finalizeTracking().then((result) => {
+      const { success, route } = result || {};
+      if (!success) {
+        this.setData({
+          wizardVisible: false,
+          wizardStep: 1,
+          finishAutoPaused: false,
+          photos: [],
+        });
+        return;
+      }
+      this.setData({ photos: [] });
+      this.handleRouteReward(route);
     });
   },
 
   handleFinishCancel() {
-    const shouldResume = this.data.finishAutoPaused;
-    this.setData({
-      finishSheetVisible: false,
-      finishConfirmVisible: false,
-      routeSurveyVisible: false,
-      finishAutoPaused: false,
-      finishConfirmMarker: [],
-      finishConfirmCircle: [],
-    });
-    if (shouldResume) {
-      tracker.resumeTracking();
-    }
-  },
-
-  handleSatisfactionChange(event) {
-    const value = clampSatisfaction(event?.detail?.value);
-    this.setData({
-      satisfactionScore: value,
-      satisfactionLabel: formatSatisfactionLabel(value),
-    });
-  },
-
-  handleRoutePreferenceSelect(event) {
-    const { key, label } = event.currentTarget.dataset || {};
-    this.setData({
-      routePreferenceChoice: key || '',
-      routePreferenceLabel: label || '',
-    });
-  },
-
-  handleRoutePreferenceReasonInput(event) {
-    this.setData({ routePreferenceReason: event.detail.value || '' });
-  },
-
-  buildRouteFeedbackPayload(route = null) {
-    const state = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
-    const points = Array.isArray(state.points) ? state.points : [];
-    const start = points[0] || null;
-    const confirmedEnd =
-      Number.isFinite(Number(this.data.finishConfirmLatitude)) && Number.isFinite(Number(this.data.finishConfirmLongitude))
-        ? {
-            latitude: Number(this.data.finishConfirmLatitude),
-            longitude: Number(this.data.finishConfirmLongitude),
-          }
-        : points[points.length - 1] || null;
-    return {
-      routeId: route?.id || '',
-      satisfactionScore: clampSatisfaction(this.data.satisfactionScore),
-      satisfactionLabel: formatSatisfactionLabel(this.data.satisfactionScore),
-      preferenceChoice: this.data.routePreferenceChoice || '',
-      preferenceLabel: this.data.routePreferenceLabel || '',
-      preferenceReason: (this.data.routePreferenceReason || '').trim(),
-      confirmedEnd,
-      start,
-      recommendationSource: this.data.routeRecommendationSource || 'fallback',
-      recommendationOptions: Array.isArray(this.data.routeRecommendationOptions)
-        ? this.data.routeRecommendationOptions.map((item) => ({
-            id: item.id,
-            title: item.title,
-            summary: item.summary,
-            scoreHint: item.scoreHint,
-            provider: item.provider,
-            isActual: !!item.isActual,
-            distanceMeters: item.distanceMeters || null,
-            durationSeconds: item.durationSeconds || null,
-          }))
-        : [],
-    };
+    this.handleWizardCancel();
   },
 
   handleFinishSave() {
-    if (this.data.uploading) {
-      return;
-    }
-    this.finalizeTracking().then((result) => {
-      const { success, route, localFallback } = result || {};
-      if (!success) {
-        if (localFallback) {
-          this.setData({
-            finishSheetVisible: false,
-            finishConfirmVisible: false,
-            finishAutoPaused: false,
-            photos: [],
-          });
-        }
-        return;
-      }
-      this.loadRouteSurvey(route)
-        .catch((error) => {
-          logger.warn('loadRouteSurvey after finish failed', error?.errMsg || error?.message || error);
-        })
-        .finally(() => {
-          this.setData({
-            finishSheetVisible: false,
-            finishConfirmVisible: false,
-            finishAutoPaused: false,
-            photos: [],
-          });
-        });
-    });
-  },
-
-  loadRouteSurvey(route) {
-    if (!route || !route.id) {
-      this.handleRouteReward(route);
-      return Promise.resolve();
-    }
-    const points = Array.isArray(route.points) ? route.points : [];
-    const start = points[0] || route.meta?.startPoint || null;
-    const end =
-      Number.isFinite(Number(this.data.finishConfirmLatitude)) && Number.isFinite(Number(this.data.finishConfirmLongitude))
-        ? { latitude: Number(this.data.finishConfirmLatitude), longitude: Number(this.data.finishConfirmLongitude) }
-        : points[points.length - 1] || route.meta?.endPoint || null;
-
-    this.setData({
-      routeSurveyVisible: true,
-      routeRecommendationLoading: true,
-      routeRecommendationSource: 'fallback',
-      routeRecommendationOptions: [],
-      routeId: route.id,
-    });
-
-    return getRouteRecommendations({
-      start,
-      end,
-      actualPoints: points,
-      distance: route.stats?.distance || 0,
-      duration: route.stats?.duration || 0,
-    })
-      .then((payload) => {
-        const options = Array.isArray(payload?.recommendations)
-          ? payload.recommendations.map((item) => ({
-              ...item,
-              distanceText: item.distanceMeters ? formatMeters(item.distanceMeters) : '--',
-              durationText: item.durationSeconds ? formatSeconds(item.durationSeconds) : '--',
-              tagText: item.isActual
-                ? '实际轨迹'
-                : item.scoreHint === 'shortest'
-                ? '偏短'
-                : item.scoreHint === 'fastest'
-                ? '偏快'
-                : item.scoreHint === 'comfort'
-                ? '偏舒适'
-                : '候选',
-            }))
-          : [];
-        this.setData({
-          routeRecommendationLoading: false,
-          routeRecommendationSource: payload?.source || 'fallback',
-          routeRecommendationOptions: options,
-          routePreferenceChoice: this.data.routePreferenceChoice || '',
-          polyline: buildRecommendationPolyline(options, points),
-        });
-        saveRouteFeedbackDraft(route.id, this.buildRouteFeedbackPayload(route));
-      })
-      .catch((error) => {
-        this.setData({
-          routeRecommendationLoading: false,
-          routeRecommendationSource: 'fallback',
-          routeRecommendationOptions: [],
-          polyline: buildRecommendationPolyline([], points),
-        });
-        saveRouteFeedbackDraft(route.id, this.buildRouteFeedbackPayload(route));
-        throw error;
-      });
-  },
-
-  handleRouteSurveySubmit() {
-    const routeId = this.data.routeId || '';
-    const feedback = this.buildRouteFeedbackPayload({ id: routeId });
-    if (!routeId) {
-      wx.showToast({ title: '未找到对应轨迹，无法提交调查', icon: 'none' });
-      return;
-    }
-    saveRouteFeedbackDraft(routeId, feedback);
-    this.setData({ uploading: true });
-    api
-      .patchRoute(routeId, {
-        routeFeedback: feedback,
-      })
-      .then(() => {
-        this.setData({
-          routeSurveyVisible: false,
-          finishConfirmMarker: [],
-          finishConfirmCircle: [],
-        });
-        const currentState = typeof tracker.getTrackerState === 'function' ? tracker.getTrackerState() || {} : {};
-        this.updateState(currentState);
-        this.handleRouteReward({ id: routeId });
-      })
-      .catch((error) => {
-        logger.warn('patch route feedback failed', error?.errMsg || error?.message || error);
-        wx.showToast({ title: '调查结果提交失败，请稍后重试', icon: 'none' });
-      })
-      .finally(() => {
-        this.setData({ uploading: false });
-      });
+    this.handleWizardSave();
   },
 
   ensureProfileReadyForTracking() {
@@ -1272,25 +1253,6 @@ Page(applyThemeMixin({
     }
     const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
     const weight = this.data.weight || 60;
-    const feedbackMeta = {
-      satisfactionScore: clampSatisfaction(this.data.satisfactionScore),
-      satisfactionLabel: formatSatisfactionLabel(this.data.satisfactionScore),
-      preferenceChoice: this.data.routePreferenceChoice || '',
-      preferenceLabel: this.data.routePreferenceLabel || '',
-      preferenceReason: (this.data.routePreferenceReason || '').trim(),
-      confirmedEnd:
-        Number.isFinite(Number(this.data.finishConfirmLatitude)) && Number.isFinite(Number(this.data.finishConfirmLongitude))
-          ? {
-              latitude: Number(this.data.finishConfirmLatitude),
-              longitude: Number(this.data.finishConfirmLongitude),
-            }
-          : null,
-      questionnaireStage: 'completed_record',
-    };
-    const noteSuffix = `\n\n[Route Feedback]\n满意度：${feedbackMeta.satisfactionLabel}${
-      feedbackMeta.preferenceLabel ? `\n偏好：${feedbackMeta.preferenceLabel}` : ''
-    }${feedbackMeta.preferenceReason ? `\n原因：${feedbackMeta.preferenceReason}` : ''}`;
-    const finalNote = `${this.data.note || ''}${noteSuffix}`.trim();
     this.setData({ uploading: true });
     return media
       .ensureRemotePhotos(this.data.photos, { continueOnError: true })
@@ -1304,14 +1266,23 @@ Page(applyThemeMixin({
         if (failedCount > 0) {
           wx.showToast({ title: `${failedCount} 张图片上传失败，可稍后重试`, icon: 'none' });
         }
+        const feedbackMeta = this._wizardFeedbackMeta || {};
         return tracker.stopTracking({
           title: this.data.title,
-          note: finalNote,
+          note: this.data.note,
           privacyLevel,
           photos: normalizedUploaded.filter((item) => !item.uploadError),
           weight,
           purposeType: this.data.purposeSelectionKey,
-          routeFeedback: feedbackMeta,
+          confirmedEndLatitude: feedbackMeta.confirmedEndLatitude || null,
+          confirmedEndLongitude: feedbackMeta.confirmedEndLongitude || null,
+          confirmedEndDistanceMeters: feedbackMeta.confirmedEndDistanceMeters || null,
+          rawEndLatitude: feedbackMeta.rawEndLatitude || null,
+          rawEndLongitude: feedbackMeta.rawEndLongitude || null,
+          feedbackSatisfactionScore: feedbackMeta.feedbackSatisfactionScore || null,
+          feedbackPreferenceLabels: feedbackMeta.feedbackPreferenceLabels || null,
+          feedbackReasonText: feedbackMeta.feedbackReasonText || null,
+          feedbackSource: feedbackMeta.feedbackSource || 'wizard',
         });
       })
       .then((result) => {
@@ -1338,7 +1309,7 @@ Page(applyThemeMixin({
       .catch((error) => {
         logger.warn('stopTracking failed', error?.errMsg || error);
         wx.showToast({ title: TOAST.routeSaveFailed, icon: 'none' });
-        return { success: false, route: null, cloudSaved: false, localFallback: false };
+        return { success: false, route: null };
       })
       .finally(() => {
         this.setData({ uploading: false });
@@ -1347,6 +1318,7 @@ Page(applyThemeMixin({
 
   handleRouteReward(route) {
     if (!route || !route.id) {
+      this.setData({ wizardVisible: false, wizardStep: 1 });
       wx.switchTab({ url: '/pages/index/index' });
       return;
     }
@@ -1357,12 +1329,14 @@ Page(applyThemeMixin({
       logger.warn('awardPointsForRoute failed', error?.errMsg || error?.message || error);
     }
     if (!rewardResult || !rewardResult.evaluation) {
+      this.setData({ wizardVisible: false, wizardStep: 1 });
       wx.switchTab({ url: '/pages/index/index' });
       return;
     }
     if (!rewardResult.evaluation.valid || rewardResult.pointsAwarded <= 0) {
       wx.showToast({ title: TOAST.rewardInvalid, icon: 'none' });
       setTimeout(() => {
+        this.setData({ wizardVisible: false, wizardStep: 1 });
         wx.switchTab({ url: '/pages/index/index' });
       }, 800);
       return;
@@ -1371,17 +1345,17 @@ Page(applyThemeMixin({
     const distanceText = `${(distanceMeters / 1000).toFixed(1)} km`;
     const durationText = this.formatRewardDuration(route?.stats?.duration);
     const summary = {
-      title: rewardResult.hasPhoto ? '🎉 完成记录并打卡！' : '🎉 完成记录！',
+      title: rewardResult.hasPhoto ? '\uD83C\uDF89 \u5B8C\u6210\u8BB0\u5F55\u5E76\u6253\u5361\uFF01' : '\uD83C\uDF89 \u5B8C\u6210\u8BB0\u5F55\uFF01',
       distanceText,
       durationText,
       hasPhoto: rewardResult.hasPhoto,
       photoCount: rewardResult.photoCount || 0,
       gainedPoints: rewardResult.pointsAwarded,
       totalPoints: rewardResult.totalPoints,
-      starIcons: rewardResult.pointsAwarded === 2 ? '⭐⭐' : '⭐',
+      starIcons: rewardResult.pointsAwarded === 2 ? '\u2B50\u2B50' : '\u2B50',
     };
     this.setData({
-      rewardModalVisible: true,
+      wizardStep: 5,
       rewardSummary: summary,
     });
   },
@@ -1404,6 +1378,8 @@ Page(applyThemeMixin({
 
   handleRewardConfirm() {
     this.setData({
+      wizardVisible: false,
+      wizardStep: 1,
       rewardModalVisible: false,
       rewardSummary: null,
     });

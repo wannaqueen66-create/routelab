@@ -1439,10 +1439,15 @@ function stopTracking(meta = {}) {
         ? options.purposeType
         : trackerState.options.purposeType || '',
     pausePoints: capturedPausePoints,
-    routeFeedback:
-      options.routeFeedback && typeof options.routeFeedback === 'object'
-        ? { ...options.routeFeedback }
-        : null,
+    confirmedEndLatitude: options.confirmedEndLatitude || null,
+    confirmedEndLongitude: options.confirmedEndLongitude || null,
+    confirmedEndDistanceMeters: options.confirmedEndDistanceMeters || null,
+    rawEndLatitude: options.rawEndLatitude || null,
+    rawEndLongitude: options.rawEndLongitude || null,
+    feedbackSatisfactionScore: options.feedbackSatisfactionScore || null,
+    feedbackPreferenceLabels: options.feedbackPreferenceLabels || null,
+    feedbackReasonText: options.feedbackReasonText || null,
+    feedbackSource: options.feedbackSource || 'wizard',
   };
 
   const resolveLocations = () => {
