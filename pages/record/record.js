@@ -16,6 +16,8 @@ const { getSyncStatus } = require('../../services/route-store');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
 const rewards = require('../../services/rewards');
+const { fetchAlternativeRoutes } = require('../../services/path-bridge');
+const { calculateSegmentDistance } = require('../../utils/geo');
 
 const app = typeof getApp === 'function' ? getApp() : null;
 
@@ -46,6 +48,28 @@ const MARKER_ICONS = {
 
 const FINISH_PRIVACY_OPTIONS =
   PRIVACY_LEVELS.filter((item) => ['public', 'private'].includes(item.key)) || PRIVACY_LEVELS;
+
+const SATISFACTION_CONFIG = [
+  { score: 1, emoji: '\uD83D\uDE2D', label: '非常不满意', color: '#ef4444' },
+  { score: 2, emoji: '\uD83D\uDE1E', label: '不满意', color: '#f97316' },
+  { score: 3, emoji: '\uD83D\uDE15', label: '有点不满意', color: '#eab308' },
+  { score: 4, emoji: '\uD83D\uDE10', label: '一般', color: '#a3a3a3' },
+  { score: 5, emoji: '\uD83D\uDE42', label: '还不错', color: '#22c55e' },
+  { score: 6, emoji: '\uD83D\uDE0A', label: '满意', color: '#3b82f6' },
+  { score: 7, emoji: '\uD83E\uDD29', label: '非常满意', color: '#7c3aed' },
+];
+
+const PREFERENCE_OPTIONS = [
+  { key: 'shorter_distance', icon: '\uD83D\uDCCF', label: '距离更短', selected: false },
+  { key: 'faster', icon: '\u26A1', label: '更快 / 更少等待', selected: false },
+  { key: 'comfortable', icon: '\uD83C\uDF3F', label: '更舒适', selected: false },
+  { key: 'safer', icon: '\uD83D\uDEE1\uFE0F', label: '更安全', selected: false },
+  { key: 'familiar', icon: '\uD83D\uDCCD', label: '更熟悉 / 习惯走', selected: false },
+  { key: 'other', icon: '\uD83D\uDCAC', label: '其他原因', selected: false },
+];
+
+const ALT_ROUTE_COLORS = ['#f97316', '#22c55e', '#ec4899'];
+const ALT_ROUTE_LABELS = ['A', 'B', 'C'];
 
 const TOAST = {
   requireLocation: '请先获取定位权限',
@@ -170,6 +194,38 @@ Page(applyThemeMixin({
     uploading: false,
     finishSheetVisible: false,
     finishAutoPaused: false,
+    wizardVisible: false,
+    wizardStep: 1,
+    wizardEndLat: 0,
+    wizardEndLng: 0,
+    wizardMapScale: 18,
+    wizardEndMarkers: [],
+    wizardEndPolyline: [],
+    wizardEndConfirmed: false,
+    wizardEndDistText: '',
+    wizardConfirmedEndLat: null,
+    wizardConfirmedEndLng: null,
+    wizardRawEndLat: null,
+    wizardRawEndLng: null,
+    wizardEndDistMeters: 0,
+    satisfactionScore: 4,
+    satisfactionEmoji: '\uD83D\uDE10',
+    satisfactionLabel: '一般',
+    satisfactionColor: '#a3a3a3',
+    preferenceOptions: PREFERENCE_OPTIONS.map((o) => ({ ...o })),
+    preferenceHasOther: false,
+    preferenceHasSelection: false,
+    feedbackReasonText: '',
+    wizardLoadingRoutes: false,
+    wizardRouteMapReady: false,
+    wizardRouteCenterLat: 0,
+    wizardRouteCenterLng: 0,
+    wizardRouteMapScale: 15,
+    wizardRouteMarkers: [],
+    wizardRoutePolylines: [],
+    wizardRouteIncludePoints: [],
+    wizardAlternatives: [],
+    wizardActualDistText: '',
     batchRetrying: false,
     batchRetryProgressText: '',
     locateAnimationActive: false,
@@ -805,7 +861,7 @@ Page(applyThemeMixin({
       return;
     }
 
-    // 打开完成面板前刷新一次隐私偏好，默认值与个人主页设置保持一致
+    // Refresh privacy preference
     try {
       const settings = typeof getRecentSettings === 'function' ? getRecentSettings() || {} : {};
       const storedPrivacyKey = settings.privacyLevel;
@@ -818,27 +874,76 @@ Page(applyThemeMixin({
         }
       }
     } catch (error) {
-      logger.warn(
-        'refresh privacy from settings before finish failed',
-        error?.errMsg || error?.message || error
-      );
+      logger.warn('refresh privacy before finish failed', error?.errMsg || error?.message || error);
     }
 
     const autoPaused = !this.data.paused;
     if (autoPaused) {
       tracker.pauseTracking();
     }
+
+    // Get the last GPS point as raw end point
+    const state = tracker.getTrackerState ? tracker.getTrackerState() : {};
+    const points = state.points || [];
+    const lastPoint = points.length ? points[points.length - 1] : null;
+    const endLat = lastPoint ? lastPoint.latitude : this.data.centerLatitude;
+    const endLng = lastPoint ? lastPoint.longitude : this.data.centerLongitude;
+    const startPoint = points.length ? points[0] : null;
+
+    // Build polyline for the end point confirmation map
+    const endPolyline = this.data.polyline && this.data.polyline.length ? this.data.polyline : [];
+
+    // GPS end marker
+    const gpsEndMarker = {
+      id: 900,
+      latitude: endLat,
+      longitude: endLng,
+      iconPath: '/assets/icons/end.png',
+      width: 28,
+      height: 28,
+      callout: { content: 'GPS\u7EC8\u70B9', bgColor: '#94a3b8', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+    };
+
     this.setData({
-      finishSheetVisible: true,
       finishAutoPaused: autoPaused,
+      wizardVisible: true,
+      wizardStep: 1,
+      wizardEndLat: endLat,
+      wizardEndLng: endLng,
+      wizardMapScale: 18,
+      wizardEndMarkers: [gpsEndMarker],
+      wizardEndPolyline: endPolyline,
+      wizardEndConfirmed: false,
+      wizardEndDistText: '',
+      wizardConfirmedEndLat: null,
+      wizardConfirmedEndLng: null,
+      wizardRawEndLat: endLat,
+      wizardRawEndLng: endLng,
+      wizardEndDistMeters: 0,
+      satisfactionScore: 4,
+      satisfactionEmoji: SATISFACTION_CONFIG[3].emoji,
+      satisfactionLabel: SATISFACTION_CONFIG[3].label,
+      satisfactionColor: SATISFACTION_CONFIG[3].color,
+      preferenceOptions: PREFERENCE_OPTIONS.map((o) => ({ ...o, selected: false })),
+      preferenceHasOther: false,
+      preferenceHasSelection: false,
+      feedbackReasonText: '',
+      wizardLoadingRoutes: false,
+      wizardRouteMapReady: false,
+      wizardAlternatives: [],
     });
+
+    // Store route points info for later steps
+    this._wizardStartPoint = startPoint;
+    this._wizardEndPoint = lastPoint;
+    this._wizardPoints = points;
   },
 
-  handleFinishCancel() {
-    // ������¼������ѡ��ȡ��ʱ������Ƿ��Զ�����¼ʱ��Ҫ�ָ�
+  handleWizardCancel() {
     const shouldResume = this.data.finishAutoPaused;
     this.setData({
-      finishSheetVisible: false,
+      wizardVisible: false,
+      wizardStep: 1,
       finishAutoPaused: false,
     });
     if (shouldResume) {
@@ -846,27 +951,284 @@ Page(applyThemeMixin({
     }
   },
 
-  handleFinishSave() {
+  handleWizardPrev() {
+    const step = this.data.wizardStep;
+    if (step <= 1) {
+      return;
+    }
+    this.setData({ wizardStep: step - 1 });
+  },
+
+  handleWizardNext() {
+    const step = this.data.wizardStep;
+    if (step >= 4) {
+      return;
+    }
+    const nextStep = step + 1;
+    this.setData({ wizardStep: nextStep });
+
+    // When entering step 3, fetch alternative routes
+    if (nextStep === 3) {
+      this.loadAlternativeRoutes();
+    }
+  },
+
+  // ── Step 1: End Point Confirmation ──
+
+  handleWizardMapTap(event) {
+    const { latitude, longitude } = event.detail || {};
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return;
+    }
+
+    const rawLat = this.data.wizardRawEndLat;
+    const rawLng = this.data.wizardRawEndLng;
+    const distMeters = calculateSegmentDistance(
+      { latitude: rawLat, longitude: rawLng },
+      { latitude, longitude }
+    );
+    const distText = distMeters >= 1000
+      ? `${(distMeters / 1000).toFixed(1)}km`
+      : `${Math.round(distMeters)}m`;
+
+    // GPS end marker
+    const gpsMarker = {
+      id: 900,
+      latitude: rawLat,
+      longitude: rawLng,
+      iconPath: '/assets/icons/end.png',
+      width: 24,
+      height: 24,
+      callout: { content: 'GPS\u7EC8\u70B9', bgColor: '#94a3b8', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 11, display: 'ALWAYS' },
+    };
+
+    // User confirmed end marker
+    const confirmedMarker = {
+      id: 901,
+      latitude,
+      longitude,
+      iconPath: '/assets/icons/start.png',
+      width: 32,
+      height: 32,
+      callout: { content: '\u786E\u8BA4\u7EC8\u70B9', bgColor: '#2563eb', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+    };
+
+    this.setData({
+      wizardEndConfirmed: true,
+      wizardConfirmedEndLat: latitude,
+      wizardConfirmedEndLng: longitude,
+      wizardEndDistMeters: distMeters,
+      wizardEndDistText: distText,
+      wizardEndMarkers: [gpsMarker, confirmedMarker],
+    });
+  },
+
+  // ── Step 2: Satisfaction Rating ──
+
+  handleSatisfactionChanging(event) {
+    this._updateSatisfaction(event.detail.value);
+  },
+
+  handleSatisfactionChange(event) {
+    this._updateSatisfaction(event.detail.value);
+  },
+
+  handleSatisfactionTick(event) {
+    const val = Number(event.currentTarget.dataset.val);
+    if (val >= 1 && val <= 7) {
+      this._updateSatisfaction(val);
+    }
+  },
+
+  _updateSatisfaction(score) {
+    const safeScore = Math.max(1, Math.min(7, Math.round(Number(score) || 4)));
+    const cfg = SATISFACTION_CONFIG[safeScore - 1] || SATISFACTION_CONFIG[3];
+    this.setData({
+      satisfactionScore: safeScore,
+      satisfactionEmoji: cfg.emoji,
+      satisfactionLabel: cfg.label,
+      satisfactionColor: cfg.color,
+    });
+  },
+
+  // ── Step 3: Route Preference Survey ──
+
+  handlePreferenceToggle(event) {
+    const key = event.currentTarget.dataset.key;
+    const options = this.data.preferenceOptions.map((o) => {
+      if (o.key === key) {
+        return { ...o, selected: !o.selected };
+      }
+      return { ...o };
+    });
+    const hasOther = options.some((o) => o.key === 'other' && o.selected);
+    const hasSelection = options.some((o) => o.selected);
+    this.setData({
+      preferenceOptions: options,
+      preferenceHasOther: hasOther,
+      preferenceHasSelection: hasSelection,
+    });
+  },
+
+  handleFeedbackReasonInput(event) {
+    this.setData({ feedbackReasonText: event.detail.value || '' });
+  },
+
+  loadAlternativeRoutes() {
+    if (this.data.wizardRouteMapReady || this.data.wizardLoadingRoutes) {
+      return;
+    }
+    const startPoint = this._wizardStartPoint;
+    const endPoint = this._wizardEndPoint;
+    const points = this._wizardPoints || [];
+
+    if (!startPoint || !endPoint) {
+      this.setData({ wizardRouteMapReady: true });
+      return;
+    }
+
+    // Determine activity mode for route fetching
+    const mode = this.data.activityKey === 'ride' ? 'ride' : 'walk';
+
+    // Actual route distance
+    const actualDist = Number(this.data.distanceText.replace(/[^0-9.]/g, '')) || 0;
+    const actualDistText = actualDist > 0 ? `${actualDist} km` : this.data.distanceText;
+
+    this.setData({ wizardLoadingRoutes: true, wizardActualDistText: actualDistText });
+
+    fetchAlternativeRoutes({ start: startPoint, end: endPoint, mode })
+      .then((result) => {
+        const alternatives = (result.alternatives || []).slice(0, 3);
+
+        // Build polylines: actual route (blue) + alternatives (orange, green, pink)
+        const polylines = [];
+
+        // Actual user route
+        if (points.length >= 2) {
+          polylines.push({
+            points: points.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+            color: '#2563eb',
+            width: 6,
+            arrowLine: true,
+          });
+        }
+
+        // Alternative routes
+        const altData = alternatives.map((alt, idx) => {
+          const color = ALT_ROUTE_COLORS[idx] || '#9ca3af';
+          const label = ALT_ROUTE_LABELS[idx] || String(idx + 1);
+          polylines.push({
+            points: alt.points,
+            color,
+            width: 4,
+            dottedLine: true,
+          });
+          const distKm = alt.distance >= 1000
+            ? `${(alt.distance / 1000).toFixed(1)}km`
+            : `${Math.round(alt.distance)}m`;
+          const durMin = alt.duration >= 60
+            ? `${Math.round(alt.duration / 60)}\u5206\u949F`
+            : `${alt.duration}\u79D2`;
+          return { label, color, distText: distKm, durText: durMin, index: idx };
+        });
+
+        // Include points for auto-fit
+        const allPoints = [];
+        if (startPoint) allPoints.push({ latitude: startPoint.latitude, longitude: startPoint.longitude });
+        if (endPoint) allPoints.push({ latitude: endPoint.latitude, longitude: endPoint.longitude });
+
+        // Start/end markers
+        const markers = [
+          {
+            id: 800,
+            latitude: startPoint.latitude,
+            longitude: startPoint.longitude,
+            iconPath: '/assets/icons/start.png',
+            width: 28,
+            height: 28,
+            callout: { content: '\u8D77\u70B9', bgColor: '#22c55e', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+          },
+          {
+            id: 801,
+            latitude: endPoint.latitude,
+            longitude: endPoint.longitude,
+            iconPath: '/assets/icons/end.png',
+            width: 28,
+            height: 28,
+            callout: { content: '\u7EC8\u70B9', bgColor: '#ef4444', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
+          },
+        ];
+
+        const centerLat = (startPoint.latitude + endPoint.latitude) / 2;
+        const centerLng = (startPoint.longitude + endPoint.longitude) / 2;
+
+        this.setData({
+          wizardLoadingRoutes: false,
+          wizardRouteMapReady: true,
+          wizardRouteCenterLat: centerLat,
+          wizardRouteCenterLng: centerLng,
+          wizardRouteMapScale: 15,
+          wizardRouteMarkers: markers,
+          wizardRoutePolylines: polylines,
+          wizardRouteIncludePoints: allPoints,
+          wizardAlternatives: altData,
+        });
+      })
+      .catch((error) => {
+        logger.warn('loadAlternativeRoutes failed', error?.errMsg || error?.message || error);
+        this.setData({
+          wizardLoadingRoutes: false,
+          wizardRouteMapReady: true,
+          wizardAlternatives: [],
+        });
+      });
+  },
+
+  // ── Step 4: Save ──
+
+  handleWizardSave() {
     if (this.data.uploading) {
       return;
     }
+
+    // Collect feedback data
+    const feedbackMeta = {
+      confirmedEndLatitude: this.data.wizardConfirmedEndLat,
+      confirmedEndLongitude: this.data.wizardConfirmedEndLng,
+      confirmedEndDistanceMeters: this.data.wizardEndDistMeters || null,
+      rawEndLatitude: this.data.wizardRawEndLat,
+      rawEndLongitude: this.data.wizardRawEndLng,
+      feedbackSatisfactionScore: this.data.satisfactionScore,
+      feedbackPreferenceLabels: this.data.preferenceOptions
+        .filter((o) => o.selected)
+        .map((o) => o.key),
+      feedbackReasonText: this.data.feedbackReasonText || null,
+      feedbackSource: 'wizard',
+    };
+
+    this._wizardFeedbackMeta = feedbackMeta;
     this.finalizeTracking().then((result) => {
       const { success, route } = result || {};
       if (!success) {
         this.setData({
-          finishSheetVisible: false,
+          wizardVisible: false,
+          wizardStep: 1,
           finishAutoPaused: false,
           photos: [],
         });
         return;
       }
-      this.setData({
-        finishSheetVisible: false,
-        finishAutoPaused: false,
-        photos: [],
-      });
+      this.setData({ photos: [] });
       this.handleRouteReward(route);
     });
+  },
+
+  handleFinishCancel() {
+    this.handleWizardCancel();
+  },
+
+  handleFinishSave() {
+    this.handleWizardSave();
   },
 
   ensureProfileReadyForTracking() {
@@ -904,6 +1266,7 @@ Page(applyThemeMixin({
         if (failedCount > 0) {
           wx.showToast({ title: `${failedCount} 张图片上传失败，可稍后重试`, icon: 'none' });
         }
+        const feedbackMeta = this._wizardFeedbackMeta || {};
         return tracker.stopTracking({
           title: this.data.title,
           note: this.data.note,
@@ -911,6 +1274,15 @@ Page(applyThemeMixin({
           photos: normalizedUploaded.filter((item) => !item.uploadError),
           weight,
           purposeType: this.data.purposeSelectionKey,
+          confirmedEndLatitude: feedbackMeta.confirmedEndLatitude || null,
+          confirmedEndLongitude: feedbackMeta.confirmedEndLongitude || null,
+          confirmedEndDistanceMeters: feedbackMeta.confirmedEndDistanceMeters || null,
+          rawEndLatitude: feedbackMeta.rawEndLatitude || null,
+          rawEndLongitude: feedbackMeta.rawEndLongitude || null,
+          feedbackSatisfactionScore: feedbackMeta.feedbackSatisfactionScore || null,
+          feedbackPreferenceLabels: feedbackMeta.feedbackPreferenceLabels || null,
+          feedbackReasonText: feedbackMeta.feedbackReasonText || null,
+          feedbackSource: feedbackMeta.feedbackSource || 'wizard',
         });
       })
       .then((result) => {
@@ -946,6 +1318,7 @@ Page(applyThemeMixin({
 
   handleRouteReward(route) {
     if (!route || !route.id) {
+      this.setData({ wizardVisible: false, wizardStep: 1 });
       wx.switchTab({ url: '/pages/index/index' });
       return;
     }
@@ -956,12 +1329,14 @@ Page(applyThemeMixin({
       logger.warn('awardPointsForRoute failed', error?.errMsg || error?.message || error);
     }
     if (!rewardResult || !rewardResult.evaluation) {
+      this.setData({ wizardVisible: false, wizardStep: 1 });
       wx.switchTab({ url: '/pages/index/index' });
       return;
     }
     if (!rewardResult.evaluation.valid || rewardResult.pointsAwarded <= 0) {
       wx.showToast({ title: TOAST.rewardInvalid, icon: 'none' });
       setTimeout(() => {
+        this.setData({ wizardVisible: false, wizardStep: 1 });
         wx.switchTab({ url: '/pages/index/index' });
       }, 800);
       return;
@@ -970,17 +1345,17 @@ Page(applyThemeMixin({
     const distanceText = `${(distanceMeters / 1000).toFixed(1)} km`;
     const durationText = this.formatRewardDuration(route?.stats?.duration);
     const summary = {
-      title: rewardResult.hasPhoto ? '🎉 完成记录并打卡！' : '🎉 完成记录！',
+      title: rewardResult.hasPhoto ? '\uD83C\uDF89 \u5B8C\u6210\u8BB0\u5F55\u5E76\u6253\u5361\uFF01' : '\uD83C\uDF89 \u5B8C\u6210\u8BB0\u5F55\uFF01',
       distanceText,
       durationText,
       hasPhoto: rewardResult.hasPhoto,
       photoCount: rewardResult.photoCount || 0,
       gainedPoints: rewardResult.pointsAwarded,
       totalPoints: rewardResult.totalPoints,
-      starIcons: rewardResult.pointsAwarded === 2 ? '⭐⭐' : '⭐',
+      starIcons: rewardResult.pointsAwarded === 2 ? '\u2B50\u2B50' : '\u2B50',
     };
     this.setData({
-      rewardModalVisible: true,
+      wizardStep: 5,
       rewardSummary: summary,
     });
   },
@@ -1003,6 +1378,8 @@ Page(applyThemeMixin({
 
   handleRewardConfirm() {
     this.setData({
+      wizardVisible: false,
+      wizardStep: 1,
       rewardModalVisible: false,
       rewardSummary: null,
     });

@@ -213,3 +213,18 @@ CREATE TABLE IF NOT EXISTS feedback_tickets (
 
 CREATE INDEX IF NOT EXISTS idx_feedback_tickets_status_created_at
   ON feedback_tickets(status, created_at DESC);
+
+-- Route feedback: confirmed end coordinates & satisfaction/preference data
+ALTER TABLE routes
+  ADD COLUMN IF NOT EXISTS confirmed_end_latitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS confirmed_end_longitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS confirmed_end_distance_meters DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS raw_end_latitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS raw_end_longitude DOUBLE PRECISION,
+  ADD COLUMN IF NOT EXISTS feedback_satisfaction_score SMALLINT,
+  ADD COLUMN IF NOT EXISTS feedback_preference_labels TEXT[],
+  ADD COLUMN IF NOT EXISTS feedback_reason_text TEXT,
+  ADD COLUMN IF NOT EXISTS feedback_source TEXT NOT NULL DEFAULT 'wizard';
+
+CREATE INDEX IF NOT EXISTS idx_routes_feedback_satisfaction
+  ON routes(feedback_satisfaction_score) WHERE feedback_satisfaction_score IS NOT NULL;

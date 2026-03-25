@@ -7,6 +7,7 @@ import RouteTable from '../components/admin/RouteTable.jsx';
 import RouteDetailPanel from '../components/admin/RouteDetailPanel.jsx';
 import UsersPanel from '../components/admin/UsersPanel.jsx';
 import QualityMetrics from '../components/admin/QualityMetrics.jsx';
+import FeedbackPanel from '../components/admin/FeedbackPanel.jsx';
 import {
   bulkDeleteRoutes,
   createAdminRoute,
@@ -31,6 +32,7 @@ import {
 } from '../api/client';
 const ADMIN_TABS = [
   { id: 'routes', label: '轨迹概览' },
+  { id: 'feedback', label: '反馈分析' },
   { id: 'users', label: '用户概览' },
   { id: 'maintenance', label: '后台维护' },
 ];
@@ -642,6 +644,10 @@ export default function AdminDashboard({ role: roleProp } = {}) {
             />
           </div>
         </>
+      ) : null}
+
+      {activeTab === 'feedback' ? (
+        <FeedbackPanel rangeDays={30} />
       ) : null}
 
       {activeTab === 'users' ? (

@@ -169,17 +169,194 @@
     </view>
   </view>
 
+  <!-- ══════ Finish Wizard (4-step) ══════ -->
   <view
-    class="finish-sheet-overlay"
-    wx:if="{{finishSheetVisible}}"
-    catchtouchmove="true"
+    class="wizard-overlay"
+    wx:if="{{wizardVisible}}"
+    catchtouchmove="{{wizardStep !== 1 && wizardStep !== 3}}"
   >
-    <view class="finish-sheet">
-      <view class="finish-sheet__header">
-        <text class="finish-sheet__title">完成记录</text>
-        <text class="finish-sheet__subtitle">补充路线名称、备注与隐私设置</text>
+    <!-- Progress indicator -->
+    <view class="wizard-progress">
+      <view class="wizard-progress__bar">
+        <view class="wizard-progress__fill" style="width: {{wizardStep * 25}}%"></view>
       </view>
-      <view class="finish-sheet__body">
+      <view class="wizard-progress__steps">
+        <view class="wizard-progress__dot {{wizardStep >= 1 ? 'wizard-progress__dot--active' : ''}}" wx:key="1">
+          <text class="wizard-progress__dot-label">确认终点</text>
+        </view>
+        <view class="wizard-progress__dot {{wizardStep >= 2 ? 'wizard-progress__dot--active' : ''}}" wx:key="2">
+          <text class="wizard-progress__dot-label">满意度</text>
+        </view>
+        <view class="wizard-progress__dot {{wizardStep >= 3 ? 'wizard-progress__dot--active' : ''}}" wx:key="3">
+          <text class="wizard-progress__dot-label">路径偏好</text>
+        </view>
+        <view class="wizard-progress__dot {{wizardStep >= 4 ? 'wizard-progress__dot--active' : ''}}" wx:key="4">
+          <text class="wizard-progress__dot-label">保存</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- ── Step 1: Confirm End Point ── -->
+    <view class="wizard-card" wx:if="{{wizardStep === 1}}">
+      <view class="wizard-card__header">
+        <text class="wizard-card__title">确认终点位置</text>
+        <text class="wizard-card__subtitle">点击地图精确标记你的实际终点</text>
+      </view>
+      <view class="wizard-card__map-wrap">
+        <map
+          id="confirmEndMap"
+          class="wizard-card__map"
+          longitude="{{wizardEndLng}}"
+          latitude="{{wizardEndLat}}"
+          scale="{{wizardMapScale}}"
+          show-location="{{false}}"
+          show-scale="{{true}}"
+          markers="{{wizardEndMarkers}}"
+          polyline="{{wizardEndPolyline}}"
+          bindtap="handleWizardMapTap"
+        ></map>
+        <view class="wizard-card__map-hint">
+          <text wx:if="{{!wizardEndConfirmed}}">请点击地图标记终点</text>
+          <text wx:else>已确认终点 (距GPS点 {{wizardEndDistText}})</text>
+        </view>
+      </view>
+      <view class="wizard-card__actions">
+        <button class="btn btn--ghost" bindtap="handleWizardCancel">取消记录</button>
+        <button
+          class="btn btn--primary"
+          bindtap="handleWizardNext"
+          disabled="{{!wizardEndConfirmed}}"
+        >下一步</button>
+      </view>
+    </view>
+
+    <!-- ── Step 2: Satisfaction Rating ── -->
+    <view class="wizard-card" wx:if="{{wizardStep === 2}}">
+      <view class="wizard-card__header">
+        <text class="wizard-card__title">路线满意度</text>
+        <text class="wizard-card__subtitle">你对本次路线体验的整体感受</text>
+      </view>
+      <view class="wizard-card__body">
+        <view class="satisfaction">
+          <view class="satisfaction__emoji">{{satisfactionEmoji}}</view>
+          <view class="satisfaction__label-text">{{satisfactionLabel}}</view>
+          <view class="satisfaction__track-wrap">
+            <view class="satisfaction__track">
+              <view class="satisfaction__track-fill" style="width: {{(satisfactionScore - 1) / 6 * 100}}%; background: {{satisfactionColor}}"></view>
+            </view>
+            <slider
+              class="satisfaction__slider"
+              min="1"
+              max="7"
+              step="1"
+              value="{{satisfactionScore}}"
+              activeColor="transparent"
+              backgroundColor="transparent"
+              block-size="28"
+              block-color="{{satisfactionColor}}"
+              bindchanging="handleSatisfactionChanging"
+              bindchange="handleSatisfactionChange"
+            />
+          </view>
+          <view class="satisfaction__scale">
+            <text class="satisfaction__scale-label">非常不满意</text>
+            <text class="satisfaction__scale-label">非常满意</text>
+          </view>
+          <view class="satisfaction__ticks">
+            <block wx:for="{{[1,2,3,4,5,6,7]}}" wx:key="*this">
+              <view class="satisfaction__tick {{satisfactionScore === item ? 'satisfaction__tick--active' : ''}}" data-val="{{item}}" bindtap="handleSatisfactionTick">
+                <text>{{item}}</text>
+              </view>
+            </block>
+          </view>
+        </view>
+      </view>
+      <view class="wizard-card__actions">
+        <button class="btn btn--ghost" bindtap="handleWizardPrev">上一步</button>
+        <button class="btn btn--primary" bindtap="handleWizardNext">下一步</button>
+      </view>
+    </view>
+
+    <!-- ── Step 3: Route Preference Survey ── -->
+    <view class="wizard-card wizard-card--tall" wx:if="{{wizardStep === 3}}">
+      <view class="wizard-card__header">
+        <text class="wizard-card__title">路径选择调查</text>
+        <text class="wizard-card__subtitle">你为什么选择走这条路？</text>
+      </view>
+      <view class="wizard-card__body">
+        <!-- Alternative routes map -->
+        <view class="wizard-card__route-map-wrap" wx:if="{{wizardRouteMapReady}}">
+          <map
+            id="routeCompareMap"
+            class="wizard-card__route-map"
+            longitude="{{wizardRouteCenterLng}}"
+            latitude="{{wizardRouteCenterLat}}"
+            scale="{{wizardRouteMapScale}}"
+            show-location="{{false}}"
+            markers="{{wizardRouteMarkers}}"
+            polyline="{{wizardRoutePolylines}}"
+            include-points="{{wizardRouteIncludePoints}}"
+          ></map>
+          <view class="wizard-card__route-legend">
+            <view class="route-legend__item">
+              <view class="route-legend__line" style="background: #2563eb"></view>
+              <text>你的路线 ({{wizardActualDistText}})</text>
+            </view>
+            <block wx:for="{{wizardAlternatives}}" wx:key="index">
+              <view class="route-legend__item">
+                <view class="route-legend__line" style="background: {{item.color}}"></view>
+                <text>推荐路线{{item.label}} ({{item.distText}}, {{item.durText}})</text>
+              </view>
+            </block>
+          </view>
+        </view>
+        <view class="wizard-card__route-map-loading" wx:elif="{{wizardLoadingRoutes}}">
+          <text>正在获取推荐路线...</text>
+        </view>
+
+        <!-- Preference options -->
+        <view class="preference-grid">
+          <block wx:for="{{preferenceOptions}}" wx:key="key">
+            <view
+              class="preference-chip {{item.selected ? 'preference-chip--active' : ''}}"
+              data-key="{{item.key}}"
+              bindtap="handlePreferenceToggle"
+            >
+              <text class="preference-chip__icon">{{item.icon}}</text>
+              <text class="preference-chip__label">{{item.label}}</text>
+            </view>
+          </block>
+        </view>
+
+        <!-- Other reason text input -->
+        <view class="finish-field" wx:if="{{preferenceHasOther}}">
+          <textarea
+            class="finish-field__textarea"
+            placeholder="请描述你选择这条路的其他原因..."
+            value="{{feedbackReasonText}}"
+            bindinput="handleFeedbackReasonInput"
+            auto-height
+            maxlength="500"
+          ></textarea>
+        </view>
+      </view>
+      <view class="wizard-card__actions">
+        <button class="btn btn--ghost" bindtap="handleWizardPrev">上一步</button>
+        <button
+          class="btn btn--primary"
+          bindtap="handleWizardNext"
+          disabled="{{!preferenceHasSelection}}"
+        >下一步</button>
+      </view>
+    </view>
+
+    <!-- ── Step 4: Route Info & Save ── -->
+    <view class="wizard-card" wx:if="{{wizardStep === 4}}">
+      <view class="wizard-card__header">
+        <text class="wizard-card__title">保存路线</text>
+        <text class="wizard-card__subtitle">补充路线信息并保存</text>
+      </view>
+      <view class="wizard-card__body wizard-card__body--scroll">
         <view class="finish-field">
           <text class="finish-field__label">路线名称</text>
           <input
@@ -218,10 +395,10 @@
         </view>
         <view class="finish-field">
           <text class="finish-field__label">打卡照片</text>
-          <text class="finish-field__hint">💡 拍照打卡可获得双倍积分！</text>
+          <text class="finish-field__hint">拍照打卡可获得双倍积分</text>
           <view class="finish-photo__actions">
-            <button class="btn btn--camera" bindtap="handleAddPhoto">📷 拍摄</button>
-            <button class="btn btn--ghost finish-photo__retry-all" loading="{{batchRetrying}}" bindtap="handleRetryAllPhotos">🔁 重传失败图片</button>
+            <button class="btn btn--camera" bindtap="handleAddPhoto">拍摄</button>
+            <button class="btn btn--ghost finish-photo__retry-all" loading="{{batchRetrying}}" bindtap="handleRetryAllPhotos">重传失败图片</button>
           </view>
           <view class="finish-photo__batch-progress" wx:if="{{batchRetryProgressText}}">
             <text>{{batchRetryProgressText}}</text>
@@ -230,13 +407,7 @@
             <block wx:for="{{photos}}" wx:key="path">
               <view class="finish-photo__item">
                 <image src="{{item.path}}" mode="aspectFill" bindtap="handlePreviewPhoto" data-index="{{index}}" />
-                <view
-                  class="finish-photo__remove"
-                  data-index="{{index}}"
-                  bindtap="handleRemovePhoto"
-                >
-                  ✕
-                </view>
+                <view class="finish-photo__remove" data-index="{{index}}" bindtap="handleRemovePhoto">✕</view>
                 <view class="finish-photo__state" wx:if="{{item.uploadError}}">
                   <text class="finish-photo__state-text">上传失败</text>
                   <text class="finish-photo__state-retry" data-index="{{index}}" bindtap="handleRetryPhoto">重试</text>
@@ -245,53 +416,62 @@
             </block>
           </view>
         </view>
+
+        <!-- Summary stats -->
+        <view class="wizard-summary">
+          <view class="wizard-summary__row">
+            <text class="wizard-summary__label">距离</text>
+            <text class="wizard-summary__value">{{distanceText}}</text>
+          </view>
+          <view class="wizard-summary__row">
+            <text class="wizard-summary__label">用时</text>
+            <text class="wizard-summary__value">{{durationText}}</text>
+          </view>
+          <view class="wizard-summary__row">
+            <text class="wizard-summary__label">满意度</text>
+            <text class="wizard-summary__value">{{satisfactionEmoji}} {{satisfactionScore}}/7</text>
+          </view>
+        </view>
       </view>
-      <view class="finish-sheet__actions">
-        <button class="btn btn--ghost" bindtap="handleFinishCancel">取消</button>
+      <view class="wizard-card__actions">
+        <button class="btn btn--ghost" bindtap="handleWizardPrev">上一步</button>
         <button
           class="btn btn--primary"
-          bindtap="handleFinishSave"
+          bindtap="handleWizardSave"
           loading="{{uploading}}"
           disabled="{{uploading}}"
-        >
-          保存
-        </button>
+        >保存路线</button>
       </view>
     </view>
-  </view>
 
-  <view
-    class="reward-modal-overlay"
-    wx:if="{{rewardModalVisible && rewardSummary}}"
-    catchtouchmove="true"
-  >
-    <view class="reward-modal">
-      <text class="reward-modal__title">{{rewardSummary.title}}</text>
-      <view class="reward-modal__stats">
-        <view class="reward-modal__row">
-          <text class="reward-modal__label">本次运动</text>
-          <text class="reward-modal__value">{{rewardSummary.distanceText}}</text>
+    <!-- ── Reward Celebration (after save) ── -->
+    <view class="wizard-card wizard-card--reward" wx:if="{{wizardStep === 5}}">
+      <view class="reward-celebration">
+        <text class="reward-celebration__title">{{rewardSummary.title}}</text>
+        <view class="reward-celebration__stats">
+          <view class="reward-celebration__row">
+            <text class="reward-celebration__label">本次运动</text>
+            <text class="reward-celebration__value">{{rewardSummary.distanceText}}</text>
+          </view>
+          <view class="reward-celebration__row">
+            <text class="reward-celebration__label">用时</text>
+            <text class="reward-celebration__value">{{rewardSummary.durationText}}</text>
+          </view>
+          <view class="reward-celebration__row" wx:if="{{rewardSummary.hasPhoto}}">
+            <text class="reward-celebration__label">已上传</text>
+            <text class="reward-celebration__value">{{rewardSummary.photoCount}} 张照片</text>
+          </view>
         </view>
-        <view class="reward-modal__row">
-          <text class="reward-modal__label">用时</text>
-          <text class="reward-modal__value">{{rewardSummary.durationText}}</text>
+        <view class="reward-celebration__points">
+          <text class="reward-celebration__points-label">获得积分</text>
+          <text class="reward-celebration__points-gain">+{{rewardSummary.gainedPoints}}</text>
+          <text class="reward-celebration__points-stars">{{rewardSummary.starIcons}}</text>
         </view>
-        <view class="reward-modal__row" wx:if="{{rewardSummary.hasPhoto}}">
-          <text class="reward-modal__label">📸 已上传</text>
-          <text class="reward-modal__value">{{rewardSummary.photoCount}} 张照片</text>
+        <view class="reward-celebration__total">
+          当前总积分：<text class="reward-celebration__total-value">{{rewardSummary.totalPoints}}</text>
         </view>
+        <button class="btn btn--primary" bindtap="handleRewardConfirm">完成</button>
       </view>
-      <view class="reward-modal__points">
-        <text class="reward-modal__points-label">获得积分</text>
-        <text class="reward-modal__points-gain">+{{rewardSummary.gainedPoints}}</text>
-        <text class="reward-modal__points-stars">{{rewardSummary.starIcons}}</text>
-      </view>
-      <view class="reward-modal__total">
-        当前总积分：<text class="reward-modal__total-value">{{rewardSummary.totalPoints}}</text>
-      </view>
-      <button class="btn btn--primary reward-modal__cta" bindtap="handleRewardConfirm">
-        确定
-      </button>
     </view>
   </view>
 

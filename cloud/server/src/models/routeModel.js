@@ -58,13 +58,27 @@ async function createRoute(userId, routeData) {
         photos = [],
         points = [],
         weather = null,
+        confirmedEndLatitude = null,
+        confirmedEndLongitude = null,
+        confirmedEndDistanceMeters = null,
+        rawEndLatitude = null,
+        rawEndLongitude = null,
+        feedbackSatisfactionScore = null,
+        feedbackPreferenceLabels = null,
+        feedbackReasonText = null,
+        feedbackSource = 'wizard',
     } = routeData;
 
     const result = await pool.query(
         `INSERT INTO routes (
       id, user_id, client_id, name, privacy_level, activity_type, purpose_code,
-      start_time, end_time, stats, meta, photos, weather, created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
+      start_time, end_time, stats, meta, photos, weather,
+      confirmed_end_latitude, confirmed_end_longitude, confirmed_end_distance_meters,
+      raw_end_latitude, raw_end_longitude,
+      feedback_satisfaction_score, feedback_preference_labels, feedback_reason_text, feedback_source,
+      created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+              $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
     RETURNING *`,
         [
             id,
@@ -80,6 +94,15 @@ async function createRoute(userId, routeData) {
             JSON.stringify(meta),
             JSON.stringify(photos),
             weather ? JSON.stringify(weather) : null,
+            confirmedEndLatitude,
+            confirmedEndLongitude,
+            confirmedEndDistanceMeters,
+            rawEndLatitude,
+            rawEndLongitude,
+            feedbackSatisfactionScore,
+            feedbackPreferenceLabels,
+            feedbackReasonText,
+            feedbackSource,
         ]
     );
 
@@ -102,6 +125,15 @@ async function updateRoute(routeId, userId, updateData) {
         stats,
         meta,
         photos,
+        confirmedEndLatitude,
+        confirmedEndLongitude,
+        confirmedEndDistanceMeters,
+        rawEndLatitude,
+        rawEndLongitude,
+        feedbackSatisfactionScore,
+        feedbackPreferenceLabels,
+        feedbackReasonText,
+        feedbackSource,
     } = updateData;
 
     const setClauses = [];
@@ -135,6 +167,42 @@ async function updateRoute(routeId, userId, updateData) {
     if (photos !== undefined) {
         setClauses.push(`photos = $${paramIndex++}`);
         params.push(JSON.stringify(photos));
+    }
+    if (confirmedEndLatitude !== undefined) {
+        setClauses.push(`confirmed_end_latitude = $${paramIndex++}`);
+        params.push(confirmedEndLatitude);
+    }
+    if (confirmedEndLongitude !== undefined) {
+        setClauses.push(`confirmed_end_longitude = $${paramIndex++}`);
+        params.push(confirmedEndLongitude);
+    }
+    if (confirmedEndDistanceMeters !== undefined) {
+        setClauses.push(`confirmed_end_distance_meters = $${paramIndex++}`);
+        params.push(confirmedEndDistanceMeters);
+    }
+    if (rawEndLatitude !== undefined) {
+        setClauses.push(`raw_end_latitude = $${paramIndex++}`);
+        params.push(rawEndLatitude);
+    }
+    if (rawEndLongitude !== undefined) {
+        setClauses.push(`raw_end_longitude = $${paramIndex++}`);
+        params.push(rawEndLongitude);
+    }
+    if (feedbackSatisfactionScore !== undefined) {
+        setClauses.push(`feedback_satisfaction_score = $${paramIndex++}`);
+        params.push(feedbackSatisfactionScore);
+    }
+    if (feedbackPreferenceLabels !== undefined) {
+        setClauses.push(`feedback_preference_labels = $${paramIndex++}`);
+        params.push(feedbackPreferenceLabels);
+    }
+    if (feedbackReasonText !== undefined) {
+        setClauses.push(`feedback_reason_text = $${paramIndex++}`);
+        params.push(feedbackReasonText);
+    }
+    if (feedbackSource !== undefined) {
+        setClauses.push(`feedback_source = $${paramIndex++}`);
+        params.push(feedbackSource);
     }
 
     if (setClauses.length === 0) {

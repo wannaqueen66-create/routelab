@@ -245,6 +245,40 @@ export default function RouteDetailPanel({
         </div>
       </div>
 
+      {route.feedbackSatisfactionScore ? (
+        <div className="admin-detail-section">
+          <div className="admin-detail-subtitle">路线反馈</div>
+          <div className="admin-detail-grid">
+            <div>
+              <span>满意度评分</span>
+              <strong>{route.feedbackSatisfactionScore} / 7</strong>
+            </div>
+            <div>
+              <span>路径偏好</span>
+              <strong>{(route.feedbackPreferenceLabels || []).join(', ') || '-'}</strong>
+            </div>
+            {route.feedbackReasonText ? (
+              <div style={{ gridColumn: '1 / -1' }}>
+                <span>其他原因</span>
+                <strong>{route.feedbackReasonText}</strong>
+              </div>
+            ) : null}
+            {route.confirmedEndLatitude ? (
+              <>
+                <div>
+                  <span>确认终点</span>
+                  <strong>{route.confirmedEndLatitude?.toFixed(5)}, {route.confirmedEndLongitude?.toFixed(5)}</strong>
+                </div>
+                <div>
+                  <span>GPS终点偏差</span>
+                  <strong>{route.confirmedEndDistanceMeters ? `${Number(route.confirmedEndDistanceMeters).toFixed(1)}m` : '-'}</strong>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <div className="admin-detail-section">
         <div className="admin-detail-subtitle">备注与可见性</div>
         <div className="admin-form">
