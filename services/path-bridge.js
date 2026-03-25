@@ -136,6 +136,80 @@ function buildGapPath({ start, end, mode = 'walk' } = {}) {
     });
 }
 
+/**
+ * Fetch ALL alternative walking paths from Amap API for route comparison.
+ * Returns an array of path objects: { points, distance, duration }.
+ */
+function fetchAllWalkingPaths({ origin, destination, key }) {
+  const url = `https://restapi.amap.com/v3/direction/walking?key=${encodeURIComponent(key)}&origin=${encodeURIComponent(
+    origin
+  )}&destination=${encodeURIComponent(destination)}`;
+  return request({ url }).then((res) => {
+    const paths = res?.route?.paths || [];
+    return paths.map((path) => {
+      const steps = path.steps || [];
+      const points = steps.flatMap((step) => parsePolyline(step.polyline));
+      return {
+        points,
+        distance: Number(path.distance) || 0,
+        duration: Number(path.duration) || 0,
+      };
+    }).filter((p) => p.points.length > 0);
+  });
+}
+
+/**
+ * Fetch ALL alternative cycling paths from Amap API for route comparison.
+ */
+function fetchAllCyclingPaths({ origin, destination, key }) {
+  const url = `https://restapi.amap.com/v4/direction/bicycling?key=${encodeURIComponent(
+    key
+  )}&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}`;
+  return request({ url }).then((res) => {
+    const paths = res?.data?.paths || [];
+    return paths.map((path) => {
+      const steps = path.steps || [];
+      const points = steps.flatMap((step) => parsePolyline(step.polyline));
+      return {
+        points,
+        distance: Number(path.distance) || 0,
+        duration: Number(path.duration) || 0,
+      };
+    }).filter((p) => p.points.length > 0);
+  });
+}
+
+/**
+ * Fetch alternative routes between start and end for display in the feedback wizard.
+ * Returns { alternatives: [{ points, distance, duration }] }.
+ */
+function fetchAlternativeRoutes({ start, end, mode = 'walk' } = {}) {
+  if (!start || !end) {
+    return Promise.resolve({ alternatives: [] });
+  }
+  const key = config?.map?.amapWebKey || config?.amapWebKey || '';
+  if (!key) {
+    logger.warn('Amap key is not configured, cannot fetch alternative routes');
+    return Promise.resolve({ alternatives: [] });
+  }
+  const origin = `${Number(start.longitude)},${Number(start.latitude)}`;
+  const destination = `${Number(end.longitude)},${Number(end.latitude)}`;
+  const fetcher = mode === 'ride' ? fetchAllCyclingPaths : fetchAllWalkingPaths;
+  return fetcher({ origin, destination, key })
+    .then((paths) => ({
+      alternatives: paths.map((p) => ({
+        points: normalizePath(p.points, { start, end }),
+        distance: p.distance,
+        duration: p.duration,
+      })),
+    }))
+    .catch((error) => {
+      logger.warn('fetchAlternativeRoutes failed', error?.errMsg || error?.message || error);
+      return { alternatives: [] };
+    });
+}
+
 module.exports = {
   buildGapPath,
+  fetchAlternativeRoutes,
 };

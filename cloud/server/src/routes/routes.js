@@ -179,6 +179,31 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
                 ? body.purposeType.trim()
                 : null;
 
+    // --- Route feedback fields ---
+    const confirmedEndLat = Number(body.confirmedEndLatitude);
+    const confirmedEndLng = Number(body.confirmedEndLongitude);
+    const confirmedEndDistM = Number(body.confirmedEndDistanceMeters);
+    const rawEndLat = Number(body.rawEndLatitude);
+    const rawEndLng = Number(body.rawEndLongitude);
+
+    const feedbackSatisfaction =
+        Number.isInteger(Number(body.feedbackSatisfactionScore)) &&
+        Number(body.feedbackSatisfactionScore) >= 1 &&
+        Number(body.feedbackSatisfactionScore) <= 7
+            ? Number(body.feedbackSatisfactionScore)
+            : null;
+
+    const feedbackPreferenceLabels =
+        Array.isArray(body.feedbackPreferenceLabels)
+            ? body.feedbackPreferenceLabels.filter((v) => typeof v === 'string' && v.trim())
+            : null;
+
+    const feedbackReasonText =
+        typeof body.feedbackReasonText === 'string' ? body.feedbackReasonText.trim().slice(0, 500) : null;
+
+    const feedbackSource =
+        typeof body.feedbackSource === 'string' ? body.feedbackSource.trim() : 'wizard';
+
     return {
         id: normalizedId,
         clientId,
@@ -193,6 +218,15 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
         photos: normalizePhotos(body.photos),
         points: normalizePoints(body.points),
         weather: body.weather && typeof body.weather === 'object' ? body.weather : null,
+        confirmedEndLatitude: Number.isFinite(confirmedEndLat) ? confirmedEndLat : null,
+        confirmedEndLongitude: Number.isFinite(confirmedEndLng) ? confirmedEndLng : null,
+        confirmedEndDistanceMeters: Number.isFinite(confirmedEndDistM) ? confirmedEndDistM : null,
+        rawEndLatitude: Number.isFinite(rawEndLat) ? rawEndLat : null,
+        rawEndLongitude: Number.isFinite(rawEndLng) ? rawEndLng : null,
+        feedbackSatisfactionScore: feedbackSatisfaction,
+        feedbackPreferenceLabels,
+        feedbackReasonText,
+        feedbackSource,
     };
 }
 
@@ -223,6 +257,15 @@ function mapRouteRow(row, points = [], options = {}) {
         createdAt: row.created_at?.getTime() || null,
         updatedAt: row.updated_at?.getTime() || null,
         deletedAt: row.deleted_at?.getTime() || null,
+        confirmedEndLatitude: row.confirmed_end_latitude || null,
+        confirmedEndLongitude: row.confirmed_end_longitude || null,
+        confirmedEndDistanceMeters: row.confirmed_end_distance_meters || null,
+        rawEndLatitude: row.raw_end_latitude || null,
+        rawEndLongitude: row.raw_end_longitude || null,
+        feedbackSatisfactionScore: row.feedback_satisfaction_score || null,
+        feedbackPreferenceLabels: row.feedback_preference_labels || null,
+        feedbackReasonText: row.feedback_reason_text || null,
+        feedbackSource: row.feedback_source || null,
     };
 
     if (includePoints) {

@@ -454,6 +454,15 @@ function createRoutePayload({
   startLabel,
   endLabel,
   purposeType = '',
+  confirmedEndLatitude = null,
+  confirmedEndLongitude = null,
+  confirmedEndDistanceMeters = null,
+  rawEndLatitude = null,
+  rawEndLongitude = null,
+  feedbackSatisfactionScore = null,
+  feedbackPreferenceLabels = null,
+  feedbackReasonText = null,
+  feedbackSource = 'wizard',
 }) {
   const effectiveWeight = weight || 60;
   const safePhotos = normalizePhotoList(photos);
@@ -537,6 +546,15 @@ function createRoutePayload({
       purposeType: normalizedPurpose,
     },
     photos: safePhotos,
+    confirmedEndLatitude,
+    confirmedEndLongitude,
+    confirmedEndDistanceMeters,
+    rawEndLatitude,
+    rawEndLongitude,
+    feedbackSatisfactionScore,
+    feedbackPreferenceLabels,
+    feedbackReasonText,
+    feedbackSource,
     createdAt: Date.now(),
   };
 }
