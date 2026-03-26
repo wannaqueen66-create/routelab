@@ -4,7 +4,6 @@
  */
 
 const { pool } = require('../db/index');
-const { calculateSegmentDistanceMeters } = require('../utils/geo');
 
 // === Route CRUD ===
 
@@ -56,51 +55,30 @@ async function createRoute(userId, routeData) {
         endTime,
         stats = {},
         meta = {},
-        routeFeedback = null,
         photos = [],
         points = [],
         weather = null,
-        confirmedEndLatitude: directConfirmedEndLatitude = null,
-        confirmedEndLongitude: directConfirmedEndLongitude = null,
-        confirmedEndDistanceMeters: directConfirmedEndDistanceMeters = null,
-        rawEndLatitude: directRawEndLatitude = null,
-        rawEndLongitude: directRawEndLongitude = null,
-        feedbackSatisfactionScore: directFeedbackSatisfactionScore = null,
+        confirmedEndLatitude = null,
+        confirmedEndLongitude = null,
+        confirmedEndDistanceMeters = null,
+        rawEndLatitude = null,
+        rawEndLongitude = null,
+        feedbackSatisfactionScore = null,
         feedbackPreferenceLabels = null,
-        feedbackReasonText: directFeedbackReasonText = null,
-        feedbackSource: directFeedbackSource = null,
+        feedbackReasonText = null,
+        feedbackSource = null,
     } = routeData;
-
-    const feedbackChoice = routeFeedback?.preferenceChoice || (Array.isArray(feedbackPreferenceLabels) ? feedbackPreferenceLabels[0] : null) || null;
-    const feedbackSatisfactionScore = Number.isFinite(Number(routeFeedback?.satisfactionScore))
-        ? Number(routeFeedback.satisfactionScore)
-        : (Number.isFinite(Number(directFeedbackSatisfactionScore)) ? Number(directFeedbackSatisfactionScore) : null);
-    const feedbackPreferenceLabel = routeFeedback?.preferenceLabel || (Array.isArray(feedbackPreferenceLabels) ? feedbackPreferenceLabels.join(',') : null) || null;
-    const feedbackReasonText = routeFeedback?.preferenceReason || directFeedbackReasonText || null;
-    const feedbackSource = routeFeedback?.recommendationSource || directFeedbackSource || null;
-    const rawEndPoint = Array.isArray(points) && points.length ? points[points.length - 1] : meta?.endPoint || null;
-    const confirmedEnd = routeFeedback?.confirmedEnd || null;
-    const rawEndLatitude = Number.isFinite(Number(rawEndPoint?.latitude)) ? Number(rawEndPoint.latitude) : (Number.isFinite(Number(directRawEndLatitude)) ? Number(directRawEndLatitude) : null);
-    const rawEndLongitude = Number.isFinite(Number(rawEndPoint?.longitude)) ? Number(rawEndPoint.longitude) : (Number.isFinite(Number(directRawEndLongitude)) ? Number(directRawEndLongitude) : null);
-    const confirmedEndLatitude = Number.isFinite(Number(confirmedEnd?.latitude)) ? Number(confirmedEnd.latitude) : (Number.isFinite(Number(directConfirmedEndLatitude)) ? Number(directConfirmedEndLatitude) : null);
-    const confirmedEndLongitude = Number.isFinite(Number(confirmedEnd?.longitude)) ? Number(confirmedEnd.longitude) : (Number.isFinite(Number(directConfirmedEndLongitude)) ? Number(directConfirmedEndLongitude) : null);
-    const confirmedEndDistanceMeters =
-        Number.isFinite(rawEndLatitude) && Number.isFinite(rawEndLongitude) && Number.isFinite(confirmedEndLatitude) && Number.isFinite(confirmedEndLongitude)
-            ? calculateSegmentDistanceMeters(
-                { latitude: rawEndLatitude, longitude: rawEndLongitude },
-                { latitude: confirmedEndLatitude, longitude: confirmedEndLongitude }
-              )
-            : (Number.isFinite(Number(directConfirmedEndDistanceMeters)) ? Number(directConfirmedEndDistanceMeters) : null);
 
     const result = await pool.query(
         `INSERT INTO routes (
       id, user_id, client_id, name, privacy_level, activity_type, purpose_code,
       start_time, end_time, stats, meta, photos, weather,
-      feedback_choice, feedback_satisfaction_score, feedback_preference_label,
-      feedback_reason_text, feedback_source, feedback_submitted_at,
-      raw_end_latitude, raw_end_longitude, confirmed_end_latitude, confirmed_end_longitude, confirmed_end_distance_meters,
+      confirmed_end_latitude, confirmed_end_longitude, confirmed_end_distance_meters,
+      raw_end_latitude, raw_end_longitude,
+      feedback_satisfaction_score, feedback_preference_labels, feedback_reason_text, feedback_source,
       created_at, updated_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW())
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+              $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
     RETURNING *`,
         [
             id,
@@ -113,20 +91,18 @@ async function createRoute(userId, routeData) {
             startTime || null,
             endTime || null,
             JSON.stringify(stats),
-            JSON.stringify({ ...(meta || {}), routeFeedback: routeFeedback || meta?.routeFeedback || null }),
+            JSON.stringify(meta),
             JSON.stringify(photos),
             weather ? JSON.stringify(weather) : null,
-            feedbackChoice,
-            feedbackSatisfactionScore,
-            feedbackPreferenceLabel,
-            feedbackReasonText,
-            feedbackSource,
-            routeFeedback ? new Date() : null,
-            rawEndLatitude,
-            rawEndLongitude,
             confirmedEndLatitude,
             confirmedEndLongitude,
             confirmedEndDistanceMeters,
+            rawEndLatitude,
+            rawEndLongitude,
+            feedbackSatisfactionScore,
+            feedbackPreferenceLabels,
+            feedbackReasonText,
+            feedbackSource,
         ]
     );
 
@@ -148,8 +124,16 @@ async function updateRoute(routeId, userId, updateData) {
         purposeCode,
         stats,
         meta,
-        routeFeedback,
         photos,
+        confirmedEndLatitude,
+        confirmedEndLongitude,
+        confirmedEndDistanceMeters,
+        rawEndLatitude,
+        rawEndLongitude,
+        feedbackSatisfactionScore,
+        feedbackPreferenceLabels,
+        feedbackReasonText,
+        feedbackSource,
     } = updateData;
 
     const setClauses = [];
@@ -176,64 +160,49 @@ async function updateRoute(routeId, userId, updateData) {
         setClauses.push(`stats = $${paramIndex++}`);
         params.push(JSON.stringify(stats));
     }
-    if (meta !== undefined || routeFeedback !== undefined) {
+    if (meta !== undefined) {
         setClauses.push(`meta = $${paramIndex++}`);
-        const nextMeta = {
-            ...((meta && typeof meta === 'object') ? meta : {}),
-            routeFeedback: routeFeedback !== undefined ? routeFeedback : (meta && meta.routeFeedback) || null,
-        };
-        params.push(JSON.stringify(nextMeta));
+        params.push(JSON.stringify(meta));
     }
     if (photos !== undefined) {
         setClauses.push(`photos = $${paramIndex++}`);
         params.push(JSON.stringify(photos));
     }
-    if (routeFeedback !== undefined) {
-        const rawEndPoint = (meta && meta.endPoint) || null;
-        const rawEndLatitude = Number.isFinite(Number(rawEndPoint?.latitude)) ? Number(rawEndPoint.latitude) : null;
-        const rawEndLongitude = Number.isFinite(Number(rawEndPoint?.longitude)) ? Number(rawEndPoint.longitude) : null;
-        const confirmedEndLatitude = Number.isFinite(Number(routeFeedback?.confirmedEnd?.latitude)) ? Number(routeFeedback.confirmedEnd.latitude) : null;
-        const confirmedEndLongitude = Number.isFinite(Number(routeFeedback?.confirmedEnd?.longitude)) ? Number(routeFeedback.confirmedEnd.longitude) : null;
-        const confirmedEndDistanceMeters =
-            Number.isFinite(rawEndLatitude) && Number.isFinite(rawEndLongitude) && Number.isFinite(confirmedEndLatitude) && Number.isFinite(confirmedEndLongitude)
-                ? calculateSegmentDistanceMeters(
-                    { latitude: rawEndLatitude, longitude: rawEndLongitude },
-                    { latitude: confirmedEndLatitude, longitude: confirmedEndLongitude }
-                  )
-                : null;
-
-        setClauses.push(`feedback_choice = $${paramIndex++}`);
-        params.push(routeFeedback?.preferenceChoice || null);
-
-        setClauses.push(`feedback_satisfaction_score = $${paramIndex++}`);
-        params.push(Number.isFinite(Number(routeFeedback?.satisfactionScore)) ? Number(routeFeedback.satisfactionScore) : null);
-
-        setClauses.push(`feedback_preference_label = $${paramIndex++}`);
-        params.push(routeFeedback?.preferenceLabel || null);
-
-        setClauses.push(`feedback_reason_text = $${paramIndex++}`);
-        params.push(routeFeedback?.preferenceReason || null);
-
-        setClauses.push(`feedback_source = $${paramIndex++}`);
-        params.push(routeFeedback?.recommendationSource || null);
-
-        setClauses.push(`feedback_submitted_at = $${paramIndex++}`);
-        params.push(routeFeedback ? new Date() : null);
-
-        setClauses.push(`raw_end_latitude = $${paramIndex++}`);
-        params.push(rawEndLatitude);
-
-        setClauses.push(`raw_end_longitude = $${paramIndex++}`);
-        params.push(rawEndLongitude);
-
+    if (confirmedEndLatitude !== undefined) {
         setClauses.push(`confirmed_end_latitude = $${paramIndex++}`);
         params.push(confirmedEndLatitude);
-
+    }
+    if (confirmedEndLongitude !== undefined) {
         setClauses.push(`confirmed_end_longitude = $${paramIndex++}`);
         params.push(confirmedEndLongitude);
-
+    }
+    if (confirmedEndDistanceMeters !== undefined) {
         setClauses.push(`confirmed_end_distance_meters = $${paramIndex++}`);
         params.push(confirmedEndDistanceMeters);
+    }
+    if (rawEndLatitude !== undefined) {
+        setClauses.push(`raw_end_latitude = $${paramIndex++}`);
+        params.push(rawEndLatitude);
+    }
+    if (rawEndLongitude !== undefined) {
+        setClauses.push(`raw_end_longitude = $${paramIndex++}`);
+        params.push(rawEndLongitude);
+    }
+    if (feedbackSatisfactionScore !== undefined) {
+        setClauses.push(`feedback_satisfaction_score = $${paramIndex++}`);
+        params.push(feedbackSatisfactionScore);
+    }
+    if (feedbackPreferenceLabels !== undefined) {
+        setClauses.push(`feedback_preference_labels = $${paramIndex++}`);
+        params.push(feedbackPreferenceLabels);
+    }
+    if (feedbackReasonText !== undefined) {
+        setClauses.push(`feedback_reason_text = $${paramIndex++}`);
+        params.push(feedbackReasonText);
+    }
+    if (feedbackSource !== undefined) {
+        setClauses.push(`feedback_source = $${paramIndex++}`);
+        params.push(feedbackSource);
     }
 
     if (setClauses.length === 0) {
