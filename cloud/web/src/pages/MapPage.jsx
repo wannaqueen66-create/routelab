@@ -227,40 +227,40 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
 
   return (
     <motion.div
-      className="filter-panel"
+      className="map-filter-panel"
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
     >
-      <div className="filter-header" onClick={() => setIsExpanded(!isExpanded)}>
-        <div className="filter-title">
+      <div className="map-filter-header" onClick={() => setIsExpanded(!isExpanded)}>
+        <div className="map-filter-title">
           <Filter size={18} />
           <span>高级筛选</span>
         </div>
         <ChevronDown
           size={18}
-          className={`filter-toggle ${isExpanded ? 'expanded' : ''}`}
+          className={`map-filter-toggle ${isExpanded ? 'expanded' : ''}`}
         />
       </div>
 
       <AnimatePresence>
         {isExpanded && (
           <motion.div
-            className="filter-content"
+            className="map-filter-content"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
             {/* User Filter */}
-            <div className="filter-group">
-              <label className="filter-label">
+            <div className="map-filter-group">
+              <label className="map-filter-label">
                 <User size={14} />
                 按用户筛选
               </label>
-              <div className="user-search-wrapper">
+              <div className="map-user-search-wrapper">
                 <input
                   type="text"
-                  className="filter-input"
+                  className="map-filter-input"
                   placeholder="输入用户ID或名称..."
                   value={userSearch}
                   onChange={(e) => {
@@ -270,30 +270,30 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
                   onFocus={() => setShowUserDropdown(true)}
                 />
                 {showUserDropdown && userSearch && (
-                  <div className="user-dropdown">
+                  <div className="map-user-dropdown">
                     {filteredUsers.length > 0 ? (
                       filteredUsers.slice(0, 10).map((user) => (
                         <div
                           key={user.id}
-                          className="user-option"
+                          className="map-user-option"
                           onClick={() => {
                             onFilterChange({ ...filters, userId: user.id.toString() });
                             setUserSearch(user.name || `用户 ${user.id}`);
                             setShowUserDropdown(false);
                           }}
                         >
-                          <span className="user-id">#{user.id}</span>
-                          <span className="user-name">{user.name || '未命名用户'}</span>
+                          <span className="map-user-id">#{user.id}</span>
+                          <span className="map-user-name">{user.name || '未命名用户'}</span>
                         </div>
                       ))
                     ) : (
-                      <div className="user-option no-result">未找到匹配用户</div>
+                      <div className="map-user-option no-result">未找到匹配用户</div>
                     )}
                   </div>
                 )}
                 {filters.userId && (
                   <button
-                    className="clear-user-btn"
+                    className="map-clear-user-btn"
                     onClick={() => {
                       onFilterChange({ ...filters, userId: '' });
                       setUserSearch('');
@@ -306,25 +306,25 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
             </div>
 
             {/* Date Range Filter */}
-            <div className="filter-group">
-              <label className="filter-label">
+            <div className="map-filter-group">
+              <label className="map-filter-label">
                 <Calendar size={14} />
                 日期时段
               </label>
-              <div className="date-range-inputs">
+              <div className="map-date-range-inputs">
                 <input
                   type="date"
-                  className="filter-input"
+                  className="map-filter-input"
                   value={filters.startDate}
                   onChange={(e) =>
                     onFilterChange({ ...filters, startDate: e.target.value })
                   }
                   placeholder="开始日期"
                 />
-                <span className="date-separator">至</span>
+                <span className="map-date-separator">至</span>
                 <input
                   type="date"
-                  className="filter-input"
+                  className="map-filter-input"
                   value={filters.endDate}
                   onChange={(e) =>
                     onFilterChange({ ...filters, endDate: e.target.value })
@@ -335,16 +335,16 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
             </div>
 
             {/* Trip Purpose Filter */}
-            <div className="filter-group">
-              <label className="filter-label">
+            <div className="map-filter-group">
+              <label className="map-filter-label">
                 <Target size={14} />
                 出行目的
               </label>
-              <div className="purpose-tags">
+              <div className="map-purpose-tags">
                 {Object.entries(PURPOSE_LABELS).map(([key, label]) => (
                   <button
                     key={key}
-                    className={`purpose-tag ${filters.purpose === key ? 'active' : ''}`}
+                    className={`map-purpose-tag ${filters.purpose === key ? 'active' : ''}`}
                     onClick={() =>
                       onFilterChange({
                         ...filters,
@@ -362,15 +362,15 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
             </div>
 
             {/* Distance Range Filter */}
-            <div className="filter-group">
-              <label className="filter-label">
+            <div className="map-filter-group">
+              <label className="map-filter-label">
                 <MapPin size={14} />
                 距离范围 (km)
               </label>
-              <div className="range-inputs">
+              <div className="map-range-inputs">
                 <input
                   type="number"
-                  className="filter-input"
+                  className="map-filter-input"
                   placeholder="最小"
                   value={filters.minDistance}
                   onChange={(e) =>
@@ -379,10 +379,10 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
                   min="0"
                   step="0.1"
                 />
-                <span className="range-separator">-</span>
+                <span className="map-range-separator">-</span>
                 <input
                   type="number"
-                  className="filter-input"
+                  className="map-filter-input"
                   placeholder="最大"
                   value={filters.maxDistance}
                   onChange={(e) =>
@@ -395,7 +395,7 @@ function FilterPanel({ filters, onFilterChange, onApply, onReset, users, loading
             </div>
 
             {/* Filter Actions */}
-            <div className="filter-actions">
+            <div className="map-filter-actions">
               <button
                 className="btn btn-primary btn-sm"
                 onClick={onApply}
@@ -444,24 +444,24 @@ function StatsSummary({ routes, loading }) {
   ).size;
 
   return (
-    <div className="stats-summary">
-      <div className="stat-item">
-        <span className="stat-label">轨迹数</span>
-        <span className="stat-value">{loading ? '--' : routes.length}</span>
+    <div className="map-stats-summary">
+      <div className="map-stat-item">
+        <span className="map-stat-label">轨迹数</span>
+        <span className="map-stat-value">{loading ? '--' : routes.length}</span>
       </div>
-      <div className="stat-item">
-        <span className="stat-label">用户数</span>
-        <span className="stat-value">{loading ? '--' : uniqueUsers}</span>
+      <div className="map-stat-item">
+        <span className="map-stat-label">用户数</span>
+        <span className="map-stat-value">{loading ? '--' : uniqueUsers}</span>
       </div>
-      <div className="stat-item">
-        <span className="stat-label">总里程</span>
-        <span className="stat-value">
+      <div className="map-stat-item">
+        <span className="map-stat-label">总里程</span>
+        <span className="map-stat-value">
           {loading ? '--' : formatDistance(totalDistance)}
         </span>
       </div>
-      <div className="stat-item">
-        <span className="stat-label">总时长</span>
-        <span className="stat-value">
+      <div className="map-stat-item">
+        <span className="map-stat-label">总时长</span>
+        <span className="map-stat-value">
           {loading ? '--' : formatDuration(totalDuration)}
         </span>
       </div>
@@ -867,15 +867,15 @@ export default function MapPage() {
           <AnimatePresence>
             {showRouteList && (
               <motion.div
-                className="route-list-panel"
+                className="map-route-list-panel"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
               >
-                <div className="route-list-header">
-                  <span className="route-list-title">
+                <div className="map-route-list-header">
+                  <span className="map-route-list-title">
                     路线列表
-                    <span className="route-count">{routes.length}</span>
+                    <span className="map-route-count">{routes.length}</span>
                   </span>
                   <button
                     className="btn btn-ghost btn-icon"
@@ -884,7 +884,7 @@ export default function MapPage() {
                     <X size={18} />
                   </button>
                 </div>
-                <div className="route-list-content">
+                <div className="map-route-list-content">
                   {loading ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <div key={i} className="skeleton" style={{ height: '80px', marginBottom: '8px' }} />
@@ -900,28 +900,28 @@ export default function MapPage() {
                     routes.map((route) => (
                       <motion.div
                         key={route.id}
-                        className={`route-item ${selectedRoute?.id === route.id ? 'selected' : ''}`}
+                        className={`map-route-item ${selectedRoute?.id === route.id ? 'selected' : ''}`}
                         onClick={() => handleRouteSelect(route)}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
-                        <div className="route-item-header">
-                          <span className="route-item-title">
+                        <div className="map-route-item-header">
+                          <span className="map-route-item-title">
                             {route.title || '未命名路线'}
                           </span>
-                          <span className="route-item-user">
+                          <span className="map-route-item-user">
                             {route.owner?.displayName
                               ? `用户：${route.owner.displayName}`
                               : `用户 #${route.user_id || route.userId || '-'}`}
                           </span>
                         </div>
-                        <div className="route-item-date">
+                        <div className="map-route-item-date">
                           {route.start_time || route.startTime
                             ? new Date(route.start_time || route.startTime).toLocaleDateString('zh-CN')
                             : ''}
                         </div>
-                        <div className="route-item-stats">
-                          <div className="route-stat">
+                        <div className="map-route-item-stats">
+                          <div className="map-route-stat">
                             <span>
                               {formatDistance(
                                 Number(
@@ -934,7 +934,7 @@ export default function MapPage() {
                               )}
                             </span>
                           </div>
-                          <div className="route-stat">
+                          <div className="map-route-stat">
                             <span>
                               {formatDuration(
                                 Number(
@@ -953,7 +953,7 @@ export default function MapPage() {
                             if (!purposeKey) return null;
                             return (
                             <div
-                              className="route-purpose-badge"
+                              className="map-route-purpose-badge"
                               style={{
                                 background: PURPOSE_COLORS[purposeKey] || '#8C8C8C',
                               }}
@@ -984,28 +984,28 @@ export default function MapPage() {
           {/* Playback Controls */}
           {selectedRoute && (
             <motion.div
-              className="playback-controls"
+              className="map-playback-controls"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <button className="playback-btn" onClick={skipBackward} title="后退">
+              <button className="map-playback-btn" onClick={skipBackward} title="后退">
                 <SkipBack size={18} />
               </button>
-              <button className="playback-btn" onClick={togglePlayback} title={isPlaying ? '暂停' : '播放'}>
+              <button className="map-playback-btn" onClick={togglePlayback} title={isPlaying ? '暂停' : '播放'}>
                 {isPlaying ? <Pause size={20} /> : <Play size={20} />}
               </button>
-              <button className="playback-btn" onClick={skipForward} title="前进">
+              <button className="map-playback-btn" onClick={skipForward} title="前进">
                 <SkipForward size={18} />
               </button>
               <input
                 type="range"
-                className="playback-slider"
+                className="map-playback-slider"
                 min={0}
                 max={selectedRoute.points?.length - 1 || 0}
                 value={playbackPosition}
                 onChange={(e) => setPlaybackPosition(parseInt(e.target.value, 10))}
               />
-              <div className="speed-control">
+              <div className="map-speed-control">
                 <span>速度:</span>
                 <select
                   value={playbackSpeed}
@@ -1033,19 +1033,19 @@ export default function MapPage() {
 
           {routeDetailModalOpen && selectedRoute && (
             <div
-              className="route-detail-modal-backdrop"
+              className="map-route-detail-modal-backdrop"
               onClick={() => setRouteDetailModalOpen(false)}
             >
               <div
-                className="route-detail-modal"
+                className="map-route-detail-modal"
                 onClick={(event) => event.stopPropagation()}
               >
-                <div className="route-detail-header">
+                <div className="map-route-detail-header">
                   <div>
-                    <h2 className="route-detail-title">
+                    <h2 className="map-route-detail-title">
                       {selectedRoute.title || '未命名路线'}
                     </h2>
-                    <div className="route-detail-subtitle">
+                    <div className="map-route-detail-subtitle">
                       {selectedRoute.owner?.displayName
                         ? `用户：${selectedRoute.owner.displayName}`
                         : selectedRoute.ownerId
@@ -1061,19 +1061,19 @@ export default function MapPage() {
                     <X size={18} />
                   </button>
                 </div>
-                <div className="route-detail-body">
-                  <div className="route-detail-section">
-                    <div className="route-detail-label">日期</div>
-                    <div className="route-detail-value">
+                <div className="map-route-detail-body">
+                  <div className="map-route-detail-section">
+                    <div className="map-route-detail-label">日期</div>
+                    <div className="map-route-detail-value">
                       {selectedRoute.startTime
                         ? new Date(selectedRoute.startTime).toLocaleString('zh-CN')
                         : '-'}
                     </div>
                   </div>
-                  <div className="route-detail-grid">
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">总里程</div>
-                      <div className="route-detail-value">
+                  <div className="map-route-detail-grid">
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">总里程</div>
+                      <div className="map-route-detail-value">
                         {formatDistance(
                           selectedRoute.statSummary?.distance ??
                             selectedRoute.stats?.distance_meters ??
@@ -1082,9 +1082,9 @@ export default function MapPage() {
                         )}
                       </div>
                     </div>
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">总时长</div>
-                      <div className="route-detail-value">
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">总时长</div>
+                      <div className="map-route-detail-value">
                         {formatDuration(
                           selectedRoute.statSummary?.durationSeconds ??
                             selectedRoute.statSummary?.duration ??
@@ -1093,9 +1093,9 @@ export default function MapPage() {
                         )}
                       </div>
                     </div>
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">平均配速</div>
-                      <div className="route-detail-value">
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">平均配速</div>
+                      <div className="map-route-detail-value">
                         {(() => {
                           const distanceMeters =
                             selectedRoute.statSummary?.distance ??
@@ -1112,10 +1112,10 @@ export default function MapPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="route-detail-grid">
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">起点</div>
-                      <div className="route-detail-value">
+                  <div className="map-route-detail-grid">
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">起点</div>
+                      <div className="map-route-detail-value">
                         {selectedRoute.startCampusMeta?.name ||
                           selectedRoute.meta?.startLabel ||
                           (selectedRoute.points && selectedRoute.points.length
@@ -1123,9 +1123,9 @@ export default function MapPage() {
                             : '-')}
                       </div>
                     </div>
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">终点</div>
-                      <div className="route-detail-value">
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">终点</div>
+                      <div className="map-route-detail-value">
                         {selectedRoute.endCampusMeta?.name ||
                           selectedRoute.meta?.endLabel ||
                           (selectedRoute.points && selectedRoute.points.length
@@ -1135,21 +1135,21 @@ export default function MapPage() {
                     </div>
                   </div>
                   {selectedRoute.purposeType && (
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">出行目的</div>
-                      <div className="route-detail-value">
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">出行目的</div>
+                      <div className="map-route-detail-value">
                         {PURPOSE_LABELS[selectedRoute.purposeType] || '其他'}
                       </div>
                     </div>
                   )}
                   {selectedRoute.note && (
-                    <div className="route-detail-section">
-                      <div className="route-detail-label">备注</div>
-                      <div className="route-detail-value">{selectedRoute.note}</div>
+                    <div className="map-route-detail-section">
+                      <div className="map-route-detail-label">备注</div>
+                      <div className="map-route-detail-value">{selectedRoute.note}</div>
                     </div>
                   )}
                 </div>
-                <div className="route-detail-footer">
+                <div className="map-route-detail-footer">
                   <button
                     type="button"
                     className="btn btn-outline"

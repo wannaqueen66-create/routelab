@@ -71,6 +71,22 @@ const PREFERENCE_OPTIONS = [
 const ALT_ROUTE_COLORS = ['#f97316', '#22c55e', '#ec4899'];
 const ALT_ROUTE_LABELS = ['A', 'B', 'C'];
 
+const FINISH_PHASES = {
+  ENDPOINT: 'endpoint',
+  SATISFACTION: 'satisfaction',
+  PREFERENCE: 'preference',
+  SAVING: 'saving',
+  REWARD: 'reward',
+};
+
+const FINISH_PHASE_ORDER = [
+  FINISH_PHASES.ENDPOINT,
+  FINISH_PHASES.SATISFACTION,
+  FINISH_PHASES.PREFERENCE,
+  FINISH_PHASES.SAVING,
+  FINISH_PHASES.REWARD,
+];
+
 const TOAST = {
   requireLocation: '请先获取定位权限',
   maxPhotos: '最多选择 9 张图片',
@@ -86,6 +102,26 @@ const TOAST = {
   rewardInvalid: '记录已保存（用时或距离不足，未获得积分）',
   profileIncomplete: '请先完善个人信息',
 };
+
+function navigateToIndexShell(targetTab = 'home') {
+  const key = typeof targetTab === 'string' ? targetTab.trim() : '';
+  const tab = key || 'home';
+  const url = tab === 'home' ? '/pages/index/index' : `/pages/index/index?tab=${tab}`;
+  if (typeof wx.redirectTo === 'function') {
+    wx.redirectTo({
+      url,
+      fail: () => {
+        if (typeof wx.reLaunch === 'function') {
+          wx.reLaunch({ url });
+        }
+      },
+    });
+    return;
+  }
+  if (typeof wx.reLaunch === 'function') {
+    wx.reLaunch({ url });
+  }
+}
 
 function normalizePhotos(photos = []) {
   return photos.map((item) => {
@@ -195,6 +231,7 @@ Page(applyThemeMixin({
     finishSheetVisible: false,
     finishAutoPaused: false,
     wizardVisible: false,
+    wizardPhase: FINISH_PHASES.ENDPOINT,
     wizardStep: 1,
     wizardEndLat: 0,
     wizardEndLng: 0,
@@ -208,13 +245,14 @@ Page(applyThemeMixin({
     wizardRawEndLat: null,
     wizardRawEndLng: null,
     wizardEndDistMeters: 0,
-    satisfactionScore: 4,
-    satisfactionEmoji: '\uD83D\uDE10',
-    satisfactionLabel: '一般',
+    satisfactionScore: null,
+    satisfactionEmoji: '',
+    satisfactionLabel: '请选择满意度',
     satisfactionColor: '#a3a3a3',
     preferenceOptions: PREFERENCE_OPTIONS.map((o) => ({ ...o })),
     preferenceHasOther: false,
     preferenceHasSelection: false,
+    preferenceReasonValid: true,
     feedbackReasonText: '',
     wizardLoadingRoutes: false,
     wizardRouteMapReady: false,
@@ -820,14 +858,14 @@ Page(applyThemeMixin({
               );
             }
             wx.navigateBack({
-              fail: () => wx.switchTab({ url: '/pages/index/index' }),
+              fail: () => navigateToIndexShell(),
             });
           }
         },
       });
       return;
     }
-    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
+    wx.navigateBack({ fail: () => navigateToIndexShell() });
   },
 
   handleNavigateBack() {
@@ -839,13 +877,13 @@ Page(applyThemeMixin({
         cancelText: '继续记录',
         success: (res) => {
           if (res.confirm) {
-            wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
+            wx.navigateBack({ fail: () => navigateToIndexShell() });
           }
         },
       });
       return;
     }
-    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/index/index' }) });
+    wx.navigateBack({ fail: () => navigateToIndexShell() });
   },
 
   handlePause() {
@@ -856,10 +894,52 @@ Page(applyThemeMixin({
     tracker.resumeTracking();
   },
 
+  getWizardStepFromPhase(phase) {
+    const index = FINISH_PHASE_ORDER.indexOf(phase);
+    return index >= 0 ? index + 1 : 1;
+  },
+
+  setWizardPhase(phase, extra = {}) {
+    this.setData({
+      wizardPhase: phase,
+      wizardStep: this.getWizardStepFromPhase(phase),
+      ...extra,
+    });
+  },
+
+  getSelectedPreferenceKeys() {
+    return (this.data.preferenceOptions || [])
+      .filter((item) => item && item.selected)
+      .map((item) => item.key)
+      .filter(Boolean);
+  },
+
+  validatePreferenceSurvey({ showToast = true } = {}) {
+    const selectedKeys = this.getSelectedPreferenceKeys();
+    if (!selectedKeys.length) {
+      if (showToast) {
+        wx.showToast({ title: '请选择至少一项路径偏好', icon: 'none' });
+      }
+      return false;
+    }
+    const reasonValid = !selectedKeys.includes('other') || !!(this.data.feedbackReasonText || '').trim();
+    if (!reasonValid) {
+      this.setData({ preferenceReasonValid: false });
+      if (showToast) {
+        wx.showToast({ title: '请选择“其他原因”时请补充说明', icon: 'none' });
+      }
+      return false;
+    }
+    this.setData({ preferenceReasonValid: true });
+    return true;
+  },
+
   handleFinishPrompt() {
     if (!this.data.tracking) {
       return;
     }
+
+    this._wizardFeedbackMeta = null;
 
     // Refresh privacy preference
     try {
@@ -904,10 +984,9 @@ Page(applyThemeMixin({
       callout: { content: 'GPS\u7EC8\u70B9', bgColor: '#94a3b8', color: '#ffffff', borderRadius: 8, padding: 6, fontSize: 12, display: 'ALWAYS' },
     };
 
-    this.setData({
+    this.setWizardPhase(FINISH_PHASES.ENDPOINT, {
       finishAutoPaused: autoPaused,
       wizardVisible: true,
-      wizardStep: 1,
       wizardEndLat: endLat,
       wizardEndLng: endLng,
       wizardMapScale: 18,
@@ -920,13 +999,14 @@ Page(applyThemeMixin({
       wizardRawEndLat: endLat,
       wizardRawEndLng: endLng,
       wizardEndDistMeters: 0,
-      satisfactionScore: 4,
-      satisfactionEmoji: SATISFACTION_CONFIG[3].emoji,
-      satisfactionLabel: SATISFACTION_CONFIG[3].label,
-      satisfactionColor: SATISFACTION_CONFIG[3].color,
+      satisfactionScore: null,
+      satisfactionEmoji: '',
+      satisfactionLabel: '请选择满意度',
+      satisfactionColor: '#a3a3a3',
       preferenceOptions: PREFERENCE_OPTIONS.map((o) => ({ ...o, selected: false })),
       preferenceHasOther: false,
       preferenceHasSelection: false,
+      preferenceReasonValid: true,
       feedbackReasonText: '',
       wizardLoadingRoutes: false,
       wizardRouteMapReady: false,
@@ -941,8 +1021,10 @@ Page(applyThemeMixin({
 
   handleWizardCancel() {
     const shouldResume = this.data.finishAutoPaused;
+    this._wizardFeedbackMeta = null;
     this.setData({
       wizardVisible: false,
+      wizardPhase: FINISH_PHASES.ENDPOINT,
       wizardStep: 1,
       finishAutoPaused: false,
     });
@@ -952,24 +1034,44 @@ Page(applyThemeMixin({
   },
 
   handleWizardPrev() {
-    const step = this.data.wizardStep;
-    if (step <= 1) {
+    const phase = this.data.wizardPhase;
+    if (phase === FINISH_PHASES.SAVING) {
+      this.setWizardPhase(FINISH_PHASES.PREFERENCE);
       return;
     }
-    this.setData({ wizardStep: step - 1 });
+    if (phase === FINISH_PHASES.PREFERENCE) {
+      this.setWizardPhase(FINISH_PHASES.SATISFACTION);
+      return;
+    }
+    if (phase === FINISH_PHASES.SATISFACTION) {
+      this.setWizardPhase(FINISH_PHASES.ENDPOINT);
+    }
   },
 
   handleWizardNext() {
-    const step = this.data.wizardStep;
-    if (step >= 4) {
+    const phase = this.data.wizardPhase;
+    if (phase === FINISH_PHASES.ENDPOINT) {
+      if (!this.data.wizardEndConfirmed) {
+        wx.showToast({ title: '请先确认终点位置', icon: 'none' });
+        return;
+      }
+      this.setWizardPhase(FINISH_PHASES.SATISFACTION);
       return;
     }
-    const nextStep = step + 1;
-    this.setData({ wizardStep: nextStep });
-
-    // When entering step 3, fetch alternative routes
-    if (nextStep === 3) {
+    if (phase === FINISH_PHASES.SATISFACTION) {
+      if (!Number.isFinite(this.data.satisfactionScore)) {
+        wx.showToast({ title: '请先选择满意度', icon: 'none' });
+        return;
+      }
+      this.setWizardPhase(FINISH_PHASES.PREFERENCE);
       this.loadAlternativeRoutes();
+      return;
+    }
+    if (phase === FINISH_PHASES.PREFERENCE) {
+      if (!this.validatePreferenceSurvey()) {
+        return;
+      }
+      this.setWizardPhase(FINISH_PHASES.SAVING);
     }
   },
 
@@ -1041,7 +1143,7 @@ Page(applyThemeMixin({
   },
 
   _updateSatisfaction(score) {
-    const safeScore = Math.max(1, Math.min(7, Math.round(Number(score) || 4)));
+    const safeScore = Math.max(1, Math.min(7, Math.round(Number(score) || 0)));
     const cfg = SATISFACTION_CONFIG[safeScore - 1] || SATISFACTION_CONFIG[3];
     this.setData({
       satisfactionScore: safeScore,
@@ -1063,15 +1165,22 @@ Page(applyThemeMixin({
     });
     const hasOther = options.some((o) => o.key === 'other' && o.selected);
     const hasSelection = options.some((o) => o.selected);
+    const nextReasonText = hasOther ? this.data.feedbackReasonText : '';
     this.setData({
       preferenceOptions: options,
       preferenceHasOther: hasOther,
       preferenceHasSelection: hasSelection,
+      preferenceReasonValid: !hasOther || !!nextReasonText.trim(),
+      feedbackReasonText: nextReasonText,
     });
   },
 
   handleFeedbackReasonInput(event) {
-    this.setData({ feedbackReasonText: event.detail.value || '' });
+    const nextText = event.detail.value || '';
+    this.setData({
+      feedbackReasonText: nextText,
+      preferenceReasonValid: !this.data.preferenceHasOther || !!nextText.trim(),
+    });
   },
 
   loadAlternativeRoutes() {
@@ -1079,10 +1188,19 @@ Page(applyThemeMixin({
       return;
     }
     const startPoint = this._wizardStartPoint;
-    const endPoint = this._wizardEndPoint;
+    const endPoint = {
+      latitude: this.data.wizardConfirmedEndLat || this._wizardEndPoint?.latitude,
+      longitude: this.data.wizardConfirmedEndLng || this._wizardEndPoint?.longitude,
+    };
     const points = this._wizardPoints || [];
 
-    if (!startPoint || !endPoint) {
+    if (
+      !startPoint ||
+      !Number.isFinite(startPoint.latitude) ||
+      !Number.isFinite(startPoint.longitude) ||
+      !Number.isFinite(endPoint.latitude) ||
+      !Number.isFinite(endPoint.longitude)
+    ) {
       this.setData({ wizardRouteMapReady: true });
       return;
     }
@@ -1190,36 +1308,52 @@ Page(applyThemeMixin({
     if (this.data.uploading) {
       return;
     }
+    if (!this.data.wizardEndConfirmed) {
+      wx.showToast({ title: '请先确认终点位置', icon: 'none' });
+      return;
+    }
+    if (!Number.isFinite(this.data.satisfactionScore)) {
+      wx.showToast({ title: '请先选择满意度', icon: 'none' });
+      return;
+    }
+    if (!this.validatePreferenceSurvey()) {
+      return;
+    }
 
-    // Collect feedback data
     const feedbackMeta = {
       confirmedEndLatitude: this.data.wizardConfirmedEndLat,
       confirmedEndLongitude: this.data.wizardConfirmedEndLng,
-      confirmedEndDistanceMeters: this.data.wizardEndDistMeters || null,
+      confirmedEndDistanceMeters: this.data.wizardEndDistMeters ?? null,
       rawEndLatitude: this.data.wizardRawEndLat,
       rawEndLongitude: this.data.wizardRawEndLng,
       feedbackSatisfactionScore: this.data.satisfactionScore,
-      feedbackPreferenceLabels: this.data.preferenceOptions
-        .filter((o) => o.selected)
-        .map((o) => o.key),
-      feedbackReasonText: this.data.feedbackReasonText || null,
+      feedbackPreferenceLabels: this.getSelectedPreferenceKeys(),
+      feedbackReasonText: this.data.feedbackReasonText?.trim() || null,
       feedbackSource: 'wizard',
     };
 
     this._wizardFeedbackMeta = feedbackMeta;
+    this.setData({ uploading: true });
     this.finalizeTracking().then((result) => {
-      const { success, route } = result || {};
-      if (!success) {
-        this.setData({
-          wizardVisible: false,
-          wizardStep: 1,
-          finishAutoPaused: false,
-          photos: [],
-        });
+      const { success, route, localFallback } = result || {};
+      if (success && route) {
+        this.setData({ photos: [] });
+        this.handleRouteReward(route);
         return;
       }
-      this.setData({ photos: [] });
-      this.handleRouteReward(route);
+      if (localFallback && route) {
+        this.setData({
+          wizardVisible: false,
+          wizardPhase: FINISH_PHASES.ENDPOINT,
+          wizardStep: 1,
+          finishAutoPaused: false,
+          rewardSummary: null,
+        });
+        this._wizardFeedbackMeta = null;
+        navigateToIndexShell();
+        return;
+      }
+      this.setWizardPhase(FINISH_PHASES.SAVING);
     });
   },
 
@@ -1248,12 +1382,8 @@ Page(applyThemeMixin({
   },
 
   finalizeTracking() {
-    if (this.data.uploading) {
-      return Promise.resolve({ success: false, route: null });
-    }
     const privacyLevel = this.data.privacyOptions[this.data.privacyIndex]?.key || 'private';
     const weight = this.data.weight || 60;
-    this.setData({ uploading: true });
     return media
       .ensureRemotePhotos(this.data.photos, { continueOnError: true })
       .then((uploadedPhotos) => {
@@ -1274,15 +1404,15 @@ Page(applyThemeMixin({
           photos: normalizedUploaded.filter((item) => !item.uploadError),
           weight,
           purposeType: this.data.purposeSelectionKey,
-          confirmedEndLatitude: feedbackMeta.confirmedEndLatitude || null,
-          confirmedEndLongitude: feedbackMeta.confirmedEndLongitude || null,
-          confirmedEndDistanceMeters: feedbackMeta.confirmedEndDistanceMeters || null,
-          rawEndLatitude: feedbackMeta.rawEndLatitude || null,
-          rawEndLongitude: feedbackMeta.rawEndLongitude || null,
-          feedbackSatisfactionScore: feedbackMeta.feedbackSatisfactionScore || null,
-          feedbackPreferenceLabels: feedbackMeta.feedbackPreferenceLabels || null,
-          feedbackReasonText: feedbackMeta.feedbackReasonText || null,
-          feedbackSource: feedbackMeta.feedbackSource || 'wizard',
+          confirmedEndLatitude: feedbackMeta.confirmedEndLatitude ?? null,
+          confirmedEndLongitude: feedbackMeta.confirmedEndLongitude ?? null,
+          confirmedEndDistanceMeters: feedbackMeta.confirmedEndDistanceMeters ?? null,
+          rawEndLatitude: feedbackMeta.rawEndLatitude ?? null,
+          rawEndLongitude: feedbackMeta.rawEndLongitude ?? null,
+          feedbackSatisfactionScore: feedbackMeta.feedbackSatisfactionScore ?? null,
+          feedbackPreferenceLabels: feedbackMeta.feedbackPreferenceLabels ?? null,
+          feedbackReasonText: feedbackMeta.feedbackReasonText ?? null,
+          feedbackSource: feedbackMeta.feedbackSource ?? 'wizard',
         });
       })
       .then((result) => {
@@ -1294,6 +1424,7 @@ Page(applyThemeMixin({
             title: TOAST.routeSaved,
             icon: 'success',
           });
+          this._wizardFeedbackMeta = null;
           return { success: true, route, cloudSaved: true, localFallback: false };
         }
         if (localFallback && route) {
@@ -1301,6 +1432,7 @@ Page(applyThemeMixin({
             title: TOAST.routeSavedLocalOnly,
             icon: 'none',
           });
+          this._wizardFeedbackMeta = null;
           return { success: false, route, cloudSaved: false, localFallback: true };
         }
         wx.showToast({ title: TOAST.routeSaveFailed, icon: 'none' });
@@ -1309,7 +1441,7 @@ Page(applyThemeMixin({
       .catch((error) => {
         logger.warn('stopTracking failed', error?.errMsg || error);
         wx.showToast({ title: TOAST.routeSaveFailed, icon: 'none' });
-        return { success: false, route: null };
+        return { success: false, route: null, localFallback: false };
       })
       .finally(() => {
         this.setData({ uploading: false });
@@ -1318,8 +1450,8 @@ Page(applyThemeMixin({
 
   handleRouteReward(route) {
     if (!route || !route.id) {
-      this.setData({ wizardVisible: false, wizardStep: 1 });
-      wx.switchTab({ url: '/pages/index/index' });
+      this.setData({ wizardVisible: false, wizardPhase: FINISH_PHASES.ENDPOINT, wizardStep: 1 });
+      navigateToIndexShell();
       return;
     }
     let rewardResult = null;
@@ -1329,15 +1461,15 @@ Page(applyThemeMixin({
       logger.warn('awardPointsForRoute failed', error?.errMsg || error?.message || error);
     }
     if (!rewardResult || !rewardResult.evaluation) {
-      this.setData({ wizardVisible: false, wizardStep: 1 });
-      wx.switchTab({ url: '/pages/index/index' });
+      this.setData({ wizardVisible: false, wizardPhase: FINISH_PHASES.ENDPOINT, wizardStep: 1 });
+      navigateToIndexShell();
       return;
     }
     if (!rewardResult.evaluation.valid || rewardResult.pointsAwarded <= 0) {
       wx.showToast({ title: TOAST.rewardInvalid, icon: 'none' });
       setTimeout(() => {
-        this.setData({ wizardVisible: false, wizardStep: 1 });
-        wx.switchTab({ url: '/pages/index/index' });
+        this.setData({ wizardVisible: false, wizardPhase: FINISH_PHASES.ENDPOINT, wizardStep: 1 });
+        navigateToIndexShell();
       }, 800);
       return;
     }
@@ -1354,8 +1486,7 @@ Page(applyThemeMixin({
       totalPoints: rewardResult.totalPoints,
       starIcons: rewardResult.pointsAwarded === 2 ? '\u2B50\u2B50' : '\u2B50',
     };
-    this.setData({
-      wizardStep: 5,
+    this.setWizardPhase(FINISH_PHASES.REWARD, {
       rewardSummary: summary,
     });
   },
@@ -1377,13 +1508,15 @@ Page(applyThemeMixin({
   },
 
   handleRewardConfirm() {
+    this._wizardFeedbackMeta = null;
     this.setData({
       wizardVisible: false,
+      wizardPhase: FINISH_PHASES.ENDPOINT,
       wizardStep: 1,
       rewardModalVisible: false,
       rewardSummary: null,
     });
-    wx.switchTab({ url: '/pages/index/index' });
+    navigateToIndexShell();
   },
 
   handleTitleInput(event) {

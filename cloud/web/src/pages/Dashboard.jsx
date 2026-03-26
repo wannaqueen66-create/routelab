@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import MapView from '../components/MapView';
 import MetricsBoard from '../components/MetricsBoard';
-import AdminDashboard from './AdminDashboard.jsx';
 import { fetchRoutes, fetchDailyMetrics } from '../api/client';
 
 const INITIAL_STATE = {
@@ -9,11 +8,7 @@ const INITIAL_STATE = {
   metrics: [],
 };
 
-export default function Dashboard({ role = 'user' }) {
-  if (role === 'admin') {
-    return <AdminDashboard role="admin" />;
-  }
-
+export default function Dashboard() {
   const [data, setData] = useState(INITIAL_STATE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -60,23 +55,23 @@ export default function Dashboard({ role = 'user' }) {
   }, [data.routes]);
 
   return (
-    <main className="layout">
-      <section className="map-card">
-        <div className="refresh-actions">
+    <main className="user-dashboard-layout">
+      <section className="user-dashboard-map-card">
+        <div className="user-dashboard-refresh-actions">
           <div>
             <h2>已采集轨迹</h2>
-            <div className="route-count">共 {summary.routes} 条</div>
+            <div className="user-dashboard-route-count">共 {summary.routes} 条</div>
           </div>
           <button type="button" onClick={loadData} disabled={loading}>
             {loading ? '刷新中...' : '刷新'}
           </button>
         </div>
-        {error && <div className="error-banner">{error}</div>}
-        <div className="map-container">
+        {error && <div className="user-dashboard-error-banner">{error}</div>}
+        <div className="dashboard-map-shell">
           <MapView routes={data.routes} loading={loading} />
         </div>
       </section>
-      <section className="metrics-card">
+      <section className="user-dashboard-metrics-card">
         <h2>日常数据统计</h2>
         <MetricsBoard metrics={data.metrics} summary={summary} loading={loading} />
       </section>

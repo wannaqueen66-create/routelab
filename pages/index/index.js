@@ -179,7 +179,7 @@ Page(applyThemeMixin({
     announcementModal: null,
   },
 
-  onLoad() {
+  onLoad(options = {}) {
     this.app = app;
     this.settings = { ...getRecentSettings() };
     this.profile = getUserProfile();
@@ -187,6 +187,11 @@ Page(applyThemeMixin({
     this.routes = [];
     this.fetchingWeather = false;
     this.currentOverview = EMPTY_OVERVIEW;
+
+    const requestedTab = typeof options.tab === 'string' ? options.tab.trim() : '';
+    const nextActiveTab = TAB_META.some((item) => item.key === requestedTab)
+      ? requestedTab
+      : TAB_META[0].key;
 
     const initialRoutes =
       (this.app &&
@@ -202,6 +207,7 @@ Page(applyThemeMixin({
     });
 
     this.setData({
+      activeTab: nextActiveTab,
       networkConnected: this.app?.globalData?.networkConnected !== false,
       privacyLevel: this.settings.privacyLevel || 'private',
     });
@@ -768,7 +774,7 @@ Page(applyThemeMixin({
   },
 
   handleNavigateHistory() {
-    wx.navigateTo({ url: '/pages/history/history' });
+    wx.navigateTo({ url: '/pages/index/index?tab=history' });
   },
 
   handleCompleteProfile() {

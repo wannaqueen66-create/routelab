@@ -3,6 +3,13 @@ import axios from 'axios';
 const SESSION_STORAGE_KEY = 'routelab.session';
 const LEGACY_TOKEN_KEY = 'routelab.token';
 
+const getStorage = () => {
+  if (typeof sessionStorage !== 'undefined') {
+    return sessionStorage;
+  }
+  return null;
+};
+
 const resolveApiBaseUrl = () => {
   if (
     typeof __ROUTELAB_API_BASE_URL__ !== 'undefined' &&
@@ -28,11 +35,12 @@ const resolveApiBaseUrl = () => {
 const API_BASE_URL = resolveApiBaseUrl();
 
 const readInitialSession = () => {
-  if (typeof localStorage === 'undefined') {
+  const storage = getStorage();
+  if (!storage) {
     return { token: '', role: 'user' };
   }
 
-  const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+  const raw = storage.getItem(SESSION_STORAGE_KEY);
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
@@ -45,9 +53,12 @@ const readInitialSession = () => {
     }
   }
 
-  const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
-  if (legacyToken) {
-    return { token: legacyToken, role: 'user' };
+  if (typeof localStorage !== 'undefined') {
+    const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (legacyToken) {
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      return { token: legacyToken, role: 'user' };
+    }
   }
 
   return { token: '', role: 'user' };
@@ -56,15 +67,17 @@ const readInitialSession = () => {
 let session = readInitialSession();
 
 const persistSession = () => {
-  if (typeof localStorage === 'undefined') {
+  const storage = getStorage();
+  if (!storage) {
     return;
   }
 
   if (session.token) {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
   } else {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    storage.removeItem(SESSION_STORAGE_KEY);
+  }
+  if (typeof localStorage !== 'undefined') {
     localStorage.removeItem(LEGACY_TOKEN_KEY);
   }
 };
@@ -96,6 +109,21 @@ export function getAuthRole() {
   return session.role;
 }
 
+export function clearSession(options = {}) {
+  session = { token: '', role: 'user' };
+  persistSession();
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(
+      new CustomEvent('routelab:auth-cleared', {
+        detail: {
+          reason: options.reason || '',
+          message: options.message || '',
+        },
+      })
+    );
+  }
+}
+
 const client = axios.create({
   baseURL: API_BASE_URL,
   timeout: 12000,
@@ -107,6 +135,21 @@ client.interceptors.request.use((config) => {
   }
   return config;
 });
+
+client.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const serverMessage = error?.response?.data?.error || '';
+    if ((status === 401 || status === 403) && session.token) {
+      clearSession({
+        reason: status === 401 ? 'unauthorized' : 'forbidden',
+        message: serverMessage || '登录状态已失效，请重新登录',
+      });
+    }
+    return Promise.reject(error);
+  }
+);
 
 export async function loginAdmin(credentials) {
   const response = await client.post('/login/admin', credentials);

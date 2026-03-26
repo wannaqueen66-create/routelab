@@ -1,13 +1,13 @@
 /* Profile Page Additional Styles */
 
-.quick-stats {
+.profile-quick-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
 
-.stat-item {
+.profile-stat-item {
   background: var(--white);
   padding: var(--space-4);
   border-radius: var(--radius-lg);
@@ -18,25 +18,25 @@
   color: var(--primary-blue);
 }
 
-.stat-value {
+.profile-stat-value {
   font-size: var(--text-xl);
   font-weight: 700;
   color: var(--gray-900);
 }
 
-.stat-label {
+.profile-stat-label {
   font-size: var(--text-xs);
   color: var(--gray-500);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
-.records-list {
+.profile-records-list {
   display: flex;
   flex-direction: column;
 }
 
-.record-item {
+.profile-record-item {
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -46,12 +46,12 @@
   transition: all var(--transition-fast);
 }
 
-.record-item:hover {
+.profile-record-item:hover {
   background: var(--primary-blue-bg);
   transform: translateX(4px);
 }
 
-.record-icon {
+.profile-record-icon {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
@@ -63,21 +63,21 @@
   flex-shrink: 0;
 }
 
-.record-info {
+.profile-record-info {
   flex: 1;
 }
 
-.record-title {
+.profile-record-title {
   font-weight: 500;
   color: var(--gray-900);
 }
 
-.record-date {
+.profile-record-date {
   font-size: var(--text-xs);
   color: var(--gray-500);
 }
 
-.record-stats {
+.profile-record-stats {
   display: flex;
   gap: var(--space-3);
   font-size: var(--text-sm);

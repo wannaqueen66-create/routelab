@@ -120,43 +120,43 @@ function PlatformStatsCard({ icon: Icon, title, value, subtitle, gradient, loadi
 function RealtimeMonitor({ data, loading }) {
   return (
     <motion.div
-      className="realtime-monitor"
+      className="dashboard-realtime-monitor"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.4, delay: 0.2 }}
     >
-      <div className="realtime-header">
-        <div className="realtime-title">
-          <Zap size={20} className="realtime-icon" />
+      <div className="dashboard-realtime-header">
+        <div className="dashboard-realtime-title">
+          <Zap size={20} className="dashboard-realtime-icon" />
           <span>实时平台监控</span>
         </div>
-        <div className="realtime-status">
-          <span className="status-dot" />
+        <div className="dashboard-realtime-status">
+          <span className="dashboard-status-dot" />
           <span>运行中</span>
         </div>
       </div>
-      <div className="realtime-grid">
-        <div className="realtime-item">
-          <div className="realtime-label">今日新增轨迹</div>
-          <div className="realtime-value">
+      <div className="dashboard-realtime-grid">
+        <div className="dashboard-realtime-item">
+          <div className="dashboard-realtime-label">今日新增轨迹</div>
+          <div className="dashboard-realtime-value">
             {loading ? '--' : <AnimatedNumber value={data?.todayRoutes || 0} />}
           </div>
         </div>
-        <div className="realtime-item">
-          <div className="realtime-label">今日活跃用户</div>
-          <div className="realtime-value">
+        <div className="dashboard-realtime-item">
+          <div className="dashboard-realtime-label">今日活跃用户</div>
+          <div className="dashboard-realtime-value">
             {loading ? '--' : <AnimatedNumber value={data?.todayActiveUsers || 0} />}
           </div>
         </div>
-        <div className="realtime-item">
-          <div className="realtime-label">本周上传量</div>
-          <div className="realtime-value">
+        <div className="dashboard-realtime-item">
+          <div className="dashboard-realtime-label">本周上传量</div>
+          <div className="dashboard-realtime-value">
             {loading ? '--' : <AnimatedNumber value={data?.weeklyUploads || 0} />}
           </div>
         </div>
-        <div className="realtime-item">
-          <div className="realtime-label">系统负载</div>
-          <div className="realtime-value text-success">正常</div>
+        <div className="dashboard-realtime-item">
+          <div className="dashboard-realtime-label">系统负载</div>
+          <div className="dashboard-realtime-value text-success">正常</div>
         </div>
       </div>
     </motion.div>
@@ -362,28 +362,28 @@ export default function DashboardPage() {
       <RealtimeMonitor data={realtimeData} loading={loading} />
 
       {/* Charts Section */}
-      <div className="charts-grid">
+      <div className="dashboard-charts-grid">
         {/* Activity trend */}
         <motion.div
-          className="chart-card chart-card-wide"
+          className="dashboard-chart-card dashboard-chart-card-wide"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.3 }}
         >
-          <div className="chart-header">
-            <h3 className="chart-title">30 天平台活跃度趋势</h3>
-            <div className="chart-legend-custom">
-              <span className="legend-item">
-                <span className="legend-dot" style={{ background: '#4A90E2' }} />
+          <div className="dashboard-chart-header">
+            <h3 className="dashboard-chart-title">30 天平台活跃度趋势</h3>
+            <div className="dashboard-chart-legend-custom">
+              <span className="dashboard-legend-item">
+                <span className="dashboard-legend-dot" style={{ background: '#4A90E2' }} />
                 轨迹上传量
               </span>
-              <span className="legend-item">
-                <span className="legend-dot" style={{ background: '#52C41A' }} />
+              <span className="dashboard-legend-item">
+                <span className="dashboard-legend-dot" style={{ background: '#52C41A' }} />
                 活跃用户数
               </span>
             </div>
           </div>
-          <div className="chart-body">
+          <div className="dashboard-chart-body">
             {loading ? (
               <div className="skeleton skeleton-card" style={{ height: '320px' }} />
             ) : (
@@ -441,16 +441,16 @@ export default function DashboardPage() {
 
         {/* Purpose distribution */}
         <motion.div
-          className="chart-card"
+          className="dashboard-chart-card"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.4 }}
         >
-          <div className="chart-header">
-            <h3 className="chart-title">全平台出行目的分布</h3>
-            <BarChart3 size={20} className="chart-icon" />
+          <div className="dashboard-chart-header">
+            <h3 className="dashboard-chart-title">全平台出行目的分布</h3>
+            <BarChart3 size={20} className="dashboard-chart-icon" />
           </div>
-          <div className="chart-body">
+          <div className="dashboard-chart-body">
             {loading ? (
               <div className="skeleton skeleton-card" style={{ height: '300px' }} />
             ) : (
@@ -483,7 +483,7 @@ export default function DashboardPage() {
                   <Legend
                     verticalAlign="bottom"
                     height={36}
-                    formatter={(value) => <span className="legend-label">{value}</span>}
+                    formatter={(value) => <span className="dashboard-legend-label">{value}</span>}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -494,21 +494,21 @@ export default function DashboardPage() {
 
       {/* Data Quality Overview */}
       <motion.div
-        className="quality-overview-card"
+        className="dashboard-quality-overview-card"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.5 }}
       >
-        <div className="quality-header">
-          <h3 className="quality-title">
+        <div className="dashboard-quality-header">
+          <h3 className="dashboard-quality-title">
             <Database size={20} />
             数据质量概览
           </h3>
         </div>
-        <div className="quality-metrics-grid">
-          <div className="quality-metric">
-            <div className="quality-metric-label">平均轨迹长度</div>
-            <div className="quality-metric-value">
+        <div className="dashboard-quality-metrics-grid">
+          <div className="dashboard-quality-metric">
+            <div className="dashboard-quality-metric-label">平均轨迹长度</div>
+            <div className="dashboard-quality-metric-value">
               {loading
                 ? '--'
                 : averageDistanceKm != null
@@ -516,9 +516,9 @@ export default function DashboardPage() {
                 : '暂无数据'}
             </div>
           </div>
-          <div className="quality-metric">
-            <div className="quality-metric-label">平均采样点数</div>
-            <div className="quality-metric-value">
+          <div className="dashboard-quality-metric">
+            <div className="dashboard-quality-metric-label">平均采样点数</div>
+            <div className="dashboard-quality-metric-value">
               {loading ? (
                 '--'
               ) : avgPointsPerRoute != null ? (
@@ -528,15 +528,15 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-          <div className="quality-metric">
-            <div className="quality-metric-label">数据完整度</div>
-            <div className="quality-metric-value text-success">
+          <div className="dashboard-quality-metric">
+            <div className="dashboard-quality-metric-label">数据完整度</div>
+            <div className="dashboard-quality-metric-value text-success">
               {loading ? '--' : `${(completenessRatio * 100).toFixed(1)}%`}
             </div>
           </div>
-          <div className="quality-metric">
-            <div className="quality-metric-label">GPS 信号质量</div>
-            <div className="quality-metric-value text-success">
+          <div className="dashboard-quality-metric">
+            <div className="dashboard-quality-metric-label">GPS 信号质量</div>
+            <div className="dashboard-quality-metric-value text-success">
               {loading ? '--' : gpsQualityLabel || '暂无数据'}
             </div>
           </div>

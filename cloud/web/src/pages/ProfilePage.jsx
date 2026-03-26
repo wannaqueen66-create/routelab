@@ -5,17 +5,13 @@ import {
   Award,
   Activity,
   MessageSquare,
-  Settings,
   Lock,
   Trophy,
-  Target,
   Zap,
-  Star,
-  Heart,
   Map,
 } from 'lucide-react';
 import { fetchDailyMetrics } from '../api/client';
-import { formatDistance, formatDuration } from '../utils/format';
+import { formatDistance } from '../utils/format';
 
 // Achievement data
 const ACHIEVEMENTS = [
@@ -119,21 +115,17 @@ const ACHIEVEMENTS = [
 
 // Achievement Card Component with 3D flip effect
 function AchievementCard({ achievement }) {
-  const [isFlipped, setIsFlipped] = useState(false);
-
   return (
     <motion.div
-      className={`achievement-card ${achievement.unlocked ? '' : 'locked'}`}
-      onHoverStart={() => setIsFlipped(true)}
-      onHoverEnd={() => setIsFlipped(false)}
+      className={`profile-achievement-card ${achievement.unlocked ? '' : 'locked'}`}
       whileHover={{ scale: 1.05, rotateY: 10 }}
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
     >
-      <div className="achievement-icon">{achievement.icon}</div>
-      <div className="achievement-name">{achievement.name}</div>
-      <div className="achievement-desc">{achievement.description}</div>
+      <div className="profile-achievement-icon">{achievement.icon}</div>
+      <div className="profile-achievement-name">{achievement.name}</div>
+      <div className="profile-achievement-desc">{achievement.description}</div>
       {!achievement.unlocked && achievement.progress > 0 && (
-        <div className="achievement-progress">
+        <div className="profile-achievement-progress">
           <div className="progress-bar">
             <div
               className="progress-fill"
@@ -288,39 +280,39 @@ export default function ProfilePage({ role }) {
 
       {/* Quick Stats */}
       <motion.div
-        className="quick-stats"
+        className="profile-quick-stats"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="stat-item">
+        <div className="profile-stat-item">
           <Map size={24} />
           <div>
-            <div className="stat-value">{formatDistance(totalDistance)}</div>
-            <div className="stat-label">总里程</div>
+            <div className="profile-stat-value">{formatDistance(totalDistance)}</div>
+            <div className="profile-stat-label">总里程</div>
           </div>
         </div>
-        <div className="stat-item">
+        <div className="profile-stat-item">
           <Activity size={24} />
           <div>
-            <div className="stat-value">{totalRoutes}</div>
-            <div className="stat-label">运动次数</div>
+            <div className="profile-stat-value">{totalRoutes}</div>
+            <div className="profile-stat-label">运动次数</div>
           </div>
         </div>
-        <div className="stat-item">
+        <div className="profile-stat-item">
           <Zap size={24} />
           <div>
-            <div className="stat-value">{Math.floor(totalDistance / 1000 * 60)}</div>
-            <div className="stat-label">消耗卡路里</div>
+            <div className="profile-stat-value">{Math.floor(totalDistance / 1000 * 60)}</div>
+            <div className="profile-stat-label">消耗卡路里</div>
           </div>
         </div>
-        <div className="stat-item">
+        <div className="profile-stat-item">
           <Trophy size={24} />
           <div>
-            <div className="stat-value">
+            <div className="profile-stat-value">
               {ACHIEVEMENTS.filter((a) => a.unlocked).length}
             </div>
-            <div className="stat-label">已获成就</div>
+            <div className="profile-stat-label">已获成就</div>
           </div>
         </div>
       </motion.div>
@@ -352,7 +344,7 @@ export default function ProfilePage({ role }) {
 
         <div className="profile-tab-content">
           {activeTab === 'records' && (
-            <div className="records-list">
+            <div className="profile-records-list">
               <h3 className="text-lg font-semibold mb-4">最近运动记录</h3>
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
@@ -363,21 +355,21 @@ export default function ProfilePage({ role }) {
                   {Array.from({ length: 5 }).map((_, i) => (
                     <motion.div
                       key={i}
-                      className="record-item"
+                      className="profile-record-item"
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.1 }}
                     >
-                      <div className="record-icon">
+                      <div className="profile-record-icon">
                         <Activity size={20} />
                       </div>
-                      <div className="record-info">
-                        <div className="record-title">晨跑训练</div>
-                        <div className="record-date">
+                      <div className="profile-record-info">
+                        <div className="profile-record-title">晨跑训练</div>
+                        <div className="profile-record-date">
                           {new Date(Date.now() - i * 86400000).toLocaleDateString('zh-CN')}
                         </div>
                       </div>
-                      <div className="record-stats">
+                      <div className="profile-record-stats">
                         <span>{(3 + Math.random() * 5).toFixed(1)} km</span>
                         <span>{Math.floor(20 + Math.random() * 30)} min</span>
                       </div>
@@ -396,7 +388,7 @@ export default function ProfilePage({ role }) {
                   已解锁 {ACHIEVEMENTS.filter((a) => a.unlocked).length}/{ACHIEVEMENTS.length}
                 </span>
               </div>
-              <div className="achievements-grid">
+              <div className="profile-achievements-grid">
                 {ACHIEVEMENTS.map((achievement, idx) => (
                   <motion.div
                     key={achievement.id}
@@ -412,7 +404,7 @@ export default function ProfilePage({ role }) {
           )}
 
           {activeTab === 'social' && (
-            <div className="social-feed">
+            <div className="profile-social-feed">
               <h3 className="text-lg font-semibold mb-4">社交动态</h3>
               <div className="empty-state">
                 <MessageSquare size={48} className="empty-state-icon" />

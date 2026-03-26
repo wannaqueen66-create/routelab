@@ -8,6 +8,7 @@ import RouteDetailPanel from '../components/admin/RouteDetailPanel.jsx';
 import UsersPanel from '../components/admin/UsersPanel.jsx';
 import QualityMetrics from '../components/admin/QualityMetrics.jsx';
 import FeedbackPanel from '../components/admin/FeedbackPanel.jsx';
+import MaintenancePanel from '../components/admin/MaintenancePanel.jsx';
 import {
   bulkDeleteRoutes,
   createAdminRoute,
@@ -21,14 +22,11 @@ import {
   fetchAdminQualityMetrics,
   fetchAdminRouteDetail,
   fetchAdminRoutes,
-  fetchRouteDetail,
   fetchAdminUserDetail,
   fetchAdminUsers,
-  fetchUserManagedRoutes,
   listBackups,
   restoreBackup,
   updateAdminRoute,
-  getSession,
 } from '../api/client';
 const ADMIN_TABS = [
   { id: 'routes', label: '轨迹概览' },
@@ -98,16 +96,7 @@ function downloadBlob(blob, filename) {
   window.URL.revokeObjectURL(url);
 }
 
-export default function AdminDashboard({ role: roleProp } = {}) {
-  const sessionRole = roleProp || getSession().role || 'admin';
-  const [role] = useState(sessionRole);
-  const isAdmin = role === 'admin';
-
-  const tabs = useMemo(
-    () => (isAdmin ? ADMIN_TABS : ADMIN_TABS.filter((tab) => tab.id === 'routes')),
-    [isAdmin]
-  );
-
+export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('routes');
   const [banner, showBanner] = useBanner();
 
@@ -142,26 +131,15 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  const fetchRoutesApi = useMemo(
-    () => (isAdmin ? fetchAdminRoutes : fetchUserManagedRoutes),
-    [isAdmin]
-  );
+  const fetchRoutesApi = useMemo(() => fetchAdminRoutes, []);
 
   useEffect(() => {
-    if (!tabs.some((tab) => tab.id === activeTab)) {
+    if (!ADMIN_TABS.some((tab) => tab.id === activeTab)) {
       setActiveTab('routes');
     }
-  }, [tabs, activeTab]);
+  }, [activeTab]);
 
   const loadAnalytics = useCallback(async () => {
-    if (!isAdmin) {
-      setSummary(null);
-      setTimeseries(null);
-      setDistribution(null);
-      setQualityMetrics(null);
-      setLoadingAnalytics(false);
-      return;
-    }
     setLoadingAnalytics(true);
     try {
       const [summaryData, timeseriesData, distributionData, qualityData] = await Promise.all([
@@ -179,7 +157,7 @@ export default function AdminDashboard({ role: roleProp } = {}) {
     } finally {
       setLoadingAnalytics(false);
     }
-  }, [isAdmin, showBanner]);
+  }, [showBanner]);
 
   const triggerRoutesReload = useCallback(() => {
     setRouteReloadToken((token) => token + 1);
@@ -196,25 +174,20 @@ export default function AdminDashboard({ role: roleProp } = {}) {
           pageSize: routePageSize,
         };
         const requestParams = { ...queryParams };
-        if (!isAdmin) {
+        const rawUserId = requestParams.userId;
+        const isEmptyUserId =
+          rawUserId === undefined ||
+          rawUserId === null ||
+          (typeof rawUserId === 'string' && rawUserId.trim() === '');
+        if (isEmptyUserId) {
           delete requestParams.userId;
-          requestParams.includeDeleted = false;
         } else {
-          const rawUserId = requestParams.userId;
-          const isEmptyUserId =
-            rawUserId === undefined ||
-            rawUserId === null ||
-            (typeof rawUserId === 'string' && rawUserId.trim() === '');
-          if (isEmptyUserId) {
-            delete requestParams.userId;
+          const parsedUserId =
+            typeof rawUserId === 'number' ? rawUserId : Number(rawUserId);
+          if (Number.isFinite(parsedUserId)) {
+            requestParams.userId = parsedUserId;
           } else {
-            const parsedUserId =
-              typeof rawUserId === 'number' ? rawUserId : Number(rawUserId);
-            if (Number.isFinite(parsedUserId)) {
-              requestParams.userId = parsedUserId;
-            } else {
-              delete requestParams.userId;
-            }
+            delete requestParams.userId;
           }
         }
         const data = await fetchRoutesApi(requestParams);
@@ -251,7 +224,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
     routePageSize,
     fetchRoutesApi,
     showBanner,
-    isAdmin,
     routeReloadToken,
   ]);
 
@@ -259,20 +231,16 @@ export default function AdminDashboard({ role: roleProp } = {}) {
     async (routeId = selectedRouteId) => {
       if (!routeId) return;
       try {
-        const detailFetcher = isAdmin ? fetchAdminRouteDetail : fetchRouteDetail;
-        const detail = await detailFetcher(routeId);
+        const detail = await fetchAdminRouteDetail(routeId);
         setSelectedRouteDetail(detail);
       } catch (error) {
         showBanner(error?.response?.data?.error || error.message || '加载轨迹详情失败', 'error');
       }
     },
-    [selectedRouteId, showBanner, isAdmin]
+    [selectedRouteId, showBanner]
   );
 
   const loadUsers = useCallback(async () => {
-    if (!isAdmin) {
-      return;
-    }
     setLoadingUsers(true);
     try {
       const data = await fetchAdminUsers({
@@ -287,13 +255,9 @@ export default function AdminDashboard({ role: roleProp } = {}) {
     } finally {
       setLoadingUsers(false);
     }
-  }, [userFilters, userPage, showBanner, isAdmin]);
+  }, [userFilters, userPage, showBanner]);
 
   const loadBackups = useCallback(async () => {
-    if (!isAdmin) {
-      return;
-    }
-
     setLoadingBackups(true);
     try {
       const data = await listBackups();
@@ -303,7 +267,7 @@ export default function AdminDashboard({ role: roleProp } = {}) {
     } finally {
       setLoadingBackups(false);
     }
-  }, [showBanner, isAdmin]);
+  }, [showBanner]);
 
   useEffect(() => {
     loadAnalytics();
@@ -344,10 +308,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleRestoreRoute = async (routeId) => {
-    if (!isAdmin) {
-      showBanner('当前账号无权恢复轨迹', 'error');
-      return;
-    }
     try {
       await updateAdminRoute(routeId, { deletedAt: null });
       showBanner('轨迹已恢复', 'success');
@@ -360,10 +320,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
 
     const handleUpdateRoute = async (payload) => {
     if (!selectedRouteId) return;
-    if (!isAdmin) {
-      showBanner('当前账号无权更新轨迹信息', 'error');
-      return;
-    }
     try {
       await updateAdminRoute(selectedRouteId, payload);
       showBanner('更新成功', 'success');
@@ -375,10 +331,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleBulkDelete = async (ids) => {
-    if (!isAdmin) {
-      showBanner('当前账号无权执行批量删除', 'error');
-      return;
-    }
     try {
       await bulkDeleteRoutes({ ids });
       showBanner('已删除选中的轨迹', 'success');
@@ -393,10 +345,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleExportRoutes = async () => {
-    if (!isAdmin) {
-      showBanner('当前账号无权导出轨迹', 'error');
-      return;
-    }
     try {
       showBanner('正在导出轨迹...', 'info');
       const result = await exportAdminRoutes({
@@ -424,10 +372,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleImportRoutes = async (file) => {
-    if (!isAdmin) {
-      showBanner('当前账号无权导入轨迹', 'error');
-      return;
-    }
     if (!file) return;
     try {
       setImporting(true);
@@ -464,9 +408,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleSelectUser = async (userId) => {
-    if (!isAdmin) {
-      return;
-    }
     if (!userId) {
       setSelectedUser(null);
       return;
@@ -480,10 +421,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleCreateBackup = async () => {
-    if (!isAdmin) {
-      showBanner('当前账号无权创建备份', 'error');
-      return;
-    }
     try {
       await createBackup();
       showBanner('备份已创建', 'success');
@@ -494,10 +431,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleDownloadBackup = async (filename) => {
-    if (!isAdmin) {
-      showBanner('当前账号无权下载备份', 'error');
-      return;
-    }
     if (!filename) return;
     try {
       const result = await downloadBackup(filename);
@@ -509,10 +442,6 @@ export default function AdminDashboard({ role: roleProp } = {}) {
   };
 
     const handleRestoreBackup = async (filename) => {
-    if (!isAdmin) {
-      showBanner('当前账号无权恢复备份', 'error');
-      return;
-    }
     if (!filename) return;
     if (!window.confirm('确定将该备份恢复到当前环境吗？此操作不可撤销')) {
       return;
@@ -532,12 +461,23 @@ export default function AdminDashboard({ role: roleProp } = {}) {
 
   const totalRoutePages = Math.max(1, Math.ceil(routeTotal / (routePageSize || 1)));
   const totalUserPages = Math.max(1, Math.ceil(userTotal / DEFAULT_PAGE_SIZE));
+  const routeAnalytics = (
+    <>
+      <SummaryCards summary={summary} loading={loadingAnalytics} />
+      <AnalyticsPanels
+        timeseries={timeseries}
+        distribution={distribution}
+        loading={loadingAnalytics}
+      />
+      <QualityMetrics metrics={qualityMetrics} loading={loadingAnalytics} />
+    </>
+  );
 
   return (
     <div className="admin-dashboard">
       {banner ? <div className={`admin-banner ${banner.type}`}>{banner.message}</div> : null}
       <div className="admin-tabs">
-        {tabs.map((tab) => (
+        {ADMIN_TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -551,17 +491,7 @@ export default function AdminDashboard({ role: roleProp } = {}) {
 
       {activeTab === 'routes' ? (
         <>
-          {isAdmin ? (
-            <>
-              <SummaryCards summary={summary} loading={loadingAnalytics} />
-              <AnalyticsPanels
-                timeseries={timeseries}
-                distribution={distribution}
-                loading={loadingAnalytics}
-              />
-              <QualityMetrics metrics={qualityMetrics} loading={loadingAnalytics} />
-            </>
-          ) : null}
+          {routeAnalytics}
           <RouteFilters
             filters={routeFilters}
             onChange={(next) => {
@@ -574,42 +504,36 @@ export default function AdminDashboard({ role: roleProp } = {}) {
               setRoutePage(1);
             }}
             loading={loadingRoutes}
-            isAdmin={isAdmin}
+            isAdmin
           />
           <div className="admin-card admin-map-card">
             <div className="admin-card-title">
               地图预览
               <div className="admin-card-actions">
-                {isAdmin ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={importing}
-                    >
-                      {importing ? '导入中...' : '导入 JSON 轨迹'}
-                    </button>
-                    <button type="button" onClick={handleExportRoutes} disabled={loadingRoutes}>
-                      导出筛选结果
-                    </button>
-                  </>
-                ) : null}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={importing}
+                >
+                  {importing ? '导入中...' : '导入 JSON 轨迹'}
+                </button>
+                <button type="button" onClick={handleExportRoutes} disabled={loadingRoutes}>
+                  导出筛选结果
+                </button>
               </div>
             </div>
-            {isAdmin ? (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/json"
-                style={{ display: 'none' }}
-                onChange={(event) => handleImportRoutes(event.target.files?.[0] || null)}
-              />
-            ) : null}
-          <MapView
-            routes={routes}
-            loading={loadingRoutes}
-            selectedRouteId={selectedRouteId}
-            onRouteClick={setSelectedRouteId}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              style={{ display: 'none' }}
+              onChange={(event) => handleImportRoutes(event.target.files?.[0] || null)}
+            />
+            <MapView
+              routes={routes}
+              loading={loadingRoutes}
+              selectedRouteId={selectedRouteId}
+              onRouteClick={setSelectedRouteId}
               showRouteMarkers
               showRoutePoints={Boolean(selectedRouteId)}
             />
@@ -627,7 +551,7 @@ export default function AdminDashboard({ role: roleProp } = {}) {
               onDelete={handleDeleteRoute}
               onBulkDelete={handleBulkDelete}
               loading={loadingRoutes}
-              canBulkDelete={isAdmin}
+              canBulkDelete
             />
             <RouteDetailPanel
               route={selectedRouteDetail}

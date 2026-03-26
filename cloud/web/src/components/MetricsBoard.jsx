@@ -38,28 +38,28 @@ export default function MetricsBoard({ summary = {}, metrics = [], loading = fal
   const totalCalories = Math.max(0, Math.round(Number(summary.totalCalories || 0)));
 
   return (
-    <div className="metrics">
-      <div className="metrics-grid">
-        <div className="metric-item">
+    <div className="user-dashboard-metrics">
+      <div className="user-dashboard-metrics-grid">
+        <div className="user-dashboard-metric-item">
           <span>累计轨迹</span>
           <strong>{totalRoutes}</strong>
         </div>
-        <div className="metric-item">
+        <div className="user-dashboard-metric-item">
           <span>累计里程</span>
           <strong>{totalDistance}</strong>
         </div>
-        <div className="metric-item">
+        <div className="user-dashboard-metric-item">
           <span>总耗时</span>
           <strong>{totalDuration}</strong>
         </div>
-        <div className="metric-item">
+        <div className="user-dashboard-metric-item">
           <span>累计能量</span>
           <strong>{totalCalories} kcal</strong>
         </div>
       </div>
 
       <h3 style={{ marginTop: 16, fontSize: 15, color: '#475569' }}>最近日度统计</h3>
-      <div className="metrics-list">
+      <div className="user-dashboard-metrics-list">
         {loading && <div>加载中...</div>}
         {!loading && (!metrics || metrics.length === 0) && <div>暂无每日统计</div>}
         {!loading &&
@@ -71,7 +71,7 @@ export default function MetricsBoard({ summary = {}, metrics = [], loading = fal
             return (
               <div
                 key={item.date || item.day || idx}
-                className="metric-item"
+                className="user-dashboard-metric-item"
                 style={{ display: 'flex', justifyContent: 'space-between' }}
               >
                 <div>

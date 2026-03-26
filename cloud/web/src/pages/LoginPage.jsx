@@ -125,10 +125,14 @@ function RouteAnimation() {
   );
 }
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, initialError = '' }) {
   const [form, setForm] = useState({ username: '', password: '' });
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setError(initialError || '');
+  }, [initialError]);
 
   const handleInputChange = (field) => (event) => {
     const value = event.target.value;

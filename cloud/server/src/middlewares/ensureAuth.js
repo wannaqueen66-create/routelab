@@ -15,12 +15,16 @@ function createEnsureAuth({ jwtSecret }) {
     }
     try {
       const payload = jwt.verify(token, jwtSecret);
-      const role = payload.role || DEFAULT_ROLE;
+      const role = payload.role === 'admin' ? 'admin' : DEFAULT_ROLE;
       const rawUserId = payload.sub || payload.userId || payload.id || null;
       const normalizedUserId =
         role === 'admin' || rawUserId === null || rawUserId === undefined
           ? null
           : rawUserId;
+
+      if (role === 'admin' && String(payload.sub || '') !== 'admin') {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
 
       if (role !== 'admin' && (normalizedUserId === null || normalizedUserId === undefined)) {
         return res.status(401).json({ error: 'Unauthorized' });

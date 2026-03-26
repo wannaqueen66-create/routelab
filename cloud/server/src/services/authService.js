@@ -13,7 +13,6 @@ const {
     WECHAT_APPID,
     WECHAT_SECRET,
     ADMIN_USER,
-    ADMIN_PASSWORD,
     ADMIN_PASSWORD_HASH
 } = require('../config/index');
 
@@ -38,25 +37,19 @@ function signToken(subject, extraPayload = {}) {
 // === Admin Authentication ===
 
 async function validateAdminPassword(password) {
-    if (!password) {
+    if (!password || !ADMIN_PASSWORD_HASH) {
         return false;
     }
-    if (ADMIN_PASSWORD_HASH) {
-        try {
-            return await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
-        } catch (err) {
-            console.error('bcrypt.compare failed', err);
-            return false;
-        }
+    try {
+        return await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+    } catch (err) {
+        console.error('bcrypt.compare failed', err);
+        return false;
     }
-    if (ADMIN_PASSWORD) {
-        return password === ADMIN_PASSWORD;
-    }
-    return false;
 }
 
 function isAdminLoginEnabled() {
-    return Boolean(ADMIN_USER && (ADMIN_PASSWORD || ADMIN_PASSWORD_HASH));
+    return Boolean(ADMIN_USER && ADMIN_PASSWORD_HASH);
 }
 
 function getAdminUser() {

@@ -15,7 +15,7 @@ import {
 
 const navItems = [
   { path: '/dashboard', icon: LayoutDashboard, label: '数据看板', adminOnly: false },
-  { path: '/map', icon: Map, label: '轨迹地图', adminOnly: false },
+  { path: '/map', icon: Map, label: '轨迹地图', adminOnly: true },
   { path: '/profile', icon: User, label: '个人中心', adminOnly: false },
   { path: '/admin', icon: Shield, label: '管理后台', adminOnly: true },
 ];
@@ -70,8 +70,6 @@ export default function Sidebar({ collapsed, onCollapse, role, onSignOut }) {
 
       <nav className="sidebar-nav">
         {navItems.map((item) => {
-          // 管理员视图下隐藏普通用户入口（如个人中心）
-          if (isAdmin && item.path === '/profile') return null;
           if (item.adminOnly && !isAdmin) return null;
           const Icon = item.icon;
           const isActive = location.pathname.startsWith(item.path);

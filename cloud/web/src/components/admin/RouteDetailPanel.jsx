@@ -245,7 +245,7 @@ export default function RouteDetailPanel({
         </div>
       </div>
 
-      {route.feedbackSatisfactionScore ? (
+      {route.feedbackSatisfactionScore != null ? (
         <div className="admin-detail-section">
           <div className="admin-detail-subtitle">路线反馈</div>
           <div className="admin-detail-grid">
@@ -255,7 +255,7 @@ export default function RouteDetailPanel({
             </div>
             <div>
               <span>路径偏好</span>
-              <strong>{(route.feedbackPreferenceLabels || []).join(', ') || '-'}</strong>
+              <strong>{(route.feedbackPreferenceLabels ?? []).join(', ') || '-'}</strong>
             </div>
             {route.feedbackReasonText ? (
               <div style={{ gridColumn: '1 / -1' }}>
@@ -263,15 +263,15 @@ export default function RouteDetailPanel({
                 <strong>{route.feedbackReasonText}</strong>
               </div>
             ) : null}
-            {route.confirmedEndLatitude ? (
+            {route.confirmedEndLatitude != null && route.confirmedEndLongitude != null ? (
               <>
                 <div>
                   <span>确认终点</span>
-                  <strong>{route.confirmedEndLatitude?.toFixed(5)}, {route.confirmedEndLongitude?.toFixed(5)}</strong>
+                  <strong>{route.confirmedEndLatitude.toFixed(5)}, {route.confirmedEndLongitude.toFixed(5)}</strong>
                 </div>
                 <div>
                   <span>GPS终点偏差</span>
-                  <strong>{route.confirmedEndDistanceMeters ? `${Number(route.confirmedEndDistanceMeters).toFixed(1)}m` : '-'}</strong>
+                  <strong>{route.confirmedEndDistanceMeters != null ? `${Number(route.confirmedEndDistanceMeters).toFixed(1)}m` : '-'}</strong>
                 </div>
               </>
             ) : null}

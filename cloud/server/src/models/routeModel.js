@@ -66,7 +66,7 @@ async function createRoute(userId, routeData) {
         feedbackSatisfactionScore = null,
         feedbackPreferenceLabels = null,
         feedbackReasonText = null,
-        feedbackSource = 'wizard',
+        feedbackSource = null,
     } = routeData;
 
     const result = await pool.query(

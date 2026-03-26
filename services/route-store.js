@@ -73,6 +73,35 @@ function normalizeRouteMetadata(route = {}, overrides = {}) {
   };
 }
 
+function readAllStoredRoutes() {
+  const list = storageGetRoutes();
+  return Array.isArray(list) ? list : [];
+}
+
+function normalizeRouteList(routes = []) {
+  return (Array.isArray(routes) ? routes : [])
+    .map((route) => normalizeRouteMetadata(route))
+    .filter(Boolean);
+}
+
+function replaceStoredRoutes(routes = []) {
+  const normalized = normalizeRouteList(routes);
+  storageSetRoutes(normalized);
+  return normalized;
+}
+
+function mutateStoredRoutes(mutator) {
+  const current = readAllStoredRoutes();
+  const draft = current.slice();
+  const result = typeof mutator === 'function' ? mutator(draft, current) : null;
+  const nextRoutes = Array.isArray(result?.routes) ? result.routes : draft;
+  const normalized = replaceStoredRoutes(nextRoutes);
+  return {
+    routes: normalized,
+    value: result && Object.prototype.hasOwnProperty.call(result, 'value') ? result.value : null,
+  };
+}
+
 function saveRoute(route, overrides = {}) {
   const normalized = normalizeRouteMetadata(route, overrides);
   if (!normalized) {
@@ -83,20 +112,12 @@ function saveRoute(route, overrides = {}) {
 }
 
 function setRoutes(routes = []) {
-  const normalized = (Array.isArray(routes) ? routes : [])
-    .map((route) => normalizeRouteMetadata(route))
-    .filter(Boolean);
-  storageSetRoutes(normalized);
-  return normalized;
+  return replaceStoredRoutes(routes);
 }
 
 function getRoutes(options = {}) {
   const includeDeleted = options && options.includeDeleted === true;
-  const list = storageGetRoutes();
-  if (!Array.isArray(list) || !list.length) {
-    return [];
-  }
-  const normalized = list.map((route) => normalizeRouteMetadata(route)).filter(Boolean);
+  const normalized = normalizeRouteList(readAllStoredRoutes());
   if (includeDeleted) {
     return normalized;
   }
@@ -107,27 +128,29 @@ function updateRoute(id, patch = {}) {
   if (!id) {
     return null;
   }
-  const list = storageGetRoutes();
-  const index = list.findIndex((item) => item && item.id === id);
-  if (index < 0) {
-    return null;
-  }
-  const updated = normalizeRouteMetadata({ ...list[index], ...patch });
-  if (!updated) {
-    return null;
-  }
-  list.splice(index, 1, updated);
-  storageSetRoutes(list);
-  return updated;
+  const { value } = mutateStoredRoutes((draft) => {
+    const index = draft.findIndex((item) => item && item.id === id);
+    if (index < 0) {
+      return { value: null };
+    }
+    const updated = normalizeRouteMetadata({ ...draft[index], ...patch });
+    if (!updated) {
+      return { value: null };
+    }
+    draft.splice(index, 1, updated);
+    return { value: updated };
+  });
+  return value;
 }
 
 function removeRoute(id) {
   if (!id) {
     return [];
   }
-  const filtered = storageGetRoutes().filter((route) => route && route.id !== id);
-  storageSetRoutes(filtered);
-  return filtered;
+  const { routes } = mutateStoredRoutes((draft) => ({
+    routes: draft.filter((route) => route && route.id !== id),
+  }));
+  return routes;
 }
 
 function createDeletedStub(route, reason = 'remote_delete') {
@@ -155,7 +178,7 @@ function createDeletedStub(route, reason = 'remote_delete') {
 }
 
 function notify() {
-  const routes = getRoutes();
+  const routes = routeRepository.getRoutes();
   subscribers.forEach((callback) => {
     try {
       callback(routes);
@@ -171,7 +194,7 @@ function subscribe(callback) {
   }
   subscribers.add(callback);
   try {
-    callback(getRoutes());
+    callback(routeRepository.getRoutes());
   } catch (err) {
     console.warn('RouteLab: init subscriber failed', err);
   }
@@ -190,12 +213,20 @@ function buildRouteLogContext(route = {}) {
   };
 }
 
-function markRouteSyncFailed(id, error) {
+function applyRouteStateTransition(id, patch = {}) {
   if (!id) {
     return null;
   }
+  const patched = routeRepository.updateRoute(id, patch);
+  if (patched) {
+    notify();
+  }
+  return patched;
+}
+
+function buildUploadFailurePatch(error) {
   const message = error?.errMsg || error?.message || String(error);
-  const patched = updateRoute(id, {
+  return {
     pendingUpload: true,
     synced: false,
     uploadError: {
@@ -204,24 +235,61 @@ function markRouteSyncFailed(id, error) {
       at: Date.now(),
     },
     lastSyncAttemptAt: Date.now(),
-  });
+  };
+}
+
+function resolveRemoteRouteId(localRoute, cloudRoute) {
+  return cloudRoute?.remoteId || cloudRoute?.id || localRoute?.remoteId || localRoute?.id;
+}
+
+function buildUploadSuccessPatch(localRoute, cloudRoute) {
+  return {
+    ...cloudRoute,
+    id: localRoute.id,
+    remoteId: resolveRemoteRouteId(localRoute, cloudRoute),
+    pendingUpload: false,
+    synced: true,
+    deleted: false,
+    uploadError: null,
+    lastSyncedAt: Date.now(),
+    updatedAt: cloudRoute?.updatedAt || localRoute.updatedAt,
+  };
+}
+
+function markRouteSyncFailed(id, error) {
+  return applyRouteStateTransition(id, buildUploadFailurePatch(error));
+}
+
+function finalizeSyncedRoute(localRoute, cloudRoute, { logContext = null, reason = 'upload_success' } = {}) {
+  if (!localRoute?.id) {
+    return null;
+  }
+  const resolvedRemoteId = resolveRemoteRouteId(localRoute, cloudRoute);
+  const patched = applyRouteStateTransition(
+    localRoute.id,
+    buildUploadSuccessPatch(localRoute, cloudRoute)
+  );
   if (patched) {
-    notify();
+    logger.info('Local cache route marked synced', {
+      ...(logContext || { id: localRoute.id }),
+      reason,
+      remoteId: resolvedRemoteId,
+    });
   }
   return patched;
 }
 
-function dropRouteFromLocalCache(id, { logContext = null, reason = 'upload_success' } = {}) {
+function dropRouteFromLocalCache(id, { logContext = null, reason = 'remove_local' } = {}) {
   if (!id) {
     return false;
   }
-  const routes = getRoutes();
+  const routes = routeRepository.getRoutes({ includeDeleted: true });
   const exists = routes.some((item) => item && item.id === id);
   if (!exists) {
     return false;
   }
   try {
-    removeRoute(id);
+    routeRepository.removeRoute(id);
     notify();
     logger.info('Local cache route removed', {
       ...(logContext || { id }),
@@ -244,7 +312,7 @@ function restoreRouteToLocalCache(route, options = {}) {
     return false;
   }
   try {
-    saveRoute({
+    routeRepository.saveRoute({
       ...route,
       pendingUpload: overrides.pendingUpload ?? false,
       uploadError: overrides.uploadError ?? null,
@@ -315,6 +383,61 @@ function isRemotePhotoPath(path) {
   return normalized.startsWith('http://') || normalized.startsWith('https://');
 }
 
+function countLocalPhotos(photos = []) {
+  return (Array.isArray(photos) ? photos : []).filter((item) => !isRemotePhotoPath(extractPhotoPath(item))).length;
+}
+
+function analyzeRoutePhotos(route) {
+  const normalizedPhotos = normalizePhotoList(route?.photos);
+  const localCount = countLocalPhotos(normalizedPhotos);
+  return {
+    normalizedPhotos,
+    localCount,
+    hasLocalPhotos: localCount > 0,
+  };
+}
+
+function ensureUploadedPhotosComplete(photos = []) {
+  const sanitized = normalizePhotoList(photos);
+  const localCount = countLocalPhotos(sanitized);
+  if (localCount > 0) {
+    const error = new Error(`Photo upload incomplete: ${localCount} of ${sanitized.length} photos still have local paths`);
+    error.code = 'PHOTO_UPLOAD_INCOMPLETE';
+    error.localCount = localCount;
+    error.totalCount = sanitized.length;
+    console.error('[ROUTE-STORE] Photo upload incomplete!', { localCount, totalCount: sanitized.length });
+    throw error;
+  }
+  return sanitized;
+}
+
+function applyUploadedRoutePhotos(route, photos = []) {
+  const patched = applyRouteStateTransition(route.id, { photos });
+  console.log('[ROUTE-STORE] Route updated with remote photos', { patched: !!patched });
+  if (patched) {
+    return patched;
+  }
+  return { ...route, photos };
+}
+
+function wrapPhotoSyncError(route, error) {
+  const errorMessage = error?.message || error?.errMsg || error;
+  const errorCode = error?.code || 'UNKNOWN_ERROR';
+
+  logger.warn('Upload photos before route sync failed', {
+    id: route.id,
+    error: errorMessage,
+    code: errorCode,
+    attempts: error?.attempts,
+  });
+
+  const enhancedError = new Error(`Failed to upload photos for route sync: ${errorMessage}`);
+  enhancedError.code = errorCode;
+  enhancedError.routeId = route.id;
+  enhancedError.originalError = error;
+  throw enhancedError;
+}
+
 function ensureRoutePhotosAreRemote(route) {
   console.log('[ROUTE-STORE ensureRoutePhotosAreRemote called', { routeId: route?.id, hasPhotos: !!route?.photos });
 
@@ -322,8 +445,7 @@ function ensureRoutePhotosAreRemote(route) {
     console.log('[ROUTE-STORE] No photos in route, skipping upload');
     return Promise.resolve(route);
   }
-  const normalizedPhotos = normalizePhotoList(route.photos);
-  const hasLocalPhotos = normalizedPhotos.some((item) => !isRemotePhotoPath(extractPhotoPath(item)));
+  const { normalizedPhotos, hasLocalPhotos } = analyzeRoutePhotos(route);
 
   console.log('[ROUTE-STORE] Photo check', { hasLocalPhotos, photoCount: normalizedPhotos.length });
 
@@ -341,53 +463,15 @@ function ensureRoutePhotosAreRemote(route) {
   return ensureRemotePhotos(normalizedPhotos)
     .then((uploaded) => {
       console.log('[ROUTE-STORE] Photos uploaded, processing result', { uploadedCount: uploaded?.length });
-
-      const sanitized = normalizePhotoList(uploaded || normalizedPhotos);
-
-      // Check if any photos failed to upload (still local)
-      const stillHasLocal = sanitized.some((item) => !isRemotePhotoPath(extractPhotoPath(item)));
-      if (stillHasLocal) {
-        const localCount = sanitized.filter((item) => !isRemotePhotoPath(extractPhotoPath(item))).length;
-        const error = new Error(`Photo upload incomplete: ${localCount} of ${sanitized.length} photos still have local paths`);
-        error.code = 'PHOTO_UPLOAD_INCOMPLETE';
-        error.localCount = localCount;
-        error.totalCount = sanitized.length;
-        console.error('[ROUTE-STORE] Photo upload incomplete!', { localCount, totalCount: sanitized.length });
-        throw error;
-      }
-
+      const sanitized = ensureUploadedPhotosComplete(uploaded || normalizedPhotos);
       console.log('[ROUTE-STORE] All photos uploaded successfully!', { photoCount: sanitized.length });
       logger.info('All photos uploaded successfully for route', {
         routeId: route.id,
         photoCount: sanitized.length
       });
-
-      const patched = updateRoute(route.id, { photos: sanitized });
-      console.log('[ROUTE-STORE] Route updated with remote photos', { patched: !!patched });
-      if (patched) {
-        notify();
-        return patched;
-      }
-      return { ...route, photos: sanitized };
+      return applyUploadedRoutePhotos(route, sanitized);
     })
-    .catch((error) => {
-      const errorMessage = error?.message || error?.errMsg || error;
-      const errorCode = error?.code || 'UNKNOWN_ERROR';
-
-      logger.warn('Upload photos before route sync failed', {
-        id: route.id,
-        error: errorMessage,
-        code: errorCode,
-        attempts: error?.attempts,
-      });
-
-      // Re-throw with enhanced error information
-      const enhancedError = new Error(`Failed to upload photos for route sync: ${errorMessage}`);
-      enhancedError.code = errorCode;
-      enhancedError.routeId = route.id;
-      enhancedError.originalError = error;
-      throw enhancedError;
-    });
+    .catch((error) => wrapPhotoSyncError(route, error));
 }
 
 function normalizePausePoints(points = []) {
@@ -424,6 +508,187 @@ function getMaxUpdatedAt(routes = []) {
     const updated = Number(route?.updatedAt) || 0;
     return updated > acc ? updated : acc;
   }, 0);
+}
+
+function dedupeRemoteRoutes(routes = []) {
+  const dedupedMap = new Map();
+  (Array.isArray(routes) ? routes : []).forEach((item) => {
+    if (!item || !item.id) {
+      return;
+    }
+    const existing = dedupedMap.get(item.id);
+    if (!existing) {
+      dedupedMap.set(item.id, item);
+      return;
+    }
+    const existingUpdated = Number(existing.updatedAt || existing.createdAt || 0);
+    const nextUpdated = Number(item.updatedAt || item.createdAt || 0);
+    if (nextUpdated >= existingUpdated) {
+      dedupedMap.set(item.id, item);
+    }
+  });
+  return Array.from(dedupedMap.values());
+}
+
+function buildKnownRemoteIds() {
+  return routeRepository.getRoutes({ includeDeleted: true })
+    .filter((route) => route && route.synced && route.remoteId)
+    .map((route) => route.remoteId);
+}
+
+function createCloudSyncAggregation() {
+  return {
+    items: [],
+    deletedIds: new Set(),
+    missingRemoteIds: new Set(),
+    metaMax: 0,
+    pagesFetched: 0,
+  };
+}
+
+function collectCloudSyncPage(result, aggregated, pageIndex) {
+  const list = Array.isArray(result?.items)
+    ? result.items
+    : Array.isArray(result)
+      ? result
+      : [];
+
+  aggregated.pagesFetched = pageIndex;
+
+  list.forEach((item) => {
+    if (item && item.id) {
+      aggregated.items.push(item);
+    }
+  });
+
+  const deletedIds = Array.isArray(result?.deletedIds) ? result.deletedIds : [];
+  const missingRemoteIds = Array.isArray(result?.missingRemoteIds) ? result.missingRemoteIds : [];
+  deletedIds.forEach((id) => id && aggregated.deletedIds.add(id));
+  missingRemoteIds.forEach((id) => id && aggregated.missingRemoteIds.add(id));
+
+  const pageMetaMax =
+    Number(
+      result?.latestSyncAt ||
+      result?.lastSyncAt ||
+      result?.maxUpdatedAt ||
+      result?.cursorUpdatedAt
+    ) || 0;
+  if (pageMetaMax > aggregated.metaMax) {
+    aggregated.metaMax = pageMetaMax;
+  }
+}
+
+function applyCloudSyncCheckpoint({ remote = [], deletedIds = [], missingRemoteIds = [], metaMax = 0, lastSync = 0, forceFull = false } = {}) {
+  const nonDeletedRemote = remote.filter((item) => item && !item.deletedAt && !item.deleted);
+  const remoteMax = getMaxUpdatedAt(nonDeletedRemote);
+  const hasChanges =
+    nonDeletedRemote.length > 0 || deletedIds.length > 0 || missingRemoteIds.length > 0 || forceFull;
+  const nextSyncPoint = hasChanges
+    ? Math.max(remoteMax, metaMax, Date.now())
+    : Math.max(lastSync, metaMax);
+  setLastSyncTimestamp(nextSyncPoint || Date.now());
+}
+
+function getRouteSyncHint(route) {
+  return (
+    Number(route?.updatedAt) ||
+    Number(route?.meta?.updatedAt) ||
+    Number(route?.endTime) ||
+    Date.now()
+  );
+}
+
+function reconcilePostUpload(localRoute, cloudRoute, { logContext = null, reason = 'upload' } = {}) {
+  const patched = finalizeSyncedRoute(localRoute, cloudRoute, {
+    logContext,
+    reason,
+  });
+  return {
+    cloudRoute,
+    sourceRoute: localRoute,
+    patched,
+    logContext,
+    syncHint: getRouteSyncHint(cloudRoute || localRoute),
+  };
+}
+
+function handleUploadFailure(route, error, { logContext = null, warningMessage = 'Route upload failed' } = {}) {
+  routeSyncCoordinator.markRouteSyncFailed(route?.id, error);
+  logger.warn(warningMessage, {
+    ...(logContext || { id: route?.id }),
+    error: error?.errMsg || error?.message || error,
+    statusCode: error?.statusCode,
+  });
+  throw error;
+}
+
+function uploadRouteWithLifecycle(route, { logContext = null, reason = 'upload', warningMessage = 'Route upload failed' } = {}) {
+  return syncRouteToCloud(route)
+    .then((cloudRoute) => routeSyncCoordinator.reconcilePostUpload(route, cloudRoute, {
+      logContext,
+      reason,
+    }))
+    .catch((error) => handleUploadFailure(route, error, {
+      logContext,
+      warningMessage,
+    }));
+}
+
+function summarizeBatchUploadResults(results = [], total = 0) {
+  const failed = (Array.isArray(results) ? results : []).filter((item) => item.status === 'rejected').length;
+  if (failed) {
+    setLastSyncError('部分轨迹同步失败，请检查网络后重试');
+    logger.warn('Some routes failed to sync', { failed, total });
+  } else {
+    clearLastSyncError();
+  }
+}
+
+function getFulfilledUploadRecords(results = []) {
+  return (Array.isArray(results) ? results : [])
+    .filter((item) => item.status === 'fulfilled')
+    .map((item) => item.value)
+    .filter(Boolean);
+}
+
+function finalizeBatchUploadResults(results = [], { total = 0, failureReason = 'post_batch_refresh_failed' } = {}) {
+  summarizeBatchUploadResults(results, total);
+  const fulfilled = getFulfilledUploadRecords(results);
+  if (!fulfilled.length) {
+    return routeRepository.getRoutes();
+  }
+  return refreshAfterUploadRecords(fulfilled, {
+    failureReason,
+  });
+}
+
+function refreshAfterUploadRecords(records = [], { failureReason = 'post_upload_refresh_failed' } = {}) {
+  const normalizedRecords = (Array.isArray(records) ? records : []).filter(Boolean);
+  if (!normalizedRecords.length) {
+    return Promise.resolve(routeRepository.getRoutes());
+  }
+
+  const updatedAfter = normalizedRecords.reduce((hint, item) => {
+    const candidate = Number(item.syncHint) || getRouteSyncHint(item.cloudRoute || item.sourceRoute);
+    return candidate > hint ? candidate : hint;
+  }, 0) || Date.now();
+
+  return syncRoutesFromCloud({ updatedAfter }).catch((error) => {
+    logger.warn('Post-upload refresh failed', {
+      error: error?.errMsg || error?.message || error,
+      count: normalizedRecords.length,
+      reason: failureReason,
+    });
+    normalizedRecords.forEach((item) => {
+      if (!item.patched && item.cloudRoute) {
+        routeRepository.restoreRouteToLocalCache(item.cloudRoute, {
+          logContext: item.logContext,
+          reason: failureReason,
+        });
+      }
+    });
+    return routeRepository.getRoutes();
+  });
 }
 
 function formatPointLabel(point) {
@@ -781,6 +1046,55 @@ function sanitizeRouteForUpload(route) {
   return sanitizedRoute;
 }
 
+function prepareUploadPayload(route, preparedRoute) {
+  const target = preparedRoute || route;
+  const remoteId = target.remoteId || target.id;
+  const payload = sanitizeRouteForUpload({
+    ...target,
+    id: remoteId,
+    clientId: route.id,
+  });
+  return { target, remoteId, payload };
+}
+
+function logUploadPayloadDetails(payload, remoteId) {
+  console.log('[ROUTE-STORE] Payload created', { hasPayload: !!payload, remoteId });
+  console.log('[ROUTE-STORE] Payload details:', {
+    id: payload?.id,
+    clientId: payload?.clientId,
+    title: payload?.title,
+    photoCount: payload?.photos?.length,
+    photos: payload?.photos,
+    pointsCount: payload?.points?.length,
+    hasStats: !!payload?.stats,
+    hasMeta: !!payload?.meta
+  });
+}
+
+function resolveUploadRequest(target, payload) {
+  return {
+    method: target?.remoteId ? 'upsert' : 'create',
+    promise: target?.remoteId ? api.upsertRoute(payload) : api.createRoute(payload),
+  };
+}
+
+function applySyncTimestampFromResponse(response) {
+  if (response && typeof response === 'object') {
+    const syncAt = Number(response.lastSyncAt);
+    if (Number.isFinite(syncAt) && syncAt > 0) {
+      setLastSyncTimestamp(syncAt);
+    }
+  }
+}
+
+function normalizeUploadResponse(response, route, remoteId) {
+  applySyncTimestampFromResponse(response);
+  if (response && typeof response === 'object' && response.route) {
+    return { ...response.route };
+  }
+  return { ...route, remoteId };
+}
+
 function syncRouteToCloud(route) {
   console.log('[ROUTE-STORE] ========== syncRouteToCloud CALLED ==========');
   console.log('[ROUTE-STORE] Route ID:', route?.id);
@@ -795,25 +1109,8 @@ function syncRouteToCloud(route) {
   return ensureRoutePhotosAreRemote(route).then((preparedRoute) => {
     console.log('[ROUTE-STORE] Photos ensured, preparing route for upload');
 
-    const target = preparedRoute || route;
-    const remoteId = target.remoteId || target.id;
-    const payload = sanitizeRouteForUpload({
-      ...target,
-      id: remoteId,
-      clientId: route.id,
-    });
-
-    console.log('[ROUTE-STORE] Payload created', { hasPayload: !!payload, remoteId });
-    console.log('[ROUTE-STORE] Payload details:', {
-      id: payload?.id,
-      clientId: payload?.clientId,
-      title: payload?.title,
-      photoCount: payload?.photos?.length,
-      photos: payload?.photos,
-      pointsCount: payload?.points?.length,
-      hasStats: !!payload?.stats,
-      hasMeta: !!payload?.meta
-    });
+    const { target, remoteId, payload } = prepareUploadPayload(route, preparedRoute);
+    logUploadPayloadDetails(payload, remoteId);
 
     if (!payload) {
       console.error('[ROUTE-STORE] Invalid payload, cannot sync!');
@@ -823,26 +1120,14 @@ function syncRouteToCloud(route) {
       return Promise.resolve();
     }
 
-    const request = target.remoteId ? api.upsertRoute(payload) : api.createRoute(payload);
-    console.log('[ROUTE-STORE] Calling API', { method: target.remoteId ? 'upsert' : 'create' });
-    return request
+    const request = resolveUploadRequest(target, payload);
+    console.log('[ROUTE-STORE] Calling API', { method: request.method });
+    return request.promise
       .then((response) => {
         console.log('[ROUTE-STORE] API call SUCCESS!', { hasResponse: !!response });
-
-        if (response && typeof response === 'object') {
-          const syncAt = Number(response.lastSyncAt);
-          if (Number.isFinite(syncAt) && syncAt > 0) {
-            setLastSyncTimestamp(syncAt);
-          }
-        }
-
         console.log('[ROUTE-STORE] ✅ Route synced to cloud successfully!', { routeId: route.id });
         logger.info('Route synced to cloud', { id: route.id });
-
-        if (response && typeof response === 'object' && response.route) {
-          return { ...response.route };
-        }
-        return { ...route, remoteId };
+        return normalizeUploadResponse(response, route, remoteId);
       })
       .catch((err) => {
         console.error('[ROUTE-STORE] ❌ API call FAILED!', {
@@ -867,7 +1152,7 @@ function syncRouteToCloud(route) {
 }
 
 function syncRoutesToCloud() {
-  const routes = getRoutes();
+  const routes = routeRepository.getRoutes();
   if (!routes.length) {
     clearLastSyncError();
     return Promise.resolve([]);
@@ -883,108 +1168,46 @@ function syncRoutesToCloud() {
     pending.map((route) => {
       const logContext = buildRouteLogContext(route);
       logger.info('Route upload initiated during batch sync', logContext);
-      return syncRouteToCloud(route)
-        .then((cloudRoute) => {
-          const removed = dropRouteFromLocalCache(route.id, {
-            logContext,
-            reason: 'batch_upload',
-          });
-          if (!removed) {
-            const patched = updateRoute(route.id, {
-              pendingUpload: false,
-              synced: true,
-              remoteId: cloudRoute?.remoteId || cloudRoute?.id || route.remoteId || route.id,
-              deleted: false,
-              uploadError: null,
-              lastSyncedAt: Date.now(),
-              updatedAt: cloudRoute?.updatedAt || route.updatedAt,
-            });
-            if (patched) {
-              notify();
-            }
-            logger.warn('Route upload finished but local cache retained', {
-              ...logContext,
-              reason: 'batch_upload',
-            });
-          }
-          return {
-            cloudRoute,
-            sourceRoute: route,
-            removed,
-            logContext,
-          };
-        })
-        .catch((error) => {
-          markRouteSyncFailed(route.id, error);
-          logger.warn('Route upload failed during batch sync', {
-            ...logContext,
-            error: error?.errMsg || error?.message || error,
-            statusCode: error?.statusCode,
-          });
-          throw error;
-        });
+      return routeSyncCoordinator.uploadRouteWithLifecycle(route, {
+        logContext,
+        reason: 'batch_upload',
+        warningMessage: 'Route upload failed during batch sync',
+      });
     })
-  ).then((results) => {
-    const failed = results.filter((item) => item.status === 'rejected').length;
-    if (failed) {
-      setLastSyncError('部分轨迹同步失败，请检查网络后重试');
-      logger.warn('Some routes failed to sync', { failed, total: pending.length });
-    } else {
-      clearLastSyncError();
-    }
-    const fulfilled = results
-      .filter((item) => item.status === 'fulfilled')
-      .map((item) => item.value)
-      .filter(Boolean);
-    if (!fulfilled.length) {
-      return getRoutes();
-    }
-    const syncHint = fulfilled.reduce((hint, item) => {
-      const candidate =
-        Number(item.cloudRoute?.updatedAt) ||
-        Number(item.cloudRoute?.meta?.updatedAt) ||
-        Number(item.sourceRoute?.updatedAt) ||
-        Number(item.sourceRoute?.endTime) ||
-        0;
-      return candidate > hint ? candidate : hint;
-    }, 0);
-    const updatedAfter = syncHint || Date.now();
-    return syncRoutesFromCloud({ updatedAfter }).catch((error) => {
-      logger.warn('Post-batch refresh failed', {
-        error: error?.errMsg || error?.message || error,
-      });
-      fulfilled.forEach((item) => {
-        if (item.removed && item.cloudRoute) {
-          restoreRouteToLocalCache(item.cloudRoute, {
-            logContext: item.logContext,
-            reason: 'post_batch_refresh_failed',
-          });
-        }
-      });
-      return getRoutes();
-    });
-  });
+  ).then((results) => routeSyncCoordinator.finalizeBatchUploadResults(results, {
+    total: pending.length,
+    failureReason: 'post_batch_refresh_failed',
+  }));
 }
 
-function mergeRoutes(remoteRoutes = [], options = {}) {
-  const { deletedIds = [], missingRemoteIds = [] } = options || {};
-  const localAll = getRoutes({ includeDeleted: true });
-  const activeLocal = localAll.filter((route) => route && !route.deleted);
+function buildLocalRouteBuckets(localRoutes = []) {
+  const activeLocal = [];
   const tombstoneMap = new Map();
-  localAll.forEach((route) => {
-    if (route && route.deleted) {
-      tombstoneMap.set(route.id, route);
+  (Array.isArray(localRoutes) ? localRoutes : []).forEach((route) => {
+    if (!route || !route.id) {
+      return;
     }
+    if (route.deleted) {
+      tombstoneMap.set(route.id, route);
+      return;
+    }
+    activeLocal.push(route);
   });
-  const deletionSet = new Set(
+  return { activeLocal, tombstoneMap };
+}
+
+function createDeletionSet(options = {}) {
+  const { deletedIds = [], missingRemoteIds = [] } = options || {};
+  return new Set(
     [
       ...(Array.isArray(deletedIds) ? deletedIds : []),
       ...(Array.isArray(missingRemoteIds) ? missingRemoteIds : []),
     ].filter(Boolean)
   );
-  const remoteMap = new Map();
-  const merged = [];
+}
 
+function buildRemoteRouteMap(remoteRoutes = [], deletionSet = new Set()) {
+  const remoteMap = new Map();
   (Array.isArray(remoteRoutes) ? remoteRoutes : []).forEach((route) => {
     if (!route || !route.id) {
       return;
@@ -1003,52 +1226,60 @@ function mergeRoutes(remoteRoutes = [], options = {}) {
       })
     );
   });
+  return remoteMap;
+}
+
+function applyRemoteDeletionToTombstones(route, tombstoneMap) {
+  logger.info('Route removed locally due to remote deletion', { id: route.id });
+  const stub = createDeletedStub(route);
+  if (stub) {
+    tombstoneMap.set(route.id, stub);
+  } else {
+    tombstoneMap.delete(route.id);
+  }
+}
+
+function normalizeMergedRemoteRoute(route) {
+  return normalizeRouteMetadata(route, {
+    synced: true,
+    pendingUpload: false,
+    remoteId: route.remoteId || route.id,
+    deleted: false,
+  });
+}
+
+function mergeRoutes(remoteRoutes = [], options = {}) {
+  const localAll = routeRepository.getRoutes({ includeDeleted: true });
+  const { activeLocal, tombstoneMap } = routeSyncCoordinator.buildLocalRouteBuckets(localAll);
+  const deletionSet = routeSyncCoordinator.createDeletionSet(options);
+  const remoteMap = routeSyncCoordinator.buildRemoteRouteMap(remoteRoutes, deletionSet);
+  const merged = [];
 
   activeLocal.forEach((route) => {
     if (!route || !route.id) {
       return;
     }
     if (deletionSet.has(route.id)) {
-      logger.info('Route removed locally due to remote deletion', { id: route.id });
-      const stub = createDeletedStub(route);
-      if (stub) {
-        tombstoneMap.set(route.id, stub);
-      } else {
-        tombstoneMap.delete(route.id);
-      }
+      routeSyncCoordinator.applyRemoteDeletionToTombstones(route, tombstoneMap);
       return;
     }
     if (remoteMap.has(route.id)) {
       const remoteRecord = remoteMap.get(route.id);
-      merged.push(
-        normalizeRouteMetadata(remoteRecord, {
-          synced: true,
-          pendingUpload: false,
-          remoteId: remoteRecord.remoteId || remoteRecord.id,
-          deleted: false,
-        })
-      );
+      merged.push(routeSyncCoordinator.normalizeMergedRemoteRoute(remoteRecord));
       remoteMap.delete(route.id);
       tombstoneMap.delete(route.id);
       return;
     }
-    merged.push(normalizeRouteMetadata(route));
+    merged.push(routeRepository.normalizeRouteMetadata(route));
   });
 
-  remoteMap.forEach((route, id) => {
-    merged.push(
-      normalizeRouteMetadata(route, {
-        synced: true,
-        pendingUpload: false,
-        remoteId: route.remoteId || id,
-        deleted: false,
-      })
-    );
+  remoteMap.forEach((route) => {
+    merged.push(routeSyncCoordinator.normalizeMergedRemoteRoute(route));
   });
 
   const sorted = merged.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
   const tombstones = Array.from(tombstoneMap.values());
-  setRoutes([...sorted, ...tombstones]);
+  routeRepository.setRoutes([...sorted, ...tombstones]);
   notify();
   return sorted;
 }
@@ -1057,21 +1288,13 @@ function syncRoutesFromCloud(options = {}) {
   const { forceFull = false, updatedAfter, includeDeleted = true, ...rest } = options || {};
   const lastSync = forceFull ? 0 : getLastSyncTimestamp();
   const effectiveUpdatedAfter = forceFull ? null : updatedAfter || lastSync;
-  const knownRemoteIds = getRoutes({ includeDeleted: true })
-    .filter((route) => route && route.synced && route.remoteId)
-    .map((route) => route.remoteId);
+  const knownRemoteIds = routeSyncCoordinator.buildKnownRemoteIds();
 
   const pageLimit = Math.min(Math.max(Number(rest.limit) || 200, 1), 500);
   const maxPages = Math.min(Math.max(Number(rest.maxPages) || 50, 1), 200);
   let cursor = Math.max(Number(rest.cursor) || 0, 0);
 
-  const aggregated = {
-    items: [],
-    deletedIds: new Set(),
-    missingRemoteIds: new Set(),
-    metaMax: 0,
-    pagesFetched: 0,
-  };
+  const aggregated = routeSyncCoordinator.createCloudSyncAggregation();
 
   const fetchPage = (pageIndex = 1) => {
     const payload = {
@@ -1083,35 +1306,7 @@ function syncRoutesFromCloud(options = {}) {
     };
 
     return api.syncRoutes(payload).then((result) => {
-      const list = Array.isArray(result?.items)
-        ? result.items
-        : Array.isArray(result)
-          ? result
-          : [];
-
-      aggregated.pagesFetched = pageIndex;
-
-      list.forEach((item) => {
-        if (item && item.id) {
-          aggregated.items.push(item);
-        }
-      });
-
-      const deletedIds = Array.isArray(result?.deletedIds) ? result.deletedIds : [];
-      const missingRemoteIds = Array.isArray(result?.missingRemoteIds) ? result.missingRemoteIds : [];
-      deletedIds.forEach((id) => id && aggregated.deletedIds.add(id));
-      missingRemoteIds.forEach((id) => id && aggregated.missingRemoteIds.add(id));
-
-      const pageMetaMax =
-        Number(
-          result?.latestSyncAt ||
-          result?.lastSyncAt ||
-          result?.maxUpdatedAt ||
-          result?.cursorUpdatedAt
-        ) || 0;
-      if (pageMetaMax > aggregated.metaMax) {
-        aggregated.metaMax = pageMetaMax;
-      }
+      routeSyncCoordinator.collectCloudSyncPage(result, aggregated, pageIndex);
 
       const nextCursorCandidate = Number(result?.nextCursor);
       const hasMore =
@@ -1136,37 +1331,19 @@ function syncRoutesFromCloud(options = {}) {
 
   return fetchPage()
     .then(() => {
-      const dedupedMap = new Map();
-      aggregated.items.forEach((item) => {
-        if (!item || !item.id) {
-          return;
-        }
-        const existing = dedupedMap.get(item.id);
-        if (!existing) {
-          dedupedMap.set(item.id, item);
-          return;
-        }
-        const existingUpdated = Number(existing.updatedAt || existing.createdAt || 0);
-        const nextUpdated = Number(item.updatedAt || item.createdAt || 0);
-        if (nextUpdated >= existingUpdated) {
-          dedupedMap.set(item.id, item);
-        }
-      });
-
-      const remote = Array.from(dedupedMap.values());
+      const remote = dedupeRemoteRoutes(aggregated.items);
       const deletedIds = Array.from(aggregated.deletedIds);
       const missingRemoteIds = Array.from(aggregated.missingRemoteIds);
 
       const merged = mergeRoutes(remote, { deletedIds, missingRemoteIds });
-      const nonDeletedRemote = remote.filter((item) => item && !item.deletedAt && !item.deleted);
-      const remoteMax = getMaxUpdatedAt(nonDeletedRemote);
-      const metaMax = aggregated.metaMax;
-      const hasChanges =
-        nonDeletedRemote.length > 0 || deletedIds.length > 0 || missingRemoteIds.length > 0 || forceFull;
-      const nextSyncPoint = hasChanges
-        ? Math.max(remoteMax, metaMax, Date.now())
-        : Math.max(lastSync, metaMax);
-      setLastSyncTimestamp(nextSyncPoint || Date.now());
+      routeSyncCoordinator.applyCloudSyncCheckpoint({
+        remote,
+        deletedIds,
+        missingRemoteIds,
+        metaMax: aggregated.metaMax,
+        lastSync,
+        forceFull,
+      });
 
       clearLastSyncError();
       logger.info('Route sync from cloud finished', {
@@ -1181,7 +1358,7 @@ function syncRoutesFromCloud(options = {}) {
     .catch((err) => {
       setLastSyncError(err, '从云端拉取轨迹失败');
       logger.warn('Fetch routes from cloud failed', err?.errMsg || err?.message || err);
-      return getRoutes();
+      return routeRepository.getRoutes();
     });
 }
 
@@ -1196,7 +1373,7 @@ function storeRoute(route, options = {}) {
     uploadError: null,
     lastSyncAttemptAt: Date.now(),
   };
-  const saved = saveRoute(pendingRoute);
+  const saved = routeRepository.saveRoute(pendingRoute);
   notify();
 
   if (!syncImmediately) {
@@ -1210,74 +1387,35 @@ function storeRoute(route, options = {}) {
 
   const logContext = buildRouteLogContext(saved);
   logger.info('Route upload initiated after recording', logContext);
-  return syncRouteToCloud(saved)
-    .then((cloudRoute) => {
-      const removed = dropRouteFromLocalCache(saved.id, {
-        logContext,
-        reason: 'recording_upload',
-      });
-      if (!removed) {
-        const patched = updateRoute(saved.id, {
-          pendingUpload: false,
-          synced: true,
-          remoteId: cloudRoute?.remoteId || cloudRoute?.id || saved.remoteId || saved.id,
-          deleted: false,
-          uploadError: null,
-          lastSyncedAt: Date.now(),
-          updatedAt: cloudRoute?.updatedAt || saved.updatedAt,
-        });
-        if (patched) {
-          notify();
-        }
-        logger.warn('Route upload finished but local cache retained', {
-          ...logContext,
-          reason: 'recording_upload',
-        });
-      }
+  return routeSyncCoordinator.uploadRouteWithLifecycle(saved, {
+    logContext,
+    reason: 'recording_upload',
+    warningMessage: 'Route upload failed after recording',
+  })
+    .then((uploadRecord) => {
       logger.info('Route upload finished after recording', {
         ...logContext,
-        removedFromCache: removed,
+        retainedLocally: !!uploadRecord.patched,
       });
-      const syncHint = cloudRoute?.updatedAt || saved.updatedAt || saved.endTime || Date.now();
-      return syncRoutesFromCloud({ updatedAfter: syncHint })
-        .catch((error) => {
-          logger.warn('Post-upload refresh failed', {
-            ...logContext,
-            error: error?.errMsg || error?.message || error,
-          });
-          if (cloudRoute && removed) {
-            restoreRouteToLocalCache(cloudRoute, {
-              logContext,
-              reason: 'post_upload_refresh_failed',
-            });
-          }
-          return null;
-        })
-        .then(() => ({
-          route: cloudRoute || saved,
-          cloudSaved: true,
-          localFallback: false,
-          syncError: null,
-        }));
+      return refreshAfterUploadRecords([uploadRecord], {
+        failureReason: 'post_upload_refresh_failed',
+      }).then(() => ({
+        route: uploadRecord.cloudRoute || uploadRecord.patched || saved,
+        cloudSaved: true,
+        localFallback: false,
+        syncError: null,
+      }));
     })
-    .catch((error) => {
-      markRouteSyncFailed(saved.id, error);
-      logger.warn('Route upload failed after recording', {
-        ...logContext,
-        error: error?.errMsg || error?.message || error,
-        statusCode: error?.statusCode,
-      });
-      return {
-        route: saved,
-        cloudSaved: false,
-        localFallback: true,
-        syncError: error,
-      };
-    });
+    .catch((error) => ({
+      route: saved,
+      cloudSaved: false,
+      localFallback: true,
+      syncError: error,
+    }));
 }
 
 function updateRoutePrivacy(id, privacyLevel) {
-  const updated = updateRoute(id, {
+  const updated = routeRepository.updateRoute(id, {
     privacyLevel,
   });
   notify();
@@ -1301,45 +1439,47 @@ function updateRoutePrivacy(id, privacyLevel) {
   return updated;
 }
 
-function deleteRoute(id) {
-  if (!id) {
-    return Promise.resolve(null);
-  }
-  const currentRoutes = getRoutes();
+function buildDeleteContext(id) {
+  const currentRoutes = routeRepository.getRoutes();
   const target = currentRoutes.find((item) => item && item.id === id) || null;
-  const logContext = target ? buildRouteLogContext(target) : { id };
-  logger.info('Route deletion initiated', logContext);
-  const removed = dropRouteFromLocalCache(id, {
-    logContext,
-    reason: 'user_delete_request',
-  });
+  return {
+    target,
+    logContext: target ? buildRouteLogContext(target) : { id },
+  };
+}
 
-  // 对于尚未成功同步到云端的记录（synced: false），
-  // 直接视为本地软删除：仅从小程序端移除，不再调用云端 DELETE。
-  // 这样可以避免云端返回 404 时重新恢复本地记录，导致“删不掉”的体验。
-  if (!target || target.synced !== true) {
-    return Promise.resolve(null);
+function shouldSkipRemoteDelete(target) {
+  return !target || target.synced !== true;
+}
+
+function syncDeleteCheckpoint(response) {
+  const syncAt = Number(response?.lastSyncAt);
+  if (Number.isFinite(syncAt) && syncAt > 0) {
+    setLastSyncTimestamp(syncAt);
   }
+}
 
+function refreshAfterDeletion(target, logContext) {
+  const syncHint = target?.updatedAt || target?.endTime || Date.now();
+  return syncRoutesFromCloud({ updatedAfter: syncHint }).catch((error) => {
+    logger.warn('Post-deletion refresh failed', {
+      ...logContext,
+      error: error?.errMsg || error?.message || error,
+    });
+    return null;
+  });
+}
+
+function syncDeletedRoute(id, { target, logContext, removed }) {
   return api
     .removeRoute(id)
     .then((response) => {
-      const syncAt = Number(response?.lastSyncAt);
-      if (Number.isFinite(syncAt) && syncAt > 0) {
-        setLastSyncTimestamp(syncAt);
-      }
+      syncDeleteCheckpoint(response);
       logger.info('Route deletion synced to cloud', {
         ...logContext,
         removedFromCache: removed,
       });
-      const syncHint = target?.updatedAt || target?.endTime || Date.now();
-      return syncRoutesFromCloud({ updatedAfter: syncHint }).catch((error) => {
-        logger.warn('Post-deletion refresh failed', {
-          ...logContext,
-          error: error?.errMsg || error?.message || error,
-        });
-        return null;
-      });
+      return refreshAfterDeletion(target, logContext);
     })
     .catch((err) => {
       logger.warn('Delete route sync failed', {
@@ -1347,10 +1487,31 @@ function deleteRoute(id) {
         error: err?.errMsg || err?.message || err,
         statusCode: err?.statusCode,
       });
-      // 云端删除失败时不再恢复本地记录，保持“用户视角已删除”的软删除语义。
-      // 管理员仍然可以在云端后台看到这条记录（若云端数据存在）。
       return null;
     });
+}
+
+function deleteRoute(id) {
+  if (!id) {
+    return Promise.resolve(null);
+  }
+  const { target, logContext } = routeSyncCoordinator.buildDeleteContext(id);
+  logger.info('Route deletion initiated', logContext);
+  const removed = routeRepository.dropRouteFromLocalCache(id, {
+    logContext,
+    reason: 'user_delete_request',
+  });
+
+  // 对于尚未成功同步到云端的记录（synced: false），
+  // 直接视为本地软删除：仅从小程序端移除，不再调用云端 DELETE。
+  // 这样可以避免云端返回 404 时重新恢复本地记录，导致“删不掉”的体验。
+  if (routeSyncCoordinator.shouldSkipRemoteDelete(target)) {
+    return Promise.resolve(null);
+  }
+
+  // 云端删除失败时不再恢复本地记录，保持“用户视角已删除”的软删除语义。
+  // 管理员仍然可以在云端后台看到这条记录（若云端数据存在）。
+  return routeSyncCoordinator.syncDeletedRoute(id, { target, logContext, removed });
 }
 
 function cacheFragment(fragment) {
@@ -1367,7 +1528,7 @@ function flushOfflineFragments() {
 }
 
 function getSyncStatus() {
-  const allRoutes = getRoutes({ includeDeleted: true });
+  const allRoutes = routeRepository.getRoutes({ includeDeleted: true });
   const pending = allRoutes.filter((route) => route && route.pendingUpload && !route.deleted).length;
   const synced = allRoutes.filter((route) => route && route.synced && !route.deleted).length;
   const deleted = allRoutes.filter((route) => route && route.deleted).length;
@@ -1380,6 +1541,57 @@ function getSyncStatus() {
     lastError: lastSyncError,
   };
 }
+
+const routeRepository = {
+  normalizeRouteMetadata,
+  readAllStoredRoutes,
+  normalizeRouteList,
+  replaceStoredRoutes,
+  mutateStoredRoutes,
+  saveRoute,
+  setRoutes,
+  getRoutes,
+  updateRoute,
+  removeRoute,
+  createDeletedStub,
+  applyRouteStateTransition,
+  dropRouteFromLocalCache,
+  restoreRouteToLocalCache,
+};
+
+const routeSyncCoordinator = {
+  buildUploadFailurePatch,
+  resolveRemoteRouteId,
+  buildUploadSuccessPatch,
+  markRouteSyncFailed,
+  finalizeSyncedRoute,
+  analyzeRoutePhotos,
+  ensureUploadedPhotosComplete,
+  applyUploadedRoutePhotos,
+  wrapPhotoSyncError,
+  prepareUploadPayload,
+  resolveUploadRequest,
+  applySyncTimestampFromResponse,
+  normalizeUploadResponse,
+  reconcilePostUpload,
+  uploadRouteWithLifecycle,
+  summarizeBatchUploadResults,
+  finalizeBatchUploadResults,
+  buildKnownRemoteIds,
+  createCloudSyncAggregation,
+  collectCloudSyncPage,
+  applyCloudSyncCheckpoint,
+  buildLocalRouteBuckets,
+  createDeletionSet,
+  buildRemoteRouteMap,
+  applyRemoteDeletionToTombstones,
+  normalizeMergedRemoteRoute,
+  buildDeleteContext,
+  shouldSkipRemoteDelete,
+  syncDeleteCheckpoint,
+  refreshAfterDeletion,
+  syncDeletedRoute,
+};
 
 module.exports = {
   subscribe,

@@ -76,20 +76,20 @@ export default function FeedbackPanel({ rangeDays = 30 }) {
     );
   }
 
-  const satisfactionData = (data.satisfaction || []).map((item) => ({
+  const satisfactionData = (data.satisfaction ?? []).map((item) => ({
     score: item.score,
     label: SATISFACTION_LABELS[item.score] || `${item.score}分`,
     count: item.count,
     fill: SATISFACTION_COLORS[item.score] || '#94a3b8',
   }));
 
-  const preferenceData = (data.preferences || []).map((item) => ({
+  const preferenceData = (data.preferences ?? []).map((item) => ({
     label: PREFERENCE_LABELS[item.label] || item.label,
     key: item.label,
     count: item.count,
   }));
 
-  const summary = data.summary || {};
+  const summary = data.summary ?? {};
 
   return (
     <div className="admin-analytics">
