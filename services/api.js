@@ -176,19 +176,65 @@ function normalizeWeatherPayload(payload, source, coordinates = {}) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Invalid weather payload');
   }
-  const fetchedAtCandidate = Number(payload.fetchedAt);
+  const weather = payload.weather && typeof payload.weather === 'object' ? payload.weather : null;
+  const air = payload.air && typeof payload.air === 'object' ? payload.air : null;
+  const suggestion = typeof payload.suggestion === 'string' ? payload.suggestion : '';
+  const fetchedAtCandidate = Number(payload.fetchedAt ?? weather?.fetchedAt ?? air?.fetchedAt);
+  const latitude =
+    payload.latitude ?? weather?.latitude ?? coordinates.latitude;
+  const longitude =
+    payload.longitude ?? weather?.longitude ?? coordinates.longitude;
+
+  if (!weather && !air) {
+    return {
+      ...payload,
+      latitude,
+      longitude,
+      fetchedAt: Number.isFinite(fetchedAtCandidate) ? fetchedAtCandidate : Date.now(),
+      source: payload.source || source,
+    };
+  }
+
+  const weatherCode = weather?.weatherCode ?? weather?.code ?? payload.weatherCode ?? null;
+  const weatherText = weather?.weatherText ?? weather?.text ?? payload.weatherText ?? '';
+  const temperature = weather?.temperature ?? payload.temperature ?? null;
+  const apparentTemperature = weather?.apparentTemperature ?? payload.apparentTemperature ?? null;
+  const humidity = weather?.humidity ?? payload.humidity ?? null;
+  const windSpeed = weather?.windSpeed ?? payload.windSpeed ?? payload.wind?.speed ?? null;
+  const windDirection = weather?.windDirection ?? payload.windDirection ?? null;
+  const windDirectionText = weather?.windDirectionText ?? payload.windDirectionText ?? null;
+  const airQuality = air || payload.airQuality || null;
+
   return {
     ...payload,
-    latitude:
-      payload.latitude !== undefined && payload.latitude !== null
-        ? payload.latitude
-        : coordinates.latitude,
-    longitude:
-      payload.longitude !== undefined && payload.longitude !== null
-        ? payload.longitude
-        : coordinates.longitude,
+    weatherCode,
+    weatherText,
+    temperature,
+    apparentTemperature,
+    humidity,
+    windSpeed,
+    windDirection,
+    windDirectionText,
+    wind: {
+      ...(payload.wind && typeof payload.wind === 'object' ? payload.wind : {}),
+      speed: windSpeed,
+      direction: windDirection,
+      directionText: windDirectionText,
+      unit:
+        payload.wind?.unit || weather?.windUnit || 'm/s',
+    },
+    airQuality:
+      airQuality && typeof airQuality === 'object'
+        ? {
+            ...airQuality,
+            value: airQuality.value ?? airQuality.aqi ?? null,
+          }
+        : null,
+    suggestion,
+    latitude,
+    longitude,
     fetchedAt: Number.isFinite(fetchedAtCandidate) ? fetchedAtCandidate : Date.now(),
-    source: payload.source || source,
+    source: payload.source || weather?.source || source,
   };
 }
 

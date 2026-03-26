@@ -1008,6 +1008,29 @@ function sanitizeRouteForUpload(route) {
     startTime,
     endTime,
     privacyLevel: route.privacyLevel || base.privacyLevel,
+    confirmedEndLatitude: route.confirmedEndLatitude ?? base.confirmedEndLatitude ?? null,
+    confirmedEndLongitude: route.confirmedEndLongitude ?? base.confirmedEndLongitude ?? null,
+    confirmedEndDistanceMeters: route.confirmedEndDistanceMeters ?? base.confirmedEndDistanceMeters ?? null,
+    rawEndLatitude: route.rawEndLatitude ?? base.rawEndLatitude ?? null,
+    rawEndLongitude: route.rawEndLongitude ?? base.rawEndLongitude ?? null,
+    feedbackSatisfactionScore: route.feedbackSatisfactionScore ?? base.feedbackSatisfactionScore ?? null,
+    feedbackPreferenceLabels: Array.isArray(route.feedbackPreferenceLabels)
+      ? route.feedbackPreferenceLabels.filter((value) => typeof value === 'string' && value.trim())
+      : Array.isArray(base.feedbackPreferenceLabels)
+        ? base.feedbackPreferenceLabels.filter((value) => typeof value === 'string' && value.trim())
+        : null,
+    feedbackReasonText:
+      typeof route.feedbackReasonText === 'string'
+        ? route.feedbackReasonText.trim() || null
+        : typeof base.feedbackReasonText === 'string'
+          ? base.feedbackReasonText.trim() || null
+          : null,
+    feedbackSource:
+      typeof route.feedbackSource === 'string' && route.feedbackSource.trim()
+        ? route.feedbackSource.trim()
+        : typeof base.feedbackSource === 'string' && base.feedbackSource.trim()
+          ? base.feedbackSource.trim()
+          : null,
   };
   const purposeFromRoute =
     typeof route.purposeType === 'string' && PURPOSE_MAP[route.purposeType] ? route.purposeType : '';

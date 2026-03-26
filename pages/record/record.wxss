@@ -38,13 +38,14 @@
   top: 64rpx;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  color: var(--color-text-primary);
   padding: 18rpx 28rpx;
   border-radius: 999rpx;
   font-size: 26rpx;
   backdrop-filter: blur(12rpx);
+  box-shadow: 0 16rpx 40rpx rgba(15, 23, 42, 0.12);
 }
 
 .sheet-container {
@@ -66,11 +67,12 @@
   padding: 28rpx 32rpx;
   padding-bottom: calc(48rpx + constant(safe-area-inset-bottom));
   padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
-  background: var(--record-sheet-bg, rgba(255, 255, 255, 0.94));
+  background: var(--record-sheet-bg, rgba(255, 255, 255, 0.97));
   backdrop-filter: blur(20rpx);
   border-radius: 40rpx;
   transition: background 0.3s ease, color 0.3s ease;
   box-shadow: 0 20rpx 60rpx rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.14);
   display: flex;
   flex-direction: column;
   gap: 24rpx;
@@ -96,8 +98,8 @@
   gap: 12rpx;
   padding: 16rpx;
   border-radius: 24rpx;
-  background: rgba(15, 23, 42, 0.06);
-  border: 1px solid rgba(15, 23, 42, 0.05);
+  background: rgba(248, 250, 252, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .metric__icon {
@@ -159,8 +161,8 @@
   justify-content: space-between;
   padding: 16rpx 20rpx;
   border-radius: 24rpx;
-  background: rgba(15, 23, 42, 0.05);
-  border: 1px solid rgba(15, 23, 42, 0.05);
+  background: rgba(248, 250, 252, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .meta-inline__cell {
@@ -233,8 +235,8 @@
   gap: 16rpx;
   padding: 18rpx 20rpx;
   border-radius: 24rpx;
-  background: rgba(15, 23, 42, 0.05);
-  border: 1px solid rgba(15, 23, 42, 0.05);
+  background: rgba(248, 250, 252, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .meta-item__icon {
@@ -776,6 +778,8 @@
   z-index: 25;
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top);
+  padding-bottom: calc(12rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(12rpx + env(safe-area-inset-bottom));
 }
 
 .wizard-progress {
@@ -829,15 +833,32 @@
   margin: 20rpx 24rpx;
   margin-bottom: calc(20rpx + constant(safe-area-inset-bottom));
   margin-bottom: calc(20rpx + env(safe-area-inset-bottom));
-  background: var(--color-surface);
+  background: rgba(255, 255, 255, 0.98);
   border-radius: 36rpx;
   padding: 32rpx;
+  border: 1px solid rgba(148, 163, 184, 0.16);
   box-shadow: 0 40rpx 100rpx rgba(15, 23, 42, 0.2);
   overflow: hidden;
 }
 
 .wizard-card--tall {
   min-height: 0;
+}
+
+.wizard-card--sheet {
+  flex: 0 0 auto;
+  margin-top: auto;
+  min-height: 720rpx;
+  max-height: calc(100vh - 180rpx - env(safe-area-inset-top));
+}
+
+.wizard-card--endpoint {
+  min-height: 760rpx;
+}
+
+.wizard-card--preference {
+  min-height: 980rpx;
+  max-height: calc(100vh - 140rpx - env(safe-area-inset-top));
 }
 
 .wizard-card--reward {
@@ -889,10 +910,11 @@
 
 .wizard-card__map-wrap {
   flex: 1;
-  min-height: 360rpx;
+  min-height: 420rpx;
   border-radius: 24rpx;
   overflow: hidden;
   position: relative;
+  background: rgba(15, 23, 42, 0.04);
 }
 
 .wizard-card__map {
@@ -905,12 +927,13 @@
   bottom: 16rpx;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 23, 42, 0.75);
-  color: #ffffff;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-text-primary);
   padding: 12rpx 24rpx;
   border-radius: 999rpx;
   font-size: 24rpx;
   backdrop-filter: blur(8rpx);
+  border: 1px solid rgba(148, 163, 184, 0.2);
   white-space: nowrap;
 }
 
@@ -1007,22 +1030,25 @@
 /* ── Step 3: Route Comparison Map ── */
 
 .wizard-card__route-map-wrap {
-  border-radius: 20rpx;
+  border-radius: 24rpx;
   overflow: hidden;
-  flex-shrink: 0;
+  flex: 1 1 0;
+  min-height: 460rpx;
+  background: rgba(15, 23, 42, 0.04);
 }
 
 .wizard-card__route-map {
   width: 100%;
-  height: 320rpx;
+  height: 460rpx;
 }
 
 .wizard-card__route-legend {
-  padding: 12rpx 16rpx;
-  background: rgba(15, 23, 42, 0.04);
+  padding: 16rpx 20rpx;
+  background: rgba(248, 250, 252, 0.92);
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
 }
 
 .route-legend__item {
@@ -1057,8 +1083,8 @@
 .preference-chip {
   padding: 16rpx 24rpx;
   border-radius: 999rpx;
-  border: 2rpx solid rgba(37, 99, 235, 0.2);
-  background: rgba(37, 99, 235, 0.04);
+  border: 2rpx solid rgba(37, 99, 235, 0.18);
+  background: rgba(248, 250, 252, 0.96);
   display: flex;
   align-items: center;
   gap: 8rpx;
@@ -1085,12 +1111,13 @@
 /* ── Wizard Summary ── */
 
 .wizard-summary {
-  background: rgba(15, 23, 42, 0.04);
+  background: rgba(248, 250, 252, 0.94);
   border-radius: 24rpx;
   padding: 20rpx;
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .wizard-summary__row {
