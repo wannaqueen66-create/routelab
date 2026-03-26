@@ -33,7 +33,6 @@ const {
     describeAqi,
     buildExerciseSuggestion,
 } = require('../services/weatherService');
-const { getRouteRecommendations } = require('../services/routeRecommendationService');
 
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
@@ -92,6 +91,7 @@ function backfillWeatherForRoute(routeId, points) {
 
 
 const PRIVACY_LEVEL_VALUES = new Set(['private', 'public']);
+const STRICT_FEEDBACK_SOURCES = new Set(['wizard', 'record_finish']);
 
 function normalizePrivacyLevel(value, fallback = 'private') {
     if (typeof value !== 'string') {
@@ -131,47 +131,6 @@ function normalizePhotos(value) {
     return value.filter(Boolean);
 }
 
-function normalizeRouteFeedback(value) {
-    if (!value || typeof value !== 'object') {
-        return null;
-    }
-    const recommendationOptions = Array.isArray(value.recommendationOptions)
-        ? value.recommendationOptions
-            .filter((item) => item && typeof item === 'object')
-            .map((item) => ({
-                id: item.id || null,
-                title: item.title || null,
-                summary: item.summary || null,
-                provider: item.provider || null,
-                scoreHint: item.scoreHint || null,
-                strategy: item.strategy || null,
-                isActual: item.isActual === true,
-                distanceMeters: Number.isFinite(Number(item.distanceMeters)) ? Number(item.distanceMeters) : null,
-                durationSeconds: Number.isFinite(Number(item.durationSeconds)) ? Number(item.durationSeconds) : null,
-            }))
-        : [];
-
-    const confirmedEnd = value.confirmedEnd && typeof value.confirmedEnd === 'object'
-        ? {
-            latitude: Number.isFinite(Number(value.confirmedEnd.latitude)) ? Number(value.confirmedEnd.latitude) : null,
-            longitude: Number.isFinite(Number(value.confirmedEnd.longitude)) ? Number(value.confirmedEnd.longitude) : null,
-        }
-        : null;
-
-    return {
-        satisfactionScore: Number.isFinite(Number(value.satisfactionScore)) ? Number(value.satisfactionScore) : null,
-        satisfactionLabel: typeof value.satisfactionLabel === 'string' ? value.satisfactionLabel.trim() : '',
-        preferenceChoice: typeof value.preferenceChoice === 'string' ? value.preferenceChoice.trim() : '',
-        preferenceLabel: typeof value.preferenceLabel === 'string' ? value.preferenceLabel.trim() : '',
-        preferenceReason: typeof value.preferenceReason === 'string' ? value.preferenceReason.trim() : '',
-        recommendationSource: typeof value.recommendationSource === 'string' ? value.recommendationSource.trim() : '',
-        questionnaireStage: typeof value.questionnaireStage === 'string' ? value.questionnaireStage.trim() : '',
-        confirmedEnd,
-        recommendationOptions,
-        updatedAt: Date.now(),
-    };
-}
-
 function normalizePoints(value) {
     if (!Array.isArray(value)) {
         return [];
@@ -187,7 +146,7 @@ function normalizePoints(value) {
                 return null;
             }
             const altitude = Number(point.altitude);
-            const timestamp = normalizeTimestamp(point.timestamp || point.recordedAt || point.time);
+            const timestamp = normalizeTimestamp(point.timestamp ?? point.recordedAt ?? point.time);
             return {
                 latitude,
                 longitude,
@@ -198,13 +157,37 @@ function normalizePoints(value) {
         .filter(Boolean);
 }
 
+function isStrictFeedbackSource(value) {
+    return typeof value === 'string' && STRICT_FEEDBACK_SOURCES.has(value.trim());
+}
+
+function validateResearchFeedback(payload = {}, { strict = false } = {}) {
+    if (!strict) {
+        return null;
+    }
+
+    const labels = Array.isArray(payload.feedbackPreferenceLabels)
+        ? payload.feedbackPreferenceLabels.filter((value) => typeof value === 'string' && value.trim())
+        : [];
+    const reasonText = typeof payload.feedbackReasonText === 'string' ? payload.feedbackReasonText.trim() : '';
+
+    if (!Number.isInteger(payload.feedbackSatisfactionScore)) {
+        return 'feedbackSatisfactionScore is required for record-finish routes';
+    }
+    if (!labels.length) {
+        return 'feedbackPreferenceLabels must include at least one item for record-finish routes';
+    }
+    if (labels.includes('other') && !reasonText) {
+        return 'feedbackReasonText is required when feedbackPreferenceLabels includes other';
+    }
+
+    return null;
+}
+
 function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
     const body = input && typeof input === 'object' ? input : {};
     const meta = body.meta && typeof body.meta === 'object' ? body.meta : {};
     const stats = body.stats && typeof body.stats === 'object' ? body.stats : {};
-    const routeFeedback = normalizeRouteFeedback(
-        body.routeFeedback || meta.routeFeedback || body.route_feedback || null
-    );
 
     const normalizedId = normalizeRouteId(routeId || body.id);
     const clientId = normalizeRouteId(body.clientId);
@@ -247,7 +230,9 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
         typeof body.feedbackReasonText === 'string' ? body.feedbackReasonText.trim().slice(0, 500) : null;
 
     const feedbackSource =
-        typeof body.feedbackSource === 'string' ? body.feedbackSource.trim() : 'wizard';
+        typeof body.feedbackSource === 'string' && body.feedbackSource.trim()
+            ? body.feedbackSource.trim()
+            : null;
 
     return {
         id: normalizedId,
@@ -259,11 +244,7 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
         startTime: normalizeTimestamp(body.startTime),
         endTime: normalizeTimestamp(body.endTime),
         stats,
-        meta: {
-            ...meta,
-            routeFeedback,
-        },
-        routeFeedback,
+        meta,
         photos: normalizePhotos(body.photos),
         points: normalizePoints(body.points),
         weather: body.weather && typeof body.weather === 'object' ? body.weather : null,
@@ -283,9 +264,9 @@ function normalizeRoutePayload(input = {}, { routeId = null } = {}) {
 function mapRouteRow(row, points = [], options = {}) {
     const { includePoints = false, includeOwner = false } = options;
 
-    const routeName = row.name || row.title || null;
-    const routeMeta = row.meta || {};
-    const routeActivityType = row.activity_type || routeMeta.activityType || 'walk';
+    const routeName = row.name ?? row.title ?? null;
+    const routeMeta = row.meta ?? {};
+    const routeActivityType = row.activity_type ?? routeMeta.activityType ?? 'walk';
 
     const result = {
         id: row.id,
@@ -294,42 +275,27 @@ function mapRouteRow(row, points = [], options = {}) {
         name: routeName,
         title: routeName,
         activityType: routeActivityType,
-        purposeCode: row.purpose_code || routeMeta.purposeType || null,
+        purposeCode: row.purpose_code ?? routeMeta.purposeType ?? null,
         privacyLevel: row.privacy_level,
-        startTime: row.start_time?.getTime() || null,
-        endTime: row.end_time?.getTime() || null,
-        stats: row.stats || {},
+        startTime: row.start_time?.getTime() ?? null,
+        endTime: row.end_time?.getTime() ?? null,
+        stats: row.stats ?? {},
         meta: routeMeta,
-        photos: row.photos || [],
-        weather: row.weather || null,
-        routeFeedback: routeMeta.routeFeedback || null,
-        feedbackChoice: row.feedback_choice || null,
-        feedbackSatisfactionScore:
-            row.feedback_satisfaction_score !== null && row.feedback_satisfaction_score !== undefined
-                ? Number(row.feedback_satisfaction_score)
-                : null,
-        feedbackPreferenceLabel: row.feedback_preference_label || null,
-        feedbackReasonText: row.feedback_reason_text || null,
-        feedbackSource: row.feedback_source || null,
-        feedbackSubmittedAt: row.feedback_submitted_at?.getTime() || null,
-        rawEndLatitude: row.raw_end_latitude !== null && row.raw_end_latitude !== undefined ? Number(row.raw_end_latitude) : null,
-        rawEndLongitude: row.raw_end_longitude !== null && row.raw_end_longitude !== undefined ? Number(row.raw_end_longitude) : null,
-        confirmedEndLatitude: row.confirmed_end_latitude !== null && row.confirmed_end_latitude !== undefined ? Number(row.confirmed_end_latitude) : null,
-        confirmedEndLongitude: row.confirmed_end_longitude !== null && row.confirmed_end_longitude !== undefined ? Number(row.confirmed_end_longitude) : null,
-        confirmedEndDistanceMeters: row.confirmed_end_distance_meters !== null && row.confirmed_end_distance_meters !== undefined ? Number(row.confirmed_end_distance_meters) : null,
+        photos: row.photos ?? [],
+        weather: row.weather ?? null,
         pointCount: points.length,
-        createdAt: row.created_at?.getTime() || null,
-        updatedAt: row.updated_at?.getTime() || null,
-        deletedAt: row.deleted_at?.getTime() || null,
-        confirmedEndLatitude: row.confirmed_end_latitude || null,
-        confirmedEndLongitude: row.confirmed_end_longitude || null,
-        confirmedEndDistanceMeters: row.confirmed_end_distance_meters || null,
-        rawEndLatitude: row.raw_end_latitude || null,
-        rawEndLongitude: row.raw_end_longitude || null,
-        feedbackSatisfactionScore: row.feedback_satisfaction_score || null,
-        feedbackPreferenceLabels: row.feedback_preference_labels || null,
-        feedbackReasonText: row.feedback_reason_text || null,
-        feedbackSource: row.feedback_source || null,
+        createdAt: row.created_at?.getTime() ?? null,
+        updatedAt: row.updated_at?.getTime() ?? null,
+        deletedAt: row.deleted_at?.getTime() ?? null,
+        confirmedEndLatitude: row.confirmed_end_latitude ?? null,
+        confirmedEndLongitude: row.confirmed_end_longitude ?? null,
+        confirmedEndDistanceMeters: row.confirmed_end_distance_meters ?? null,
+        rawEndLatitude: row.raw_end_latitude ?? null,
+        rawEndLongitude: row.raw_end_longitude ?? null,
+        feedbackSatisfactionScore: row.feedback_satisfaction_score ?? null,
+        feedbackPreferenceLabels: row.feedback_preference_labels ?? null,
+        feedbackReasonText: row.feedback_reason_text ?? null,
+        feedbackSource: row.feedback_source ?? null,
     };
 
     if (includePoints) {
@@ -337,7 +303,7 @@ function mapRouteRow(row, points = [], options = {}) {
             latitude: p.latitude,
             longitude: p.longitude,
             altitude: p.altitude,
-            timestamp: p.timestamp?.getTime() || p.recorded_at?.getTime() || null,
+            timestamp: p.timestamp?.getTime() ?? p.recorded_at?.getTime() ?? null,
         }));
     }
 
@@ -418,32 +384,6 @@ router.post('/sync', ensureAuth, async (req, res) => {
     }
 });
 
-// === Route Recommendations ===
-
-router.post('/recommendations', ensureAuth, async (req, res) => {
-    try {
-        const body = req.body || {};
-        const start = body.start && typeof body.start === 'object' ? body.start : null;
-        const end = body.end && typeof body.end === 'object' ? body.end : null;
-        const actualPoints = Array.isArray(body.actualPoints) ? body.actualPoints : [];
-        const distanceMeters = Number(body.distanceMeters) || 0;
-        const durationMs = Number(body.durationMs) || 0;
-
-        const payload = await getRouteRecommendations({
-            start,
-            end,
-            actualPoints,
-            distanceMeters,
-            durationMs,
-        });
-
-        return res.json(payload);
-    } catch (error) {
-        console.error('POST /api/routes/recommendations failed', error);
-        return res.status(500).json({ error: 'Failed to build route recommendations' });
-    }
-});
-
 // === Route CRUD ===
 
 // POST /api/routes
@@ -455,6 +395,12 @@ router.post('/', ensureAuth, async (req, res) => {
     const payload = normalizeRoutePayload(req.body || {});
     if (!payload.id) {
         return res.status(400).json({ error: 'Route id is required' });
+    }
+    const feedbackError = validateResearchFeedback(payload, {
+        strict: isStrictFeedbackSource(payload.feedbackSource),
+    });
+    if (feedbackError) {
+        return res.status(400).json({ error: feedbackError });
     }
 
     try {
@@ -498,6 +444,12 @@ router.put('/:id', ensureAuth, async (req, res) => {
 
     const payload = normalizeRoutePayload(req.body || {}, { routeId });
     payload.id = routeId;
+    const feedbackError = validateResearchFeedback(payload, {
+        strict: isStrictFeedbackSource(payload.feedbackSource),
+    });
+    if (feedbackError) {
+        return res.status(400).json({ error: feedbackError });
+    }
 
     try {
         const existing = await getRouteById(routeId);
@@ -526,8 +478,16 @@ router.put('/:id', ensureAuth, async (req, res) => {
             purposeCode: payload.purposeCode,
             stats: payload.stats,
             meta: payload.meta,
-            routeFeedback: payload.routeFeedback,
             photos: payload.photos,
+            confirmedEndLatitude: payload.confirmedEndLatitude,
+            confirmedEndLongitude: payload.confirmedEndLongitude,
+            confirmedEndDistanceMeters: payload.confirmedEndDistanceMeters,
+            rawEndLatitude: payload.rawEndLatitude,
+            rawEndLongitude: payload.rawEndLongitude,
+            feedbackSatisfactionScore: payload.feedbackSatisfactionScore,
+            feedbackPreferenceLabels: payload.feedbackPreferenceLabels,
+            feedbackReasonText: payload.feedbackReasonText,
+            feedbackSource: payload.feedbackSource,
         });
 
         if (!updated) {
@@ -564,9 +524,16 @@ router.patch('/:id', ensureAuth, async (req, res) => {
         body.purposeType !== undefined ||
         body.stats !== undefined ||
         body.meta !== undefined ||
-        body.routeFeedback !== undefined ||
-        body.route_feedback !== undefined ||
-        body.photos !== undefined;
+        body.photos !== undefined ||
+        body.confirmedEndLatitude !== undefined ||
+        body.confirmedEndLongitude !== undefined ||
+        body.confirmedEndDistanceMeters !== undefined ||
+        body.rawEndLatitude !== undefined ||
+        body.rawEndLongitude !== undefined ||
+        body.feedbackSatisfactionScore !== undefined ||
+        body.feedbackPreferenceLabels !== undefined ||
+        body.feedbackReasonText !== undefined ||
+        body.feedbackSource !== undefined;
 
     if (!hasKnownField) {
         return res.status(400).json({ error: 'No patchable fields provided' });
@@ -576,6 +543,7 @@ router.patch('/:id', ensureAuth, async (req, res) => {
         body.activityType !== undefined
             ? sanitizeEnumValue(body.activityType, ACTIVITY_TYPE_VALUES)
             : undefined;
+    const normalizedPatchPayload = normalizeRoutePayload(body, { routeId });
 
     const patch = {
         name:
@@ -597,14 +565,55 @@ router.patch('/:id', ensureAuth, async (req, res) => {
                     : undefined,
         stats: body.stats !== undefined && typeof body.stats === 'object' ? body.stats : undefined,
         meta: body.meta !== undefined && typeof body.meta === 'object' ? body.meta : undefined,
-        routeFeedback:
-            body.routeFeedback !== undefined || body.route_feedback !== undefined
-                ? normalizeRouteFeedback(body.routeFeedback || body.route_feedback || null)
-                : undefined,
         photos: body.photos !== undefined ? normalizePhotos(body.photos) : undefined,
+        confirmedEndLatitude:
+            body.confirmedEndLatitude !== undefined ? normalizedPatchPayload.confirmedEndLatitude : undefined,
+        confirmedEndLongitude:
+            body.confirmedEndLongitude !== undefined ? normalizedPatchPayload.confirmedEndLongitude : undefined,
+        confirmedEndDistanceMeters:
+            body.confirmedEndDistanceMeters !== undefined ? normalizedPatchPayload.confirmedEndDistanceMeters : undefined,
+        rawEndLatitude: body.rawEndLatitude !== undefined ? normalizedPatchPayload.rawEndLatitude : undefined,
+        rawEndLongitude: body.rawEndLongitude !== undefined ? normalizedPatchPayload.rawEndLongitude : undefined,
+        feedbackSatisfactionScore:
+            body.feedbackSatisfactionScore !== undefined ? normalizedPatchPayload.feedbackSatisfactionScore : undefined,
+        feedbackPreferenceLabels:
+            body.feedbackPreferenceLabels !== undefined ? normalizedPatchPayload.feedbackPreferenceLabels : undefined,
+        feedbackReasonText:
+            body.feedbackReasonText !== undefined ? normalizedPatchPayload.feedbackReasonText : undefined,
+        feedbackSource: body.feedbackSource !== undefined ? normalizedPatchPayload.feedbackSource : undefined,
     };
-
     try {
+        const existing = await getRouteById(routeId);
+        if (!existing || existing.user_id !== req.userId) {
+            return res.status(404).json({ error: 'Route not found or not owned by user' });
+        }
+
+        const effectiveFeedbackSource =
+            patch.feedbackSource !== undefined ? patch.feedbackSource : existing.feedback_source ?? null;
+        const feedbackError = validateResearchFeedback(
+            {
+                feedbackSatisfactionScore:
+                    patch.feedbackSatisfactionScore !== undefined
+                        ? patch.feedbackSatisfactionScore
+                        : existing.feedback_satisfaction_score,
+                feedbackPreferenceLabels:
+                    patch.feedbackPreferenceLabels !== undefined
+                        ? patch.feedbackPreferenceLabels
+                        : existing.feedback_preference_labels,
+                feedbackReasonText:
+                    patch.feedbackReasonText !== undefined
+                        ? patch.feedbackReasonText
+                        : existing.feedback_reason_text,
+                feedbackSource: effectiveFeedbackSource,
+            },
+            {
+                strict: isStrictFeedbackSource(effectiveFeedbackSource),
+            }
+        );
+        if (feedbackError) {
+            return res.status(400).json({ error: feedbackError });
+        }
+
         const updated = await updateRoute(routeId, req.userId, patch);
         if (!updated) {
             return res.status(404).json({ error: 'Route not found or not owned by user' });

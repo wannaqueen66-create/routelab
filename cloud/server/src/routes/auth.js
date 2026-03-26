@@ -15,10 +15,52 @@ const {
 
 const router = express.Router();
 
+const adminLoginAttempts = new Map();
+
+function getAdminLoginKey(req) {
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim() : '';
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    return `${ip}:${username || 'unknown'}`;
+}
+
+function checkAdminLoginRateLimit(req, res) {
+    const key = getAdminLoginKey(req);
+    const now = Date.now();
+    const current = adminLoginAttempts.get(key);
+    if (!current || now >= current.resetAt) {
+        adminLoginAttempts.set(key, { count: 0, resetAt: now + 10 * 60 * 1000 });
+        return true;
+    }
+    if (current.count >= 5) {
+        res.set('Retry-After', Math.ceil((current.resetAt - now) / 1000));
+        res.status(429).json({ error: 'Too many admin login attempts, please try again later' });
+        return false;
+    }
+    return true;
+}
+
+function recordAdminLoginFailure(req) {
+    const key = getAdminLoginKey(req);
+    const now = Date.now();
+    const current = adminLoginAttempts.get(key);
+    if (!current || now >= current.resetAt) {
+        adminLoginAttempts.set(key, { count: 1, resetAt: now + 10 * 60 * 1000 });
+        return;
+    }
+    current.count += 1;
+}
+
+function clearAdminLoginFailures(req) {
+    adminLoginAttempts.delete(getAdminLoginKey(req));
+}
+
 // POST /api/login/admin
 router.post('/admin', async (req, res) => {
     if (!isAdminLoginEnabled()) {
         return res.status(503).json({ error: 'Admin login is not configured' });
+    }
+    if (!checkAdminLoginRateLimit(req, res)) {
+        return;
     }
     const { username, password } = req.body || {};
     if (typeof username !== 'string' || typeof password !== 'string') {
@@ -29,12 +71,15 @@ router.post('/admin', async (req, res) => {
         return res.status(400).json({ error: 'Username is required' });
     }
     if (normalizedUsername !== getAdminUser()) {
+        recordAdminLoginFailure(req);
         return res.status(401).json({ error: 'Invalid username or password' });
     }
     const passwordValid = await validateAdminPassword(password);
     if (!passwordValid) {
+        recordAdminLoginFailure(req);
         return res.status(401).json({ error: 'Invalid username or password' });
     }
+    clearAdminLoginFailures(req);
     const token = signToken('admin', { role: 'admin' });
     res.json({ token, role: 'admin' });
 });

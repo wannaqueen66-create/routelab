@@ -332,11 +332,11 @@ Page(applyThemeMixin({
             wx.navigateBack();
           } else if (typeof wx.redirectTo === 'function') {
             wx.redirectTo({
-              url: '/pages/profile/profile',
+              url: '/pages/index/index?tab=profile',
             });
           } else if (typeof wx.reLaunch === 'function') {
             wx.reLaunch({
-              url: '/pages/profile/profile',
+              url: '/pages/index/index?tab=profile',
             });
           }
         }, 600);

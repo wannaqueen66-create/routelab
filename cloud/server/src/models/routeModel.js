@@ -60,28 +60,37 @@ async function createRoute(userId, routeData) {
         photos = [],
         points = [],
         weather = null,
+        confirmedEndLatitude: directConfirmedEndLatitude = null,
+        confirmedEndLongitude: directConfirmedEndLongitude = null,
+        confirmedEndDistanceMeters: directConfirmedEndDistanceMeters = null,
+        rawEndLatitude: directRawEndLatitude = null,
+        rawEndLongitude: directRawEndLongitude = null,
+        feedbackSatisfactionScore: directFeedbackSatisfactionScore = null,
+        feedbackPreferenceLabels = null,
+        feedbackReasonText: directFeedbackReasonText = null,
+        feedbackSource: directFeedbackSource = null,
     } = routeData;
 
-    const feedbackChoice = routeFeedback?.preferenceChoice || null;
+    const feedbackChoice = routeFeedback?.preferenceChoice || (Array.isArray(feedbackPreferenceLabels) ? feedbackPreferenceLabels[0] : null) || null;
     const feedbackSatisfactionScore = Number.isFinite(Number(routeFeedback?.satisfactionScore))
         ? Number(routeFeedback.satisfactionScore)
-        : null;
-    const feedbackPreferenceLabel = routeFeedback?.preferenceLabel || null;
-    const feedbackReasonText = routeFeedback?.preferenceReason || null;
-    const feedbackSource = routeFeedback?.recommendationSource || null;
+        : (Number.isFinite(Number(directFeedbackSatisfactionScore)) ? Number(directFeedbackSatisfactionScore) : null);
+    const feedbackPreferenceLabel = routeFeedback?.preferenceLabel || (Array.isArray(feedbackPreferenceLabels) ? feedbackPreferenceLabels.join(',') : null) || null;
+    const feedbackReasonText = routeFeedback?.preferenceReason || directFeedbackReasonText || null;
+    const feedbackSource = routeFeedback?.recommendationSource || directFeedbackSource || null;
     const rawEndPoint = Array.isArray(points) && points.length ? points[points.length - 1] : meta?.endPoint || null;
     const confirmedEnd = routeFeedback?.confirmedEnd || null;
-    const rawEndLatitude = Number.isFinite(Number(rawEndPoint?.latitude)) ? Number(rawEndPoint.latitude) : null;
-    const rawEndLongitude = Number.isFinite(Number(rawEndPoint?.longitude)) ? Number(rawEndPoint.longitude) : null;
-    const confirmedEndLatitude = Number.isFinite(Number(confirmedEnd?.latitude)) ? Number(confirmedEnd.latitude) : null;
-    const confirmedEndLongitude = Number.isFinite(Number(confirmedEnd?.longitude)) ? Number(confirmedEnd.longitude) : null;
+    const rawEndLatitude = Number.isFinite(Number(rawEndPoint?.latitude)) ? Number(rawEndPoint.latitude) : (Number.isFinite(Number(directRawEndLatitude)) ? Number(directRawEndLatitude) : null);
+    const rawEndLongitude = Number.isFinite(Number(rawEndPoint?.longitude)) ? Number(rawEndPoint.longitude) : (Number.isFinite(Number(directRawEndLongitude)) ? Number(directRawEndLongitude) : null);
+    const confirmedEndLatitude = Number.isFinite(Number(confirmedEnd?.latitude)) ? Number(confirmedEnd.latitude) : (Number.isFinite(Number(directConfirmedEndLatitude)) ? Number(directConfirmedEndLatitude) : null);
+    const confirmedEndLongitude = Number.isFinite(Number(confirmedEnd?.longitude)) ? Number(confirmedEnd.longitude) : (Number.isFinite(Number(directConfirmedEndLongitude)) ? Number(directConfirmedEndLongitude) : null);
     const confirmedEndDistanceMeters =
         Number.isFinite(rawEndLatitude) && Number.isFinite(rawEndLongitude) && Number.isFinite(confirmedEndLatitude) && Number.isFinite(confirmedEndLongitude)
             ? calculateSegmentDistanceMeters(
                 { latitude: rawEndLatitude, longitude: rawEndLongitude },
                 { latitude: confirmedEndLatitude, longitude: confirmedEndLongitude }
               )
-            : null;
+            : (Number.isFinite(Number(directConfirmedEndDistanceMeters)) ? Number(directConfirmedEndDistanceMeters) : null);
 
     const result = await pool.query(
         `INSERT INTO routes (

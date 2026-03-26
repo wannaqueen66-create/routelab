@@ -186,18 +186,8 @@ App({
       this.unsubscribe = subscribe((routes) => {
         this.globalData.routes = routes;
       });
-  
-      const runInitialSync = () => {
-        if (this.shouldAutoSync()) {
-          this.flushOfflineCache()
-            .then(() => this.pushLocalToCloud())
-            .then(() => this.syncFromCloud(false, { forceFull: true }))
-            .catch((error) => logger.warn('Auto sync on launch failed', error?.message || error));
-        } else {
-          this.syncFromCloud(false, { forceFull: true }).catch(() => {});
-        }
-      };
-  
+      this._syncPromise = null;
+
       this.ensurePrerequisites()
         .then(() =>
           Promise.all([
@@ -224,9 +214,11 @@ App({
                 }
               })
               .catch(() => {}),
-          ]).then(() => {
-            runInitialSync();
-          })
+          ]).then(() => this.runSyncPipeline({
+            reason: 'launch',
+            forceFull: true,
+            allowPush: this.shouldAutoSync(),
+          }))
         )
         .catch((error) => {
           logger.warn('Prerequisite check incomplete', error?.errMsg || error?.message || error);
@@ -236,11 +228,11 @@ App({
         wx.onNetworkStatusChange((res) => {
           this.globalData.networkConnected = res.isConnected;
           logger.info('Network status changed', { connected: res.isConnected });
-          if (res.isConnected && this.shouldAutoSync()) {
-            this.flushOfflineCache()
-              .then(() => this.pushLocalToCloud())
-              .then(() => this.syncFromCloud(false))
-              .catch((error) => logger.warn('Auto sync after reconnect failed', error?.message || error));
+          if (res.isConnected) {
+            this.runSyncPipeline({
+              reason: 'reconnect',
+              allowPush: this.shouldAutoSync(),
+            }).catch((error) => logger.warn('Auto sync after reconnect failed', error?.message || error));
           }
         });
       }
@@ -389,7 +381,31 @@ App({
     shouldAutoSync() {
       return true;
     },
-  
+
+    runSyncPipeline({ reason = 'manual', forceFull = false, allowPush = true, showToast = false } = {}) {
+      if (this._syncPromise) {
+        logger.info('Reuse active sync pipeline', { reason });
+        return this._syncPromise;
+      }
+
+      logger.info('Sync pipeline started', { reason, forceFull, allowPush });
+      const pipeline = Promise.resolve()
+        .then(() => this.flushOfflineCache())
+        .then(() => {
+          if (!allowPush) {
+            return null;
+          }
+          return this.pushLocalToCloud();
+        })
+        .then(() => this.syncFromCloud(showToast, { forceFull }))
+        .finally(() => {
+          this._syncPromise = null;
+        });
+
+      this._syncPromise = pipeline;
+      return pipeline;
+    },
+
     flushOfflineCache() {
       const fragments = flushOfflineFragments();
       if (!fragments.length) {

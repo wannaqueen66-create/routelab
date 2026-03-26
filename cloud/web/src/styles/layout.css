@@ -163,6 +163,30 @@
   color: var(--error);
 }
 
+/* App Loading */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-spinner {
+  margin-bottom: var(--space-4);
+}
+
+.loading-text {
+  color: var(--gray-600);
+  font-size: var(--text-base);
+}
+
 /* Header Styles */
 .app-header {
   height: var(--header-height);

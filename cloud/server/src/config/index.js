@@ -6,7 +6,6 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const WECHAT_APPID = process.env.WECHAT_APPID || '';
 const WECHAT_SECRET = process.env.WECHAT_SECRET || '';
 const ADMIN_USER = process.env.ADMIN_USER || '';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || '';
 const TOKEN_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
@@ -29,7 +28,7 @@ const PUBLIC_ROUTE_LIMIT = Math.min(
   Math.max(Number(process.env.PUBLIC_ROUTE_LIMIT) || 24, 5),
   50
 );
-const ADMIN_LOGIN_ENABLED = Boolean(ADMIN_USER && (ADMIN_PASSWORD || ADMIN_PASSWORD_HASH));
+const ADMIN_LOGIN_ENABLED = Boolean(ADMIN_USER && ADMIN_PASSWORD_HASH);
 
 const AMAP_WEB_KEY = process.env.AMAP_WEB_KEY || '';
 const AMAP_TIMEOUT_MS = Math.max(Number(process.env.AMAP_TIMEOUT_MS) || 6500, 2000);
@@ -116,7 +115,6 @@ module.exports = {
   WECHAT_APPID,
   WECHAT_SECRET,
   ADMIN_USER,
-  ADMIN_PASSWORD,
   ADMIN_PASSWORD_HASH,
   TOKEN_EXPIRES_IN,
   STORAGE_LOCAL_PATH,

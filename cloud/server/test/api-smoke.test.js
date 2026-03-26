@@ -5,6 +5,7 @@ const fs = require('fs');
 const supertest = require('supertest');
 const jwt = require('jsonwebtoken');
 
+process.env.NODE_ENV = process.env.NODE_ENV || 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
 process.env.ADMIN_USER = process.env.ADMIN_USER || 'admin';
 process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
@@ -105,8 +106,16 @@ test('GET /api/routes returns empty list for valid token', async () => {
   assert.deepEqual(response.body, { items: [], total: 0 });
 });
 
-test('POST /api/upload returns 400 when file is missing', async () => {
+test('POST /api/upload requires auth', async () => {
   const response = await request.post('/api/upload');
+  assert.equal(response.status, 401);
+  assert.equal(response.body.error, 'Unauthorized');
+});
+
+test('POST /api/upload returns 400 when authenticated request is missing file', async () => {
+  const response = await request
+    .post('/api/upload')
+    .set('Authorization', `Bearer ${signUserToken('user-upload-1')}`);
   assert.equal(response.status, 400);
   assert.equal(response.body.error, 'No file uploaded');
 });
@@ -239,6 +248,7 @@ test('POST /api/upload returns file metadata', async () => {
 
   const response = await request
     .post('/api/upload')
+    .set('Authorization', `Bearer ${signUserToken('user-upload-2')}`)
     .attach('file', filePath);
 
   assert.equal(response.status, 200);
