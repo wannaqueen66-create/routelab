@@ -200,7 +200,7 @@
     </view>
 
     <!-- ── Step 1: Confirm End Point ── -->
-    <view class="wizard-card" wx:if="{{wizardPhase === 'endpoint'}}">
+    <view class="wizard-card wizard-card--sheet wizard-card--endpoint" wx:if="{{wizardPhase === 'endpoint'}}">
       <view class="wizard-card__header">
         <text class="wizard-card__title">确认终点位置</text>
         <text class="wizard-card__subtitle">点击地图精确标记你的实际终点</text>
@@ -281,7 +281,7 @@
     </view>
 
     <!-- ── Step 3: Route Preference Survey ── -->
-    <view class="wizard-card wizard-card--tall" wx:if="{{wizardPhase === 'preference'}}">
+    <view class="wizard-card wizard-card--tall wizard-card--sheet wizard-card--preference" wx:if="{{wizardPhase === 'preference'}}">
       <view class="wizard-card__header">
         <text class="wizard-card__title">路径选择调查</text>
         <text class="wizard-card__subtitle">你为什么选择走这条路？</text>
