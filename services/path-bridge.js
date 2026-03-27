@@ -1,5 +1,6 @@
 const config = require('../config/saaa-config');
 const logger = require('../utils/logger');
+const api = require('./api');
 
 function parsePolyline(polyline = '') {
   if (typeof polyline !== 'string' || !polyline.length) {
@@ -181,32 +182,65 @@ function fetchAllCyclingPaths({ origin, destination, key }) {
 
 /**
  * Fetch alternative routes between start and end for display in the feedback wizard.
- * Returns { alternatives: [{ points, distance, duration }] }.
+ * Preferred path: call cloud API so the AMap key stays on the server.
+ * Fallback path: direct client AMap request for backward compatibility.
+ * Returns { alternatives: [{ points, distance, duration, title, strategy }] }.
  */
-function fetchAlternativeRoutes({ start, end, mode = 'walk' } = {}) {
+function fetchAlternativeRoutes({ start, end, mode = 'walk', actualPoints = [], distanceMeters = 0, durationMs = 0 } = {}) {
   if (!start || !end) {
     return Promise.resolve({ alternatives: [] });
   }
-  const key = config?.map?.amapWebKey || config?.amapWebKey || '';
-  if (!key) {
-    logger.warn('Amap key is not configured, cannot fetch alternative routes');
-    return Promise.resolve({ alternatives: [] });
-  }
-  const origin = `${Number(start.longitude)},${Number(start.latitude)}`;
-  const destination = `${Number(end.longitude)},${Number(end.latitude)}`;
-  const fetcher = mode === 'ride' ? fetchAllCyclingPaths : fetchAllWalkingPaths;
-  return fetcher({ origin, destination, key })
-    .then((paths) => ({
-      alternatives: paths.map((p) => ({
-        points: normalizePath(p.points, { start, end }),
-        distance: p.distance,
-        duration: p.duration,
-      })),
-    }))
-    .catch((error) => {
-      logger.warn('fetchAlternativeRoutes failed', error?.errMsg || error?.message || error);
+
+  const cloudRequest = api && typeof api.getRouteRecommendations === 'function'
+    ? api.getRouteRecommendations({
+        start,
+        end,
+        actualPoints,
+        distanceMeters,
+        durationMs,
+        mode,
+      })
+        .then((res) => {
+          const recommendations = Array.isArray(res?.recommendations) ? res.recommendations : [];
+          const alternatives = recommendations
+            .filter((item) => !item?.isActual)
+            .map((item) => ({
+              points: normalizePath(Array.isArray(item.polyline) ? item.polyline : [], { start, end }),
+              distance: Number(item.distanceMeters || item.distance) || 0,
+              duration: Number(item.durationSeconds || item.duration) || 0,
+              title: item.title || '',
+              strategy: item.strategy || item.scoreHint || '',
+            }))
+            .filter((item) => Array.isArray(item.points) && item.points.length > 1);
+          return { alternatives };
+        })
+    : Promise.reject(new Error('Cloud route recommendations unavailable'));
+
+  return cloudRequest.catch((cloudError) => {
+    logger.warn('Cloud alternative routes failed, falling back to direct AMap', cloudError?.errMsg || cloudError?.message || cloudError);
+    const key = config?.map?.amapWebKey || config?.amapWebKey || '';
+    if (!key) {
+      logger.warn('Amap key is not configured, cannot fetch alternative routes');
       return { alternatives: [] };
-    });
+    }
+    const origin = `${Number(start.longitude)},${Number(start.latitude)}`;
+    const destination = `${Number(end.longitude)},${Number(end.latitude)}`;
+    const fetcher = mode === 'ride' ? fetchAllCyclingPaths : fetchAllWalkingPaths;
+    return fetcher({ origin, destination, key })
+      .then((paths) => ({
+        alternatives: paths.map((p) => ({
+          points: normalizePath(p.points, { start, end }),
+          distance: p.distance,
+          duration: p.duration,
+          title: '',
+          strategy: mode,
+        })),
+      }))
+      .catch((error) => {
+        logger.warn('fetchAlternativeRoutes failed', error?.errMsg || error?.message || error);
+        return { alternatives: [] };
+      });
+  });
 }
 
 module.exports = {
