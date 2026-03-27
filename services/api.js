@@ -3,7 +3,6 @@ const logger = require('../utils/logger');
 const auth = require('./auth');
 const { STORAGE_KEYS } = require('../constants/storage');
 const { getLocalWeatherSnapshot } = require('./weather-local');
-const { gcj02ToWgs84 } = require('../utils/coord');
 
 const DEFAULT_TIMEOUT = config.api?.timeout || 15000;
 const DEFAULT_RETRIES = typeof config.api?.retries === 'number' ? config.api.retries : 1;
