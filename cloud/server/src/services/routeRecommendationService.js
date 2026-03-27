@@ -110,7 +110,7 @@ function pickArray(value) {
     return Array.isArray(value) ? value : [];
 }
 
-function extractCandidatePath(payload, strategy) {
+function extractCandidatePaths(payload, strategy) {
     const route = payload?.route || payload?.data || payload || {};
     const paths = [
         ...pickArray(route.paths),
@@ -118,26 +118,35 @@ function extractCandidatePath(payload, strategy) {
         ...pickArray(route.routes),
         ...pickArray(route.data?.paths),
     ];
-    const firstPath = paths[0] || route?.path || route?.route || null;
-    if (!firstPath || typeof firstPath !== 'object') {
-        return null;
+    const fallbackPath = route?.path || route?.route || null;
+    const rawPaths = paths.length ? paths : fallbackPath && typeof fallbackPath === 'object' ? [fallbackPath] : [];
+    if (!rawPaths.length) {
+        return [];
     }
 
-    const points = dedupePolyline([
-        ...parsePolylineString(firstPath.polyline || firstPath.path || ''),
-        ...parseStepsPolyline(firstPath.steps || firstPath.segments || []),
-    ]);
-
-    const distanceMeters = toFiniteNumber(firstPath.distance || firstPath.dist || firstPath.total_distance);
-    const durationSeconds = toFiniteNumber(firstPath.duration || firstPath.time || firstPath.cost?.duration);
-
-    return {
-        distanceMeters,
-        durationSeconds,
-        polyline: points,
-        raw: firstPath,
-        strategy,
-    };
+    return rawPaths
+        .map((pathItem) => {
+            if (!pathItem || typeof pathItem !== 'object') {
+                return null;
+            }
+            const points = dedupePolyline([
+                ...parsePolylineString(pathItem.polyline || pathItem.path || ''),
+                ...parseStepsPolyline(pathItem.steps || pathItem.segments || []),
+            ]);
+            if (!points.length) {
+                return null;
+            }
+            const distanceMeters = toFiniteNumber(pathItem.distance || pathItem.dist || pathItem.total_distance);
+            const durationSeconds = toFiniteNumber(pathItem.duration || pathItem.time || pathItem.cost?.duration);
+            return {
+                distanceMeters,
+                durationSeconds,
+                polyline: points,
+                raw: pathItem,
+                strategy,
+            };
+        })
+        .filter(Boolean);
 }
 
 async function fetchWalkingRecommendation(start, end) {
@@ -146,7 +155,7 @@ async function fetchWalkingRecommendation(start, end) {
         destination: `${end.longitude},${end.latitude}`,
     });
     const payload = await executeAmapRequest(url);
-    return extractCandidatePath(payload, 'walking');
+    return extractCandidatePaths(payload, 'walking');
 }
 
 async function fetchDrivingRecommendation(start, end) {
@@ -157,7 +166,7 @@ async function fetchDrivingRecommendation(start, end) {
         extensions: 'base',
     });
     const payload = await executeAmapRequest(url);
-    return extractCandidatePath(payload, 'driving');
+    return extractCandidatePaths(payload, 'driving');
 }
 
 async function fetchRidingRecommendation(start, end) {
@@ -177,8 +186,8 @@ async function fetchRidingRecommendation(start, end) {
     for (const url of candidates) {
         try {
             const payload = await executeAmapRequest(url);
-            const extracted = extractCandidatePath(payload, 'riding');
-            if (extracted) {
+            const extracted = extractCandidatePaths(payload, 'riding');
+            if (extracted.length) {
                 return extracted;
             }
         } catch (error) {
@@ -188,7 +197,7 @@ async function fetchRidingRecommendation(start, end) {
     if (lastError) {
         throw lastError;
     }
-    return null;
+    return [];
 }
 
 function buildActualRecommendation(actualPoints = [], distanceMeters = 0, durationMs = 0) {
@@ -207,14 +216,15 @@ function buildActualRecommendation(actualPoints = [], distanceMeters = 0, durati
     };
 }
 
-function toRecommendationItem(candidate, index) {
+function toRecommendationItem(candidate, index, total = 1) {
     if (!candidate || !Array.isArray(candidate.polyline) || !candidate.polyline.length) {
         return null;
     }
-    const titleMap = {
-        walking: '候选路线 A',
-        riding: '候选路线 B',
-        driving: '候选路线 C',
+    const strategy = candidate.strategy || `candidate_${index + 1}`;
+    const titleBaseMap = {
+        walking: '步行方案',
+        riding: '骑行方案',
+        driving: '驾车方案',
     };
     const summaryMap = {
         walking: '高德步行推荐路线',
@@ -226,11 +236,12 @@ function toRecommendationItem(candidate, index) {
         riding: 'riding',
         driving: 'driving',
     };
-    const strategy = candidate.strategy || `candidate_${index + 1}`;
+    const titleBase = titleBaseMap[strategy] || '候选路线';
+    const showIndex = total > 1 ? ` ${index + 1}` : '';
     return {
-        id: `amap-${strategy}`,
+        id: `amap-${strategy}-${index + 1}`,
         provider: 'amap',
-        title: titleMap[strategy] || `候选路线 ${index + 1}`,
+        title: `${titleBase}${showIndex}`,
         summary: summaryMap[strategy] || '高德推荐路线',
         distanceMeters: candidate.distanceMeters,
         durationSeconds: candidate.durationSeconds,
@@ -253,17 +264,33 @@ async function getRouteRecommendations({ start, end, actualPoints = [], distance
         };
     }
 
-    const settled = await Promise.allSettled([
+    const [walkingSettled, ridingSettled, drivingSettled] = await Promise.allSettled([
         fetchWalkingRecommendation(safeStart, safeEnd),
         fetchRidingRecommendation(safeStart, safeEnd),
         fetchDrivingRecommendation(safeStart, safeEnd),
     ]);
 
-    const candidates = settled
-        .filter((item) => item.status === 'fulfilled' && item.value)
-        .map((item) => item.value)
-        .map((item, index) => toRecommendationItem(item, index))
-        .filter(Boolean);
+    const candidates = [];
+
+    const appendCandidates = (items, strategy) => {
+        const list = Array.isArray(items) ? items : [];
+        list.forEach((item, index) => {
+            const mapped = toRecommendationItem(item, index, list.length || 1);
+            if (mapped) {
+                candidates.push(mapped);
+            }
+        });
+    };
+
+    if (walkingSettled.status === 'fulfilled') {
+        appendCandidates(walkingSettled.value, 'walking');
+    }
+    if (ridingSettled.status === 'fulfilled') {
+        appendCandidates(ridingSettled.value, 'riding');
+    }
+    if (drivingSettled.status === 'fulfilled') {
+        appendCandidates(drivingSettled.value, 'driving');
+    }
 
     return {
         source: candidates.length ? 'amap' : 'actual_only',
