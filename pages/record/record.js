@@ -16,6 +16,7 @@ const { getSyncStatus } = require('../../services/route-store');
 const { resolveActivityMeta } = require('../../utils/activity');
 const { PURPOSE_OPTIONS, PURPOSE_MAP } = require('../../constants/purpose');
 const rewards = require('../../services/rewards');
+const { fetchAlternativeRoutes } = require('../../services/path-bridge');
 const { calculateSegmentDistance } = require('../../utils/geo');
 
 const app = typeof getApp === 'function' ? getApp() : null;
@@ -1206,37 +1207,15 @@ Page(applyThemeMixin({
     // Determine activity mode for route fetching
     const mode = this.data.activityKey === 'ride' ? 'ride' : 'walk';
 
-    // Actual route distance/time for compare baseline
-    const actualDistMeters = Array.isArray(points) && points.length >= 2
-      ? points.reduce((sum, point, index) => {
-          if (index === 0) return 0;
-          return sum + calculateSegmentDistance(points[index - 1], point);
-        }, 0)
-      : 0;
-    const actualDurationMs = (() => {
-      const firstTs = Number(points[0]?.timestamp || points[0]?.time || 0);
-      const lastTs = Number(points[points.length - 1]?.timestamp || points[points.length - 1]?.time || 0);
-      return firstTs > 0 && lastTs >= firstTs ? lastTs - firstTs : 0;
-    })();
-    const actualDistText = actualDistMeters >= 1000
-      ? `${(actualDistMeters / 1000).toFixed(1)} km`
-      : actualDistMeters > 0
-        ? `${Math.round(actualDistMeters)} m`
-        : this.data.distanceText;
+    // Actual route distance
+    const actualDist = Number(this.data.distanceText.replace(/[^0-9.]/g, '')) || 0;
+    const actualDistText = actualDist > 0 ? `${actualDist} km` : this.data.distanceText;
 
     this.setData({ wizardLoadingRoutes: true, wizardActualDistText: actualDistText });
 
-    api.getRouteRecommendations({
-      start: startPoint,
-      end: endPoint,
-      actualPoints: points.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
-      distanceMeters: actualDistMeters,
-      durationMs: actualDurationMs,
-      mode,
-    })
+    fetchAlternativeRoutes({ start: startPoint, end: endPoint, mode })
       .then((result) => {
-        const recommendations = Array.isArray(result?.recommendations) ? result.recommendations : [];
-        const alternatives = recommendations.filter((item) => !item?.isActual);
+        const alternatives = result.alternatives || [];
 
         // Build polylines: actual route (blue) + all alternatives
         const polylines = [];
@@ -1255,22 +1234,19 @@ Page(applyThemeMixin({
         const altData = alternatives.map((alt, idx) => {
           const color = ALT_ROUTE_COLORS[idx % ALT_ROUTE_COLORS.length] || '#9ca3af';
           const label = String(idx + 1);
-          const altPoints = Array.isArray(alt.polyline) ? alt.polyline : [];
           polylines.push({
-            points: altPoints,
+            points: alt.points,
             color,
             width: 4,
             dottedLine: true,
           });
-          const distanceMeters = Number(alt.distanceMeters || alt.distance || 0);
-          const durationSeconds = Number(alt.durationSeconds || alt.duration || 0);
-          const distKm = distanceMeters >= 1000
-            ? `${(distanceMeters / 1000).toFixed(1)}km`
-            : `${Math.round(distanceMeters)}m`;
-          const durMin = durationSeconds >= 60
-            ? `${Math.round(durationSeconds / 60)}\u5206\u949F`
-            : `${durationSeconds}\u79D2`;
-          return { label, color, distText: distKm, durText: durMin, index: idx, title: alt.title || '' };
+          const distKm = alt.distance >= 1000
+            ? `${(alt.distance / 1000).toFixed(1)}km`
+            : `${Math.round(alt.distance)}m`;
+          const durMin = alt.duration >= 60
+            ? `${Math.round(alt.duration / 60)}\u5206\u949F`
+            : `${alt.duration}\u79D2`;
+          return { label, color, distText: distKm, durText: durMin, index: idx };
         });
 
         // Include points for auto-fit
