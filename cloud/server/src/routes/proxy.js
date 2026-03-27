@@ -106,6 +106,11 @@ router.get('/weather', ensureAuth, async (req, res) => {
 });
 
 // GET /api/geocode/reverse
+// IMPORTANT COORDINATE CONTRACT:
+// - This endpoint expects GCJ-02 coordinates from the mini-program/client.
+// - It prefers AMap reverse geocoding first, and AMap also expects GCJ-02.
+// - Do NOT pre-convert client coordinates to WGS84 before calling this route,
+//   otherwise returned place names may shift west / southwest on mainland China.
 router.get('/geocode/reverse', ensureAuth, async (req, res) => {
     const latitude = normalizeCoordinate(req.query.lat, { min: -90, max: 90 });
     const longitude = normalizeCoordinate(req.query.lon, { min: -180, max: 180 });

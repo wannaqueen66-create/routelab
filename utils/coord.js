@@ -38,6 +38,9 @@ function outOfChina(latitude, longitude) {
   return longitude < 72.004 || longitude > 137.8347 || latitude < 0.8293 || latitude > 55.8271;
 }
 
+// Convert GCJ-02 -> WGS84 for providers that require global GPS coordinates
+// (for example OpenStreetMap / Nominatim or Open-Meteo style services).
+// Do NOT use this before calling AMap geocode/regeo APIs, because AMap expects GCJ-02.
 function gcj02ToWgs84(latitude, longitude) {
   if (typeof latitude === 'object' && latitude !== null) {
     return gcj02ToWgs84(latitude.latitude, latitude.longitude);
