@@ -33,6 +33,9 @@ const {
     describeAqi,
     buildExerciseSuggestion,
 } = require('../services/weatherService');
+const {
+    getRouteRecommendations,
+} = require('../services/routeRecommendationService');
 
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
@@ -316,6 +319,26 @@ function mapRouteRow(row, points = [], options = {}) {
 
     return result;
 }
+
+// === Recommendations ===
+
+// POST /api/routes/recommendations
+router.post('/recommendations', async (req, res) => {
+    try {
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const result = await getRouteRecommendations({
+            start: body.start,
+            end: body.end,
+            actualPoints: Array.isArray(body.actualPoints) ? body.actualPoints : [],
+            distanceMeters: Number(body.distanceMeters) || 0,
+            durationMs: Number(body.durationMs) || 0,
+        });
+        return res.json(result);
+    } catch (error) {
+        console.error('POST /api/routes/recommendations failed', error);
+        return res.status(500).json({ error: 'Failed to get route recommendations' });
+    }
+});
 
 // === Sync ===
 

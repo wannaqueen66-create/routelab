@@ -666,11 +666,12 @@ function reverseGeocodeSafe({ latitude, longitude } = {}) {
     return Promise.reject(new Error('Latitude and longitude are required'));
   }
   const coords = { latitude, longitude };
-  const wgs84 = gcj02ToWgs84(latitude, longitude);
-  const targetCoords =
-    Number.isFinite(wgs84?.latitude) && Number.isFinite(wgs84?.longitude) ? wgs84 : coords;
 
-  return reverseGeocode(targetCoords)
+  // The mini-program location and map rendering chain use GCJ-02.
+  // Cloud /api/geocode/reverse prefers AMap, which also expects GCJ-02.
+  // So keep the original coordinates for cloud reverse geocoding.
+  // Only local OSM fallbacks should convert to WGS84 internally when needed.
+  return reverseGeocode(coords)
     .catch((cloudError) => {
       logger.warn('Cloud reverse geocode failed, using local fallbacks', {
         message: cloudError?.errMsg || cloudError?.message || cloudError,
