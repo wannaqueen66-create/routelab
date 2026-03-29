@@ -68,8 +68,7 @@ const PREFERENCE_OPTIONS = [
   { key: 'other', icon: '\uD83D\uDCAC', label: '其他原因', selected: false },
 ];
 
-const ALT_ROUTE_COLORS = ['#f97316', '#22c55e', '#ec4899'];
-const ALT_ROUTE_LABELS = ['A', 'B', 'C'];
+const ALT_ROUTE_COLORS = ['#f97316', '#22c55e', '#ec4899', '#8b5cf6', '#06b6d4', '#eab308', '#ef4444', '#14b8a6'];
 
 const FINISH_PHASES = {
   ENDPOINT: 'endpoint',
@@ -1216,9 +1215,9 @@ Page(applyThemeMixin({
 
     fetchAlternativeRoutes({ start: startPoint, end: endPoint, mode })
       .then((result) => {
-        const alternatives = (result.alternatives || []).slice(0, 3);
+        const alternatives = result.alternatives || [];
 
-        // Build polylines: actual route (blue) + alternatives (orange, green, pink)
+        // Build polylines: actual route (blue) + all alternatives
         const polylines = [];
 
         // Actual user route
@@ -1233,8 +1232,8 @@ Page(applyThemeMixin({
 
         // Alternative routes
         const altData = alternatives.map((alt, idx) => {
-          const color = ALT_ROUTE_COLORS[idx] || '#9ca3af';
-          const label = ALT_ROUTE_LABELS[idx] || String(idx + 1);
+          const color = ALT_ROUTE_COLORS[idx % ALT_ROUTE_COLORS.length] || '#9ca3af';
+          const label = String(idx + 1);
           polylines.push({
             points: alt.points,
             color,
