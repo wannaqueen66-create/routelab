@@ -1,0 +1,7 @@
+<web-view wx:if="{{ready}}" src="{{url}}" binderror="handleWebViewError"></web-view>
+
+<view wx:else class="survey-webview-error">
+  <text class="survey-webview-error__title">????????</text>
+  <text class="survey-webview-error__desc">{{error}}</text>
+  <button class="survey-webview-error__btn" bindtap="handleNavigateBack">?????</button>
+</view>

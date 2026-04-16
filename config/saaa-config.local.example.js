@@ -5,4 +5,10 @@ module.exports = {
     baseUrl: 'https://your-domain.example/api',
     staticBase: 'https://your-domain.example/static/uploads',
   },
+  survey: {
+    enabled: true,
+    title: '开始记录前问卷',
+    url: 'https://www.powercx.com/r/kjzqe',
+    version: 'powercx-kjzqe-v1',
+  },
 };

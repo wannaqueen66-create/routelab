@@ -23,6 +23,12 @@ const baseConfig = {
     // Custom UA for Nominatim (required by usage policy)
     nominatimUserAgent: 'RouteLab-MP/1.0 (+https://routelab.qzz.io)',
   },
+  survey: {
+    enabled: true,
+    title: '开始记录前问卷',
+    url: 'https://www.powercx.com/r/kjzqe',
+    version: 'powercx-kjzqe-v1',
+  },
 };
 
 function isPlainObject(value) {

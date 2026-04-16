@@ -12,10 +12,33 @@ process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 process.env.STORAGE_LOCAL_PATH = process.env.STORAGE_LOCAL_PATH || path.join(__dirname, '.tmp', 'uploads');
 process.env.BACKUP_STORAGE_PATH = process.env.BACKUP_STORAGE_PATH || path.join(__dirname, '.tmp', 'backups');
 process.env.STORAGE_BASE_URL = process.env.STORAGE_BASE_URL || 'https://example.test/static/uploads';
+process.env.PUBLIC_APP_BASE_URL = process.env.PUBLIC_APP_BASE_URL || 'https://example.test';
 
 const db = require('../src/db/index');
 db.ensureDatabaseReady = async () => {};
-db.pool.query = async () => ({ rows: [] });
+
+let mockSurveyCompletionRow = null;
+let insertedSurveyCompletion = null;
+
+db.pool.query = async (sql, params = []) => {
+  const normalized = String(sql || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (normalized.includes('from survey_completions')) {
+    return { rows: mockSurveyCompletionRow ? [mockSurveyCompletionRow] : [] };
+  }
+  if (normalized.includes('insert into survey_completions')) {
+    insertedSurveyCompletion = { sql, params };
+    mockSurveyCompletionRow = {
+      survey_key: params[1],
+      survey_version: params[2],
+      respondent_id: params[3],
+      response_status: params[4],
+      completed_at: params[5],
+      updated_at: params[5],
+    };
+    return { rows: [] };
+  }
+  return { rows: [] };
+};
 
 const routeModel = require('../src/models/routeModel');
 
@@ -80,6 +103,82 @@ const request = supertest(app);
 function signUserToken(userId = 'user-1') {
   return jwt.sign({ sub: userId, role: 'user' }, process.env.JWT_SECRET);
 }
+
+test('GET /api/user/surveys/powercx/status returns incomplete payload by default', async () => {
+  mockSurveyCompletionRow = null;
+
+  const response = await request
+    .get('/api/user/surveys/powercx/status')
+    .set('Authorization', `Bearer ${signUserToken('42')}`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.surveyKey, 'powercx');
+  assert.equal(response.body.currentVersionCompleted, false);
+  assert.equal(response.body.surveyVersion, 'powercx-kjzqe-v1');
+});
+
+test('POST /api/user/surveys/powercx/session returns survey start url', async () => {
+  const response = await request
+    .post('/api/user/surveys/powercx/session')
+    .set('Authorization', `Bearer ${signUserToken('42')}`)
+    .send({ source: 'home_hero' });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.body.surveyKey, 'powercx');
+  assert.match(response.body.startUrl, /^https:\/\/example\.test\/api\/public\/surveys\/powercx\/start\?state=/);
+});
+
+test('GET /api/public/surveys/powercx/start redirects to PowerCX and sets cookie', async () => {
+  const sessionResponse = await request
+    .post('/api/user/surveys/powercx/session')
+    .set('Authorization', `Bearer ${signUserToken('42')}`)
+    .send({ source: 'home_hero' });
+  const startUrl = new URL(sessionResponse.body.startUrl);
+  const state = startUrl.searchParams.get('state');
+
+  const response = await request.get(`/api/public/surveys/powercx/start?state=${encodeURIComponent(state)}`);
+
+  assert.equal(response.status, 302);
+  assert.match(response.headers.location, /^https:\/\/www\.powercx\.com\/r\/kjzqe\?/);
+  assert.match(response.headers.location, /userId=42/);
+  assert.match(response.headers.location, /source=home_hero/);
+  assert.ok(Array.isArray(response.headers['set-cookie']));
+  assert.match(response.headers['set-cookie'][0], /rlab_powercx_state=/);
+});
+
+test('GET /api/public/surveys/powercx/complete stores completion for current user', async () => {
+  mockSurveyCompletionRow = null;
+  insertedSurveyCompletion = null;
+
+  const sessionResponse = await request
+    .post('/api/user/surveys/powercx/session')
+    .set('Authorization', `Bearer ${signUserToken('42')}`)
+    .send({ source: 'home_hero' });
+  const startUrl = new URL(sessionResponse.body.startUrl);
+  const state = startUrl.searchParams.get('state');
+
+  const response = await request
+    .get('/api/public/surveys/powercx/complete?respondentId=resp-001&status=complete')
+    .set('Cookie', `rlab_powercx_state=${encodeURIComponent(state)}`);
+
+  assert.equal(response.status, 200);
+  assert.match(response.text, /问卷结果已同步/);
+  assert.ok(insertedSurveyCompletion);
+  assert.equal(String(insertedSurveyCompletion.params[0]), '42');
+  assert.equal(insertedSurveyCompletion.params[1], 'powercx');
+  assert.equal(insertedSurveyCompletion.params[2], 'powercx-kjzqe-v1');
+  assert.equal(insertedSurveyCompletion.params[3], 'resp-001');
+  assert.equal(insertedSurveyCompletion.params[4], 'complete');
+
+  const statusResponse = await request
+    .get('/api/user/surveys/powercx/status')
+    .set('Authorization', `Bearer ${signUserToken('42')}`);
+
+  assert.equal(statusResponse.status, 200);
+  assert.equal(statusResponse.body.currentVersionCompleted, true);
+  assert.equal(statusResponse.body.respondentId, 'resp-001');
+  assert.equal(statusResponse.body.responseStatus, 'complete');
+});
 
 test('GET /api/ping returns ok payload', async () => {
   const response = await request.get('/api/ping');

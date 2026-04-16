@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Skill(update-config)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(claude plugin:*)",
+      "Bash(claude agents:*)",
+      "Bash(claude plugins:*)",
+      "Bash(git:*)",
+      "Bash(node:*)",
+      "Bash(npm run:*)",
+      "Bash(npm:*)",
+      "Bash(\"C:/Users/Lucas/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh\" --project-dir \"C:/Users/Lucas/WeChatProjects/miniprogram-1\")",
+      "Bash(cp /tmp/anthropic-skills/skills/frontend-design/SKILL.md \"C:/Users/Lucas/WeChatProjects/miniprogram-1/.claude/skills/frontend-design.md\")",
+      "Bash(cp /tmp/anthropic-skills/skills/frontend-design/LICENSE.txt \"C:/Users/Lucas/WeChatProjects/miniprogram-1/.claude/skills/\")"
+    ]
+  }
+}

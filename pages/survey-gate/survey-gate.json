@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "开始记录前问卷",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
+}

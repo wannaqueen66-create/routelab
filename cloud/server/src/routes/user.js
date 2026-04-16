@@ -14,6 +14,11 @@ const {
     USER_IDENTITY_VALUES
 } = require('../config/index');
 const { sanitizeEnumValue } = require('../utils/format');
+const {
+    getPowercxSurveyConfig,
+    createSurveyStateToken,
+    buildSurveyStatusPayload,
+} = require('../services/surveyService');
 
 const ensureAuth = createEnsureAuth({ jwtSecret: JWT_SECRET });
 const router = express.Router();
@@ -333,6 +338,83 @@ router.post('/settings', ensureAuth, async (req, res) => {
             stack: error?.stack,
         });
         res.status(500).json({ error: 'Failed to update user settings' });
+    }
+});
+
+// GET /api/user/surveys/powercx/status
+router.get('/surveys/powercx/status', ensureAuth, async (req, res) => {
+    if (!req.userId) {
+        return res.status(403).json({ error: 'User context required' });
+    }
+    const survey = getPowercxSurveyConfig();
+    const basePayload = {
+        ...buildSurveyStatusPayload(null),
+        configValid: survey.valid,
+        surveyUrlConfigured: survey.urlValid,
+        surveyVersionConfigured: survey.versionValid,
+    };
+    if (!survey.enabled) {
+        return res.json(basePayload);
+    }
+
+    try {
+        const result = await pool.query(
+            `SELECT survey_key, survey_version, respondent_id, response_status, completed_at, updated_at
+       FROM survey_completions
+      WHERE user_id = $1 AND survey_key = $2
+      LIMIT 1`,
+            [req.userId, survey.key]
+        );
+        const row = result.rows[0] || null;
+        return res.json({
+            ...buildSurveyStatusPayload(row),
+            configValid: survey.valid,
+            surveyUrlConfigured: survey.urlValid,
+            surveyVersionConfigured: survey.versionValid,
+        });
+    } catch (error) {
+        console.error('GET /api/user/surveys/powercx/status failed', {
+            userId: req.userId,
+            message: error?.message,
+            stack: error?.stack,
+        });
+        return res.status(500).json({ error: 'Failed to fetch survey completion status' });
+    }
+});
+
+// POST /api/user/surveys/powercx/session
+router.post('/surveys/powercx/session', ensureAuth, async (req, res) => {
+    if (!req.userId) {
+        return res.status(403).json({ error: 'User context required' });
+    }
+    const survey = getPowercxSurveyConfig();
+    if (!survey.enabled) {
+        return res.status(409).json({ error: 'Survey is disabled' });
+    }
+    if (!survey.valid) {
+        return res.status(409).json({ error: 'Survey config is invalid' });
+    }
+
+    const source =
+        req.body && typeof req.body.source === 'string' && req.body.source.trim()
+            ? req.body.source.trim().slice(0, 64)
+            : 'manual';
+
+    try {
+        const state = createSurveyStateToken({ userId: req.userId, source });
+        return res.json({
+            surveyKey: survey.key,
+            surveyVersion: survey.version,
+            callbackUrl: survey.callbackUrl,
+            startUrl: `${survey.startUrlBase}?state=${encodeURIComponent(state)}`,
+        });
+    } catch (error) {
+        console.error('POST /api/user/surveys/powercx/session failed', {
+            userId: req.userId,
+            message: error?.message,
+            stack: error?.stack,
+        });
+        return res.status(500).json({ error: 'Failed to create survey session' });
     }
 });
 

@@ -108,6 +108,13 @@ const ANNOUNCEMENT_STATUS_VALUES = new Set(['draft', 'published']);
 const ANNOUNCEMENT_DELIVERY_MODE_VALUES = new Set(['single', 'persistent']);
 const ANNOUNCEMENT_TARGET_AUDIENCE_VALUES = new Set(['all', 'new_users']);
 const FEEDBACK_STATUS_VALUES = new Set(['open', 'in_progress', 'resolved', 'closed']);
+const PUBLIC_APP_BASE_URL = (process.env.PUBLIC_APP_BASE_URL || 'https://routelab.qzz.io').replace(/\/$/, '');
+const SURVEY_POWERCX_KEY = 'powercx';
+const SURVEY_POWERCX_ENABLED = process.env.SURVEY_POWERCX_ENABLED !== 'false';
+const SURVEY_POWERCX_TITLE = process.env.SURVEY_POWERCX_TITLE || '开始记录前问卷';
+const SURVEY_POWERCX_URL = process.env.SURVEY_POWERCX_URL || 'https://www.powercx.com/r/kjzqe';
+const SURVEY_POWERCX_VERSION = process.env.SURVEY_POWERCX_VERSION || 'powercx-kjzqe-v1';
+const SURVEY_POWERCX_STATE_EXPIRES_IN = process.env.SURVEY_POWERCX_STATE_EXPIRES_IN || '2h';
 
 module.exports = {
   PORT,
@@ -149,5 +156,12 @@ module.exports = {
   ANNOUNCEMENT_STATUS_VALUES,
   ANNOUNCEMENT_DELIVERY_MODE_VALUES,
   ANNOUNCEMENT_TARGET_AUDIENCE_VALUES,
-  FEEDBACK_STATUS_VALUES
+  FEEDBACK_STATUS_VALUES,
+  PUBLIC_APP_BASE_URL,
+  SURVEY_POWERCX_KEY,
+  SURVEY_POWERCX_ENABLED,
+  SURVEY_POWERCX_TITLE,
+  SURVEY_POWERCX_URL,
+  SURVEY_POWERCX_VERSION,
+  SURVEY_POWERCX_STATE_EXPIRES_IN
 };

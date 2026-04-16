@@ -1,6 +1,8 @@
 {
   "pages": [
     "pages/index/index",
+    "pages/survey-gate/survey-gate",
+    "pages/survey-webview/survey-webview",
     "pages/record/record",
     "pages/history/history",
     "pages/route-detail/route-detail",

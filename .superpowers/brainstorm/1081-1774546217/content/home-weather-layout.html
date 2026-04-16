@@ -1,0 +1,80 @@
+<h2>首页天气卡交互草图</h2>
+<p class="subtitle">方案 A：概览指标可点击，卡片内展开 24 小时详情。看看这种信息层级是否符合你的预期。</p>
+
+<div class="mockup">
+  <div class="mockup-header">首页 · 今日天气与建议</div>
+  <div class="mockup-body" style="display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div style="font-size:30px;font-weight:700;">18.6℃</div>
+        <div style="color:#6b7280;">多云 · 体感 17.9℃</div>
+        <div style="margin-top:6px;font-size:13px;color:#6b7280;">杭州 · 紫金港</div>
+      </div>
+      <div style="padding:8px 12px;border-radius:999px;background:#ecfeff;color:#0f766e;font-size:13px;">适宜户外，注意补水</div>
+    </div>
+
+    <div class="cards" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+      <div class="card" data-choice="temp" onclick="toggleSelect(this)">
+        <div class="card-body">
+          <div class="label">温度 / 体感</div>
+          <h3>18.6℃ / 17.9℃</h3>
+          <p>点击查看前12h + 后12h变化</p>
+        </div>
+      </div>
+      <div class="card" data-choice="humidity" onclick="toggleSelect(this)">
+        <div class="card-body">
+          <div class="label">湿度</div>
+          <h3>62%</h3>
+          <p>点击查看湿度变化</p>
+        </div>
+      </div>
+      <div class="card" data-choice="wind" onclick="toggleSelect(this)">
+        <div class="card-body">
+          <div class="label">风力 / 风向</div>
+          <h3>3.4 m/s · 东北风</h3>
+          <p>点击查看风速变化与风向摘要</p>
+        </div>
+      </div>
+      <div class="card" data-choice="air" onclick="toggleSelect(this)">
+        <div class="card-body">
+          <div class="label">空气 / 污染</div>
+          <h3>良 · AQI 58</h3>
+          <p>点击查看 AQI 与污染物详情</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #dbeafe;border-radius:16px;padding:16px;background:#f8fbff;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <div>
+          <div style="font-weight:700;">温度 / 体感 · 24 小时变化</div>
+          <div style="font-size:13px;color:#6b7280;">前 12 小时 + 后 12 小时，当前时刻居中</div>
+        </div>
+        <div style="font-size:12px;color:#2563eb;">默认选中当前点击项</div>
+      </div>
+      <div style="height:180px;border-radius:12px;background:linear-gradient(180deg,#eff6ff 0%,#ffffff 100%);border:1px dashed #93c5fd;display:flex;align-items:center;justify-content:center;color:#6b7280;">
+        这里是折线图区域
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px;">
+        <div style="padding:10px 12px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;">
+          <div style="font-size:12px;color:#6b7280;">最低</div>
+          <div style="font-weight:700;">14.2℃</div>
+        </div>
+        <div style="padding:10px 12px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;">
+          <div style="font-size:12px;color:#6b7280;">当前</div>
+          <div style="font-weight:700;">18.6℃</div>
+        </div>
+        <div style="padding:10px 12px;border-radius:12px;background:#fff;border:1px solid #e5e7eb;">
+          <div style="font-size:12px;color:#6b7280;">最高</div>
+          <div style="font-weight:700;">23.1℃</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:13px;color:#6b7280;">如果切到“空气 / 污染”，主图显示 AQI 曲线，下方摘要显示 PM2.5 / PM10 / O3 等。</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>想确认的点</h3>
+  <p class="subtitle">如果你愿意，可以点击上面的 4 个指标卡任意一个做选择；也可以直接在终端回复你的意见。</p>
+</div>

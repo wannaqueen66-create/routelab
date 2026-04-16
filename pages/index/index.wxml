@@ -93,7 +93,7 @@
             <text class="hero__title">开启校园轨迹</text>
             <text class="hero__desc">已积累 {{overview.todayDistance}} · {{overview.todayDuration}}</text>
           </view>
-          <button class="btn btn--primary" bindtap="handleNavigateRecord">开始记录</button>
+          <button class="btn btn--primary" bindtap="handleNavigateRecordFromHome">开始记录</button>
         </view>
         <view class="hero__stats">
           <view class="hero__stat">
