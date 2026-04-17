@@ -26,7 +26,7 @@ const baseConfig = {
   survey: {
     enabled: true,
     title: '开始记录前问卷',
-    url: 'https://www.powercx.com/r/kjzqe',
+    url: 'https://www.powercx.com/r/6zl8y',
     version: 'powercx-kjzqe-v1',
   },
 };

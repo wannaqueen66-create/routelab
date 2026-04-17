@@ -112,7 +112,7 @@ const PUBLIC_APP_BASE_URL = (process.env.PUBLIC_APP_BASE_URL || 'https://routela
 const SURVEY_POWERCX_KEY = 'powercx';
 const SURVEY_POWERCX_ENABLED = process.env.SURVEY_POWERCX_ENABLED !== 'false';
 const SURVEY_POWERCX_TITLE = process.env.SURVEY_POWERCX_TITLE || '开始记录前问卷';
-const SURVEY_POWERCX_URL = process.env.SURVEY_POWERCX_URL || 'https://www.powercx.com/r/kjzqe';
+const SURVEY_POWERCX_URL = process.env.SURVEY_POWERCX_URL || 'https://www.powercx.com/r/6zl8y';
 const SURVEY_POWERCX_VERSION = process.env.SURVEY_POWERCX_VERSION || 'powercx-kjzqe-v1';
 const SURVEY_POWERCX_STATE_EXPIRES_IN = process.env.SURVEY_POWERCX_STATE_EXPIRES_IN || '2h';
 
