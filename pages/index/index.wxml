@@ -93,7 +93,7 @@
             <text class="hero__title">开启校园轨迹</text>
             <text class="hero__desc">已积累 {{overview.todayDistance}} · {{overview.todayDuration}}</text>
           </view>
-          <button class="btn btn--primary" bindtap="handleNavigateRecord">开始记录</button>
+          <button class="btn btn--primary" bindtap="handleNavigateRecord" data-source="home_hero">开始记录</button>
         </view>
         <view class="hero__stats">
           <view class="hero__stat">
@@ -146,7 +146,7 @@
         <view wx:if="{{historyEmpty}}" class="history__empty">
           <text class="history__empty-title">暂未记录轨迹</text>
           <text class="history__empty-desc">开启一次运动，即可在此回顾完整轨迹</text>
-          <button class="btn btn--primary" bindtap="handleNavigateRecord">立即记录</button>
+          <button class="btn btn--primary" bindtap="handleNavigateRecord" data-source="history_empty">立即记录</button>
         </view>
         <block wx:else>
           <block wx:for="{{historyRoutes}}" wx:key="id">

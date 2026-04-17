@@ -1,0 +1,83 @@
+<view class="survey-gate-page {{theme === 'dark' ? 'dark' : ''}}">
+  <rlab-nav title="开始记录前问卷" theme="{{theme}}"></rlab-nav>
+
+  <scroll-view scroll-y class="survey-gate-scroll" enable-back-to-top>
+    <view class="survey-card">
+      <text class="survey-card__eyebrow">首次开始记录前需完成</text>
+      <text class="survey-card__title">{{surveyTitle}}</text>
+      <text class="survey-card__desc">
+        这次会先打开 RouteLab 服务端中转页，再跳转到 PowerCX 问卷；提交完成后会回跳 RouteLab 后端，并按当前登录用户记录完成状态。
+      </text>
+
+      <view
+        class="survey-status survey-status--{{configValid ? (alreadyCompleted ? 'ok' : (loadingStatus ? 'active' : (openedSurvey ? 'active' : 'pending'))) : 'error'}}"
+      >
+        <text class="survey-status__label">
+          {{loadingStatus ? '正在核验服务端问卷状态...' : (!surveyEnabled ? '问卷未启用' : (!configValid ? '问卷配置不完整' : (alreadyCompleted ? '服务端已确认当前用户完成本版本问卷' : (openedSurvey ? '已打开问卷，可在提交后回来再次核验' : '尚未完成问卷'))))}}
+        </text>
+      </view>
+
+      <view wx:if="{{surveyVersion}}" class="survey-meta">
+        <text>问卷版本：{{surveyVersion}}</text>
+      </view>
+      <view wx:if="{{completedAtText && alreadyCompleted}}" class="survey-meta">
+        <text>服务端记录时间：{{completedAtText}}</text>
+      </view>
+      <view wx:if="{{respondentId && alreadyCompleted}}" class="survey-meta">
+        <text>PowerCX respondentId：{{respondentId}}</text>
+      </view>
+      <view wx:if="{{responseStatus && alreadyCompleted}}" class="survey-meta">
+        <text>PowerCX 状态：{{responseStatus}}</text>
+      </view>
+
+      <view wx:if="{{!configValid && surveyEnabled}}" class="survey-alert survey-alert--error">
+        <text>{{configError}}</text>
+        <text class="survey-alert__hint">
+          当前不会放行到记录页，请先检查 survey.url / survey.version 配置与问卷链接可用性。
+        </text>
+      </view>
+
+      <view wx:elif="{{statusError}}" class="survey-alert survey-alert--error">
+        <text>{{statusError}}</text>
+        <button class="btn btn--ghost survey-alert__action" bindtap="handleRetryStatus">重新核验</button>
+      </view>
+
+      <view wx:elif="{{alreadyCompleted}}" class="survey-alert survey-alert--ok">
+        <text>当前登录用户已经完成本版本问卷，可直接继续开始记录。</text>
+      </view>
+
+      <view wx:else class="survey-steps">
+        <view class="survey-step">
+          <text class="survey-step__index">1</text>
+          <text class="survey-step__text">打开内嵌问卷页面并完成填写</text>
+        </view>
+        <view class="survey-step">
+          <text class="survey-step__index">2</text>
+          <text class="survey-step__text">提交后等待页面自动回跳到 RouteLab 后端结果页</text>
+        </view>
+        <view class="survey-step">
+          <text class="survey-step__index">3</text>
+          <text class="survey-step__text">返回小程序后点击“我已完成，继续记录”触发服务端核验</text>
+        </view>
+      </view>
+
+      <view class="survey-actions">
+        <button
+          class="btn btn--primary"
+          bindtap="handleOpenSurvey"
+          disabled="{{!surveyEnabled || !configValid || loadingStatus}}"
+        >
+          {{openedSurvey || alreadyCompleted ? '重新打开问卷' : '打开问卷'}}
+        </button>
+        <button
+          class="btn btn--primary survey-actions__confirm"
+          bindtap="handleConfirmContinue"
+          disabled="{{!canContinue || loadingStatus}}"
+        >
+          {{alreadyCompleted ? '继续前往记录' : '我已完成，继续记录'}}
+        </button>
+        <button class="btn btn--ghost" bindtap="handleNavigateBack">返回首页</button>
+      </view>
+    </view>
+  </scroll-view>
+</view>

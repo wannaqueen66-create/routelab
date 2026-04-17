@@ -646,6 +646,25 @@ function getActiveAnnouncements() {
   });
 }
 
+function getPowercxSurveyStatus() {
+  return request({
+    path: '/user/surveys/powercx/status',
+    method: 'GET',
+  });
+}
+
+function createPowercxSurveySession({ source } = {}) {
+  const payload = {};
+  if (typeof source === 'string' && source.trim()) {
+    payload.source = source.trim();
+  }
+  return request({
+    path: '/user/surveys/powercx/session',
+    method: 'POST',
+    data: payload,
+  });
+}
+
 function submitFeedbackTicket({ category, title, content, contact } = {}) {
   const payload = {};
   if (typeof category === 'string') {
@@ -736,6 +755,8 @@ module.exports = {
   getRouteById,
   getLatestAnnouncement,
   getActiveAnnouncements,
+  getPowercxSurveyStatus,
+  createPowercxSurveySession,
   submitFeedbackTicket,
   updateUserProfile,
   getUserSettings,

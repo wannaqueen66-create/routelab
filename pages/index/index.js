@@ -21,6 +21,7 @@ const { formatDistance, formatCalories } = require('../../utils/format');
 const { PRIVACY_LEVELS, PRIVACY_LEVEL_MAP } = require('../../constants/privacy');
 const api = require('../../services/api');
 const geocodeLocal = require('../../services/geocode-local');
+const { isSurveyRequired, buildSurveyGateUrl } = require('../../services/survey-flow');
 const {
   getRecentSettings,
   getUserProfile,
@@ -752,11 +753,41 @@ Page(applyThemeMixin({
       });
   },
 
-  handleNavigateRecord() {
+  handleNavigateRecord(event) {
     if (!this.ensureProfileReadyForRecordStart()) {
       return;
     }
-    wx.navigateTo({ url: '/pages/record/record' });
+
+    const source =
+      typeof event?.currentTarget?.dataset?.source === 'string' && event.currentTarget.dataset.source.trim()
+        ? event.currentTarget.dataset.source.trim()
+        : 'manual';
+
+    wx.showLoading({ title: '检查问卷状态...' });
+    isSurveyRequired({ source })
+      .then((required) => {
+        if (required) {
+          wx.navigateTo({
+            url: buildSurveyGateUrl({
+              next: '/pages/record/record',
+              source,
+            }),
+          });
+          return;
+        }
+        wx.navigateTo({ url: '/pages/record/record' });
+      })
+      .catch(() => {
+        wx.navigateTo({
+          url: buildSurveyGateUrl({
+            next: '/pages/record/record',
+            source,
+          }),
+        });
+      })
+      .finally(() => {
+        wx.hideLoading();
+      });
   },
 
   ensureProfileReadyForRecordStart() {
