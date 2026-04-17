@@ -414,6 +414,64 @@ function removeRouteFeedbackDraft(routeId) {
   safeSet(STORAGE_KEYS.ROUTE_FEEDBACK_DRAFTS, drafts);
 }
 
+function getLocalSurveyCompletionStore() {
+  const stored = safeGet(STORAGE_KEYS.SURVEY_COMPLETION, {});
+  return stored && typeof stored === 'object' ? { ...stored } : {};
+}
+
+function buildSurveyCompletionCacheKey({ surveyKey = 'powercx', surveyVersion = '', userId = '' } = {}) {
+  const normalizedSurveyKey = typeof surveyKey === 'string' && surveyKey.trim() ? surveyKey.trim() : 'powercx';
+  const normalizedSurveyVersion = typeof surveyVersion === 'string' ? surveyVersion.trim() : '';
+  const normalizedUserId = userId === undefined || userId === null ? '' : String(userId).trim();
+  if (!normalizedSurveyVersion) {
+    return '';
+  }
+  return `${normalizedSurveyKey}::${normalizedSurveyVersion}::${normalizedUserId || 'anonymous'}`;
+}
+
+function getLocalSurveyCompletion({ surveyKey = 'powercx', surveyVersion = '', userId = '' } = {}) {
+  const cacheKey = buildSurveyCompletionCacheKey({ surveyKey, surveyVersion, userId });
+  if (!cacheKey) {
+    return null;
+  }
+  const store = getLocalSurveyCompletionStore();
+  const record = store[cacheKey];
+  return record && typeof record === 'object' ? { ...record } : null;
+}
+
+function saveLocalSurveyCompletion({
+  surveyKey = 'powercx',
+  surveyVersion = '',
+  userId = '',
+  source = 'manual_confirmed',
+  responseStatus = 'manual_confirmed',
+  respondentId = '',
+  completedAt = Date.now(),
+} = {}) {
+  const cacheKey = buildSurveyCompletionCacheKey({ surveyKey, surveyVersion, userId });
+  if (!cacheKey) {
+    return null;
+  }
+  const completedAtValue = Number(completedAt) || Date.now();
+  const record = {
+    surveyKey: typeof surveyKey === 'string' && surveyKey.trim() ? surveyKey.trim() : 'powercx',
+    surveyVersion: typeof surveyVersion === 'string' ? surveyVersion.trim() : '',
+    userId: userId === undefined || userId === null ? '' : String(userId).trim(),
+    source: typeof source === 'string' && source.trim() ? source.trim() : 'manual_confirmed',
+    responseStatus:
+      typeof responseStatus === 'string' && responseStatus.trim()
+        ? responseStatus.trim()
+        : 'manual_confirmed',
+    respondentId: typeof respondentId === 'string' ? respondentId.trim() : '',
+    completedAt: completedAtValue,
+    updatedAt: Date.now(),
+  };
+  const store = getLocalSurveyCompletionStore();
+  store[cacheKey] = record;
+  safeSet(STORAGE_KEYS.SURVEY_COMPLETION, store);
+  return { ...record };
+}
+
 module.exports = {
   getRoutes,
   saveRoute,
@@ -448,4 +506,6 @@ module.exports = {
   getRouteFeedbackDraft,
   saveRouteFeedbackDraft,
   removeRouteFeedbackDraft,
+  getLocalSurveyCompletion,
+  saveLocalSurveyCompletion,
 };

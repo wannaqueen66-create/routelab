@@ -21,7 +21,7 @@
         <text>问卷版本：{{surveyVersion}}</text>
       </view>
       <view wx:if="{{completedAtText && alreadyCompleted}}" class="survey-meta">
-        <text>服务端记录时间：{{completedAtText}}</text>
+        <text>{{completionSource === 'local_manual' ? '本机放行时间' : '服务端记录时间'}}：{{completedAtText}}</text>
       </view>
       <view wx:if="{{respondentId && alreadyCompleted}}" class="survey-meta">
         <text>PowerCX respondentId：{{respondentId}}</text>
@@ -43,7 +43,7 @@
       </view>
 
       <view wx:elif="{{alreadyCompleted}}" class="survey-alert survey-alert--ok">
-        <text>当前登录用户已经完成本版本问卷，可直接继续开始记录。</text>
+        <text>{{completionSource === 'local_manual' ? '已通过本机手动放行本版本问卷，可直接继续开始记录。' : '当前登录用户已经完成本版本问卷，可直接继续开始记录。'}}</text>
       </view>
 
       <view wx:else class="survey-steps">
@@ -75,6 +75,13 @@
           disabled="{{!canContinue || loadingStatus}}"
         >
           {{alreadyCompleted ? '继续前往记录' : '我已完成，继续记录'}}
+        </button>
+        <button
+          class="btn btn--ghost"
+          bindtap="handleManualComplete"
+          disabled="{{!openedSurvey || loadingStatus || alreadyCompleted}}"
+        >
+          已提交但未回跳，手动继续
         </button>
         <button class="btn btn--ghost" bindtap="handleNavigateBack">返回首页</button>
       </view>

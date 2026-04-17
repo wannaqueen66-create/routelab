@@ -139,7 +139,7 @@ test('GET /api/public/surveys/powercx/start redirects to PowerCX and sets cookie
   const response = await request.get(`/api/public/surveys/powercx/start?state=${encodeURIComponent(state)}`);
 
   assert.equal(response.status, 302);
-  assert.match(response.headers.location, /^https:\/\/www\.powercx\.com\/r\/kjzqe\?/);
+  assert.match(response.headers.location, /^https:\/\/www\.powercx\.com\/r\/6zl8y\?/);
   assert.match(response.headers.location, /userId=42/);
   assert.match(response.headers.location, /source=home_hero/);
   assert.ok(Array.isArray(response.headers['set-cookie']));

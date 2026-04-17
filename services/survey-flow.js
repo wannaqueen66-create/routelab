@@ -2,6 +2,7 @@
 
 const config = require('../config/saaa-config');
 const api = require('./api');
+const { getUserAccount, getLocalSurveyCompletion, saveLocalSurveyCompletion } = require('../utils/storage');
 
 const DEFAULT_SURVEY_TITLE = '开始记录前问卷';
 const DEFAULT_NEXT_URL = '/pages/record/record';
@@ -98,11 +99,43 @@ function normalizeSurveyStatus(payload = {}) {
     configValid: payload.configValid !== false,
     surveyUrlConfigured: payload.surveyUrlConfigured !== false,
     surveyVersionConfigured: payload.surveyVersionConfigured !== false,
+    completionSource: normalizeString(payload.completionSource),
+  };
+}
+
+function getSurveyContext() {
+  const survey = getSurveyConfig();
+  const account = getUserAccount();
+  return {
+    survey,
+    surveyKey: 'powercx',
+    surveyVersion: survey.version,
+    userId: account && account.id !== undefined && account.id !== null ? String(account.id).trim() : '',
+  };
+}
+
+function buildManualCompletionState({ survey, record = null } = {}) {
+  return {
+    surveyEnabled: survey.enabled,
+    surveyVersion: survey.version,
+    surveyTitle: survey.title,
+    callbackUrl: '',
+    currentVersionCompleted: !!record,
+    completedVersion: record?.surveyVersion || '',
+    completedAt: Number(record?.completedAt) || 0,
+    updatedAt: Number(record?.updatedAt) || 0,
+    responseStatus: normalizeString(record?.responseStatus),
+    respondentId: normalizeString(record?.respondentId),
+    configValid: survey.valid,
+    surveyUrlConfigured: survey.urlValid,
+    surveyVersionConfigured: survey.versionValid,
+    completionSource: record ? 'local_manual' : '',
+    errorMessage: survey.errorMessage,
   };
 }
 
 function getSurveyCompletionState() {
-  const survey = getSurveyConfig();
+  const { survey, surveyKey, surveyVersion, userId } = getSurveyContext();
   if (!survey.enabled || !survey.valid) {
     return Promise.resolve({
       surveyEnabled: survey.enabled,
@@ -118,14 +151,42 @@ function getSurveyCompletionState() {
       configValid: survey.valid,
       surveyUrlConfigured: survey.urlValid,
       surveyVersionConfigured: survey.versionValid,
+      completionSource: '',
       errorMessage: survey.errorMessage,
     });
   }
 
-  return api.getPowercxSurveyStatus().then((payload) => ({
-    ...normalizeSurveyStatus(payload),
-    errorMessage: '',
-  }));
+  const localRecord = getLocalSurveyCompletion({
+    surveyKey,
+    surveyVersion,
+    userId,
+  });
+
+  return api
+    .getPowercxSurveyStatus()
+    .then((payload) => {
+      const normalized = normalizeSurveyStatus(payload);
+      if (normalized.currentVersionCompleted) {
+        return {
+          ...normalized,
+          completionSource: 'server',
+          errorMessage: '',
+        };
+      }
+      if (localRecord) {
+        return buildManualCompletionState({ survey, record: localRecord });
+      }
+      return {
+        ...normalized,
+        errorMessage: '',
+      };
+    })
+    .catch((error) => {
+      if (localRecord) {
+        return buildManualCompletionState({ survey, record: localRecord });
+      }
+      throw error;
+    });
 }
 
 function isSurveyRequired({ source } = {}) {
@@ -142,8 +203,20 @@ function isSurveyRequired({ source } = {}) {
   return getSurveyCompletionState().then((state) => !state.currentVersionCompleted);
 }
 
-function markSurveyCompleted() {
-  return getSurveyCompletionState();
+function markSurveyCompleted({ responseStatus = 'manual_confirmed', source = 'manual_confirmed' } = {}) {
+  const { survey, surveyKey, surveyVersion, userId } = getSurveyContext();
+  if (!surveyVersion) {
+    return Promise.reject(new Error('Survey version is required'));
+  }
+  const record = saveLocalSurveyCompletion({
+    surveyKey,
+    surveyVersion,
+    userId,
+    responseStatus,
+    source,
+    completedAt: Date.now(),
+  });
+  return Promise.resolve(buildManualCompletionState({ survey, record }));
 }
 
 function buildSurveyWebviewUrl({ source = 'manual' } = {}) {

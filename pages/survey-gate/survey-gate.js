@@ -6,6 +6,7 @@ const {
   getSurveyCompletionState,
   buildSurveyWebviewUrl,
   resolveNextUrl,
+  markSurveyCompleted,
 } = require('../../services/survey-flow');
 
 function formatCompletedAt(timestamp) {
@@ -38,6 +39,7 @@ Page(applyThemeMixin({
     responseStatus: '',
     respondentId: '',
     callbackUrl: '',
+    completionSource: '',
   },
 
   onLoad(options = {}) {
@@ -94,6 +96,7 @@ Page(applyThemeMixin({
           completedAtText: formatCompletedAt(state.completedAt),
           responseStatus: state.responseStatus || '',
           respondentId: state.respondentId || '',
+          completionSource: state.completionSource || '',
           canContinue: alreadyCompleted || openedSurvey,
           loadingStatus: false,
           statusError: '',
@@ -168,6 +171,7 @@ Page(applyThemeMixin({
           completedAtText: formatCompletedAt(state.completedAt),
           responseStatus: state.responseStatus || '',
           respondentId: state.respondentId || '',
+          completionSource: state.completionSource || '',
           canContinue: alreadyCompleted || this.data.openedSurvey,
           statusError: '',
         });
@@ -193,6 +197,54 @@ Page(applyThemeMixin({
 
   handleRetryStatus() {
     this.refreshSurveyState();
+  },
+
+  handleManualComplete() {
+    const survey = getSurveyConfig();
+    if (!survey.enabled || !survey.valid) {
+      wx.showToast({ title: '当前问卷不可用', icon: 'none' });
+      return;
+    }
+    if (!this.data.openedSurvey) {
+      wx.showToast({ title: '请先打开问卷并提交', icon: 'none' });
+      return;
+    }
+
+    wx.showModal({
+      title: '确认已提交问卷？',
+      content: '如果你已经在 PowerCX 页面完成提交，但没有自动回跳，可以手动放行继续记录。',
+      confirmText: '确认继续',
+      cancelText: '再看看',
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        wx.showLoading({ title: '正在放行...' });
+        markSurveyCompleted()
+          .then((state) => {
+            this.setData({
+              alreadyCompleted: true,
+              completedAtText: formatCompletedAt(state.completedAt),
+              responseStatus: state.responseStatus || '',
+              respondentId: state.respondentId || '',
+              completionSource: state.completionSource || 'local_manual',
+              canContinue: true,
+              statusError: '',
+            });
+            wx.showToast({ title: '已手动放行', icon: 'success' });
+            setTimeout(() => this.navigateToNext(), 250);
+          })
+          .catch((error) => {
+            wx.showToast({
+              title: error?.message || '手动放行失败',
+              icon: 'none',
+            });
+          })
+          .finally(() => {
+            wx.hideLoading();
+          });
+      },
+    });
   },
 
   handleNavigateBack() {
