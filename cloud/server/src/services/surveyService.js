@@ -238,6 +238,42 @@ function renderSurveyCompletionHtml({ success, title, message, details = '' } = 
     const pageMessage = escapeHtml(message || '');
     const pageDetails = details ? `<p class="details">${escapeHtml(details)}</p>` : '';
     const toneClass = success ? 'success' : 'warning';
+    const helperText = success
+        ? '若未自动返回，请点击下方按钮回到小程序。'
+        : '如未能自动返回，请手动回到小程序后重试。';
+    const autoBackScript = success
+        ? `<script>
+(function () {
+  function fallbackHint() {
+    var helper = document.getElementById('helper-text');
+    if (helper) helper.textContent = '${helperText}';
+  }
+  function goBack() {
+    try {
+      if (window.WeixinJSBridge && typeof window.WeixinJSBridge.invoke === 'function') {
+        window.WeixinJSBridge.invoke('closeWindow', {}, function () {});
+        return true;
+      }
+      if (window.wx && window.wx.miniProgram && typeof window.wx.miniProgram.navigateBack === 'function') {
+        window.wx.miniProgram.navigateBack({ delta: 1, fail: fallbackHint });
+        return true;
+      }
+      if (window.wx && window.wx.miniProgram && typeof window.wx.miniProgram.reLaunch === 'function') {
+        window.wx.miniProgram.reLaunch({ url: '/pages/index/index', fail: fallbackHint });
+        return true;
+      }
+    } catch (error) {}
+    return false;
+  }
+  window.__routeLabBackToMiniProgram = function () {
+    if (!goBack()) fallbackHint();
+  };
+  setTimeout(function () {
+    if (!goBack()) fallbackHint();
+  }, 800);
+})();
+</script>`
+        : '';
 
     return `<!doctype html>
 <html lang="zh-CN">
@@ -296,6 +332,23 @@ function renderSurveyCompletionHtml({ success, title, message, details = '' } = 
       color: #64748b;
       font-size: 13px;
     }
+    .helper {
+      margin-top: 16px;
+      color: #64748b;
+      font-size: 13px;
+    }
+    .action {
+      margin-top: 20px;
+      width: 100%;
+      border: 0;
+      border-radius: 999px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 44px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -305,8 +358,11 @@ function renderSurveyCompletionHtml({ success, title, message, details = '' } = 
       <h1>${pageTitle}</h1>
       <p>${pageMessage}</p>
       ${pageDetails}
+      <p class="helper" id="helper-text">${helperText}</p>
+      <button class="action" type="button" onclick="window.__routeLabBackToMiniProgram && window.__routeLabBackToMiniProgram()">返回小程序</button>
     </div>
   </div>
+  ${autoBackScript}
 </body>
 </html>`;
 }
