@@ -1,15 +1,7 @@
-<view class="survey-webview-page {{theme === 'dark' ? 'dark' : ''}}">
-  <rlab-nav title="{{title}}" theme="{{theme}}" customBack="{{true}}" bind:back="handleNavigateBack">
-    <view slot="right" class="survey-webview-nav__right">
-      <button class="survey-webview-nav__action" bindtap="handleManualComplete">已提交，继续记录</button>
-    </view>
-  </rlab-nav>
+<web-view wx:if="{{ready}}" src="{{url}}" binderror="handleWebViewError"></web-view>
 
-  <web-view wx:if="{{ready}}" src="{{url}}" binderror="handleWebViewError"></web-view>
-
-  <view wx:else class="survey-webview-error">
-    <text class="survey-webview-error__title">问卷页面无法打开</text>
-    <text class="survey-webview-error__desc">{{error}}</text>
-    <button class="survey-webview-error__btn" bindtap="handleNavigateBack">返回上一页</button>
-  </view>
+<view wx:else class="survey-webview-error">
+  <text class="survey-webview-error__title">问卷页面无法打开</text>
+  <text class="survey-webview-error__desc">{{error}}</text>
+  <button class="survey-webview-error__btn" bindtap="handleNavigateBack">返回上一页</button>
 </view>

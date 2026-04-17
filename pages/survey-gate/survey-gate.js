@@ -49,7 +49,11 @@ Page(applyThemeMixin({
   },
 
   onShow() {
-    this.refreshSurveyState();
+    this.refreshSurveyState().finally(() => {
+      if (this.data.openedSurvey && !this.data.alreadyCompleted) {
+        this.promptAfterSurveyReturn();
+      }
+    });
   },
 
   refreshSurveyState() {
@@ -202,6 +206,31 @@ Page(applyThemeMixin({
     this.refreshSurveyState();
   },
 
+  promptAfterSurveyReturn() {
+    if (this._returnPromptShown) {
+      return;
+    }
+    this._returnPromptShown = true;
+    wx.showActionSheet({
+      itemList: ['已提交，继续记录', '继续填写问卷'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          this.handleManualComplete();
+          return;
+        }
+        if (res.tapIndex === 1) {
+          this.handleOpenSurvey();
+        }
+      },
+      fail: () => {},
+      complete: () => {
+        setTimeout(() => {
+          this._returnPromptShown = false;
+        }, 300);
+      },
+    });
+  },
+
   handleManualComplete() {
     const survey = getSurveyConfig();
     if (!survey.enabled || !survey.valid) {
@@ -234,6 +263,7 @@ Page(applyThemeMixin({
               canContinue: true,
               statusError: '',
             });
+            this._returnPromptShown = false;
             wx.showToast({ title: '已手动放行', icon: 'success' });
             setTimeout(() => this.navigateToNext(), 250);
           })
