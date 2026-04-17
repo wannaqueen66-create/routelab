@@ -219,7 +219,7 @@ function markSurveyCompleted({ responseStatus = 'manual_confirmed', source = 'ma
   return Promise.resolve(buildManualCompletionState({ survey, record }));
 }
 
-function buildSurveyWebviewUrl({ source = 'manual' } = {}) {
+function buildSurveyWebviewUrl({ source = 'manual', next = DEFAULT_NEXT_URL } = {}) {
   const survey = getSurveyConfig();
   if (!survey.enabled) {
     return Promise.reject(new Error('Survey is disabled'));
@@ -238,7 +238,9 @@ function buildSurveyWebviewUrl({ source = 'manual' } = {}) {
       '?url=' +
       encodeURIComponent(startUrl) +
       '&title=' +
-      encodeURIComponent(survey.title || DEFAULT_SURVEY_TITLE)
+      encodeURIComponent(survey.title || DEFAULT_SURVEY_TITLE) +
+      '&next=' +
+      encodeURIComponent(resolveNextUrl(next))
     );
   });
 }

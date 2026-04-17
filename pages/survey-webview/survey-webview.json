@@ -1,4 +1,7 @@
 {
-  "navigationStyle": "default",
-  "navigationBarTitleText": "填写问卷"
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "填写问卷",
+  "usingComponents": {
+    "rlab-nav": "/components/navigation-bar/navigation-bar"
+  }
 }

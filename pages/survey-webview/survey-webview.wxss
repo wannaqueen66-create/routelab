@@ -1,5 +1,30 @@
-.survey-webview-error {
+.survey-webview-page {
   min-height: 100vh;
+  background: #f8fafc;
+}
+
+.survey-webview-nav__right {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 24rpx;
+  box-sizing: border-box;
+}
+
+.survey-webview-nav__action {
+  border: 0;
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  line-height: 56rpx;
+  padding: 0 20rpx;
+}
+
+.survey-webview-error {
+  min-height: calc(100vh - 88rpx);
   padding: 120rpx 48rpx;
   box-sizing: border-box;
   background: #f8fafc;
@@ -32,4 +57,25 @@
   color: #ffffff;
   font-size: 28rpx;
   line-height: 88rpx;
+}
+
+.dark.survey-webview-page {
+  background: #0f172a;
+}
+
+.dark .survey-webview-nav__action {
+  background: rgba(96, 165, 250, 0.18);
+  color: #dbeafe;
+}
+
+.dark .survey-webview-error {
+  background: #0f172a;
+}
+
+.dark .survey-webview-error__title {
+  color: #f8fafc;
+}
+
+.dark .survey-webview-error__desc {
+  color: #cbd5e1;
 }

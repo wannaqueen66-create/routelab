@@ -127,7 +127,10 @@ Page(applyThemeMixin({
     }
 
     wx.showLoading({ title: '正在打开问卷...' });
-    buildSurveyWebviewUrl({ source: this.source || 'home_hero' })
+    buildSurveyWebviewUrl({
+      source: this.source || 'home_hero',
+      next: this.nextUrl,
+    })
       .then((url) => {
         this.setData({
           openedSurvey: true,
